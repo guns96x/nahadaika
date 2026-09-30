@@ -1,5 +1,6 @@
 package ua.nahadaika.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -49,6 +50,8 @@ data class Reminder(
     val fired: Boolean = false,
     val lastFiredAt: Long? = null,
     val createdAt: Long = System.currentTimeMillis(),
+    /** Будильник: гучна мелодія, поки не вимкнуть, і екран на весь дисплей. */
+    @ColumnInfo(defaultValue = "0") val alarm: Boolean = false,
 )
 
 /** Час, на який реально стоїть будильник. */

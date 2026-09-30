@@ -7,6 +7,8 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Room
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.room.RoomDatabase
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
@@ -62,13 +64,20 @@ interface ReminderDao {
     suspend fun delete(reminder: Reminder)
 }
 
-@Database(entities = [Chat::class, Reminder::class], version = 1, exportSchema = false)
+@Database(entities = [Chat::class, Reminder::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun chats(): ChatDao
     abstract fun reminders(): ReminderDao
 
     companion object {
         fun create(context: Context): AppDatabase =
-            Room.databaseBuilder(context, AppDatabase::class.java, "nahadaika.db").build()
+            Room.databaseBuilder(context, AppDatabase::class.java, "nahadaika.db").addMigrations(MIGRATION_1_2).build()
+
+        /** 3.7: нагадування-будильник. */
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE reminders ADD COLUMN alarm INTEGER NOT NULL DEFAULT 0")
+            }
+        }
     }
 }

@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AlarmOff
+import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.HourglassBottom
@@ -120,6 +122,8 @@ fun ScheduleSheet(
     confirmLabel: String,
     onDismiss: () -> Unit,
     onDictate: (() -> Unit)? = null,
+    alarm: Boolean? = null,
+    onAlarmChange: (Boolean) -> Unit = {},
     onConfirm: (at: Long, repeat: Repeat) -> Unit,
 ) {
     val context = LocalContext.current
@@ -207,7 +211,17 @@ fun ScheduleSheet(
             }
 
             Spacer(Modifier.height(8.dp))
-            RepeatChip(repeat, onChange = { repeat = it }, modifier = Modifier.align(Alignment.CenterHorizontally))
+            Row(Modifier.align(Alignment.CenterHorizontally), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                RepeatChip(repeat, onChange = { repeat = it })
+                if (alarm != null) {
+                    GlassChip(
+                        if (alarm) "Будильник" else "Як будильник",
+                        onClick = { onAlarmChange(!alarm) },
+                        selected = alarm,
+                        leading = if (alarm) Icons.Default.Alarm else Icons.Default.AlarmOff,
+                    )
+                }
+            }
 
             Spacer(Modifier.height(12.dp))
             Text(

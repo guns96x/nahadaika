@@ -10,7 +10,7 @@ import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
 
 /** Результат розбору голосової команди. [at] = null, якщо час не вдалося зрозуміти; [text] може бути порожнім. */
-data class VoiceCommand(val text: String, val at: Long?, val repeat: Repeat)
+data class VoiceCommand(val text: String, val at: Long?, val repeat: Repeat, val alarm: Boolean = false)
 
 /**
  * Розбирає фрази на кшталт «нагадай завтра о 9 купити хліб», «через 2 години подзвонити мамі»,
@@ -434,6 +434,8 @@ object VoiceParser {
             text = text,
             at = at?.atZone(ZoneId.systemDefault())?.toInstant()?.toEpochMilli(),
             repeat = repeat,
+            // Будильник і таймер дзвонять, поки їх не вимкнуть.
+            alarm = mode != null,
         )
     }
 

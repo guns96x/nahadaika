@@ -224,6 +224,8 @@ fun ChatScreen(
     // Фонове розпізнавання щойно записаного; голосова команда без вікна Google.
     var transcription by remember { mutableStateOf<Job?>(null) }
     var offerSpeech by remember { mutableStateOf(false) }
+    // Нове нагадування — як будильник (гучно, на весь екран).
+    var composeAlarm by remember { mutableStateOf(false) }
     val dictation = remember { LiveDictation(context) }
     var rescheduling by remember { mutableStateOf<Reminder?>(null) }
     var actionsFor by remember { mutableStateOf<Reminder?>(null) }
@@ -295,7 +297,8 @@ fun ChatScreen(
             highlightId = id
             val label = previewText(reminder).take(40)
             val result = snackbar.showSnackbar(
-                message = "Нагадаю ${soonLabel(reminder.triggerAt)}" + if (label.isNotBlank()) ": $label" else "",
+                message = (if (reminder.alarm) "⏰ Будильник ${soonLabel(reminder.triggerAt)}" else "Нагадаю ${soonLabel(reminder.triggerAt)}") +
+                    if (label.isNotBlank() && label != "Будильник" && label != "Таймер") ": $label" else "",
                 actionLabel = "Змінити",
                 withDismissAction = true,
                 duration = SnackbarDuration.Long,
@@ -304,7 +307,7 @@ fun ChatScreen(
         }
     }
 
-    fun scheduleComposed(at: Long, repeat: Repeat, textOverride: String? = null) {
+    fun scheduleComposed(at: Long, repeat: Repeat, textOverride: String? = null, alarm: Boolean = composeAlarm) {
         val a = attachment
         val body = (textOverride ?: text).trim()
         val reminder = Reminder(
@@ -315,7 +318,9 @@ fun ChatScreen(
             durationMs = a?.durationMs ?: 0,
             triggerAt = at,
             repeat = repeat,
+            alarm = alarm,
         )
+        composeAlarm = false
         if (a != null && player.currentPath == a.file.absolutePath) player.stop()
         attachment = null
         text = ""
@@ -330,9 +335,10 @@ fun ChatScreen(
         val cmd = VoiceParser.parse(spoken, defaultTime = Prefs.defaultTime(context))
         val combined = listOf(text.trim(), cmd.text).filter { it.isNotBlank() }.joinToString(" ")
         if (cmd.at != null) {
-            scheduleComposed(cmd.at, cmd.repeat, combined)
+            scheduleComposed(cmd.at, cmd.repeat, combined, alarm = cmd.alarm)
         } else {
             text = combined
+            if (cmd.alarm) composeAlarm = true
             showSchedule = true
             toast("Почув: «$spoken» — але не зрозумів, коли нагадати")
         }
@@ -400,7 +406,7 @@ fun ChatScreen(
             val cmd = (hearing as? Hearing.Heard)?.let { VoiceParser.parse(it.text, defaultTime = defaultTime) }
             if (cmd?.at != null) {
                 val caption = if (Prefs.voiceCaption(context)) cmd.text else ""
-                scheduleComposed(cmd.at, cmd.repeat, listOf(text.trim(), caption).filter { it.isNotBlank() }.joinToString(" "))
+                scheduleComposed(cmd.at, cmd.repeat, listOf(text.trim(), caption).filter { it.isNotBlank() }.joinToString(" "), alarm = cmd.alarm)
                 return@launch
             }
             when {
@@ -792,6 +798,8 @@ fun ChatScreen(
             confirmLabel = "Запланувати",
             onDismiss = { showSchedule = false },
             onDictate = ::dictate,
+            alarm = composeAlarm,
+            onAlarmChange = { composeAlarm = it },
         ) { at, repeat -> scheduleComposed(at, repeat) }
     }
 

@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Mic
@@ -298,6 +299,10 @@ fun TimelineItem(
                     Text(inLabel(occurrence.at - now), fontSize = 12.sp, color = Glass.Lavender, fontWeight = FontWeight.Medium)
                 }
                 Spacer(Modifier.weight(1f))
+                if (r.alarm) {
+                    Icon(Icons.Default.Alarm, "Будильник", Modifier.size(14.dp), tint = Glass.TextFaint)
+                    Spacer(Modifier.width(6.dp))
+                }
                 if (r.snoozedUntil != null && !done) {
                     Icon(Icons.Default.Snooze, "Відкладено", Modifier.size(14.dp), tint = Glass.TextFaint)
                     Spacer(Modifier.width(6.dp))

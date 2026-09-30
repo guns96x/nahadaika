@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.LightMode
@@ -117,6 +118,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { refresh++ }
     val canNotify = remember(refresh) { Notifier.canNotify(context) }
     val canExact = remember(refresh) { AlarmScheduler.canScheduleExact(context) }
+    val canFullScreen = remember(refresh) { Notifier.canFullScreen(context) }
     val batteryOk = remember(refresh) {
         context.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(context.packageName)
     }
@@ -303,6 +305,14 @@ fun SettingsScreen(onBack: () -> Unit) {
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                                 context.startActivitySafe(
                                     Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}")),
+                                )
+                            }
+                        }
+                        if (Build.VERSION.SDK_INT >= 34) {
+                            Divider()
+                            StatusRow(Icons.Default.Alarm, "Будильник на весь екран", canFullScreen) {
+                                context.startActivitySafe(
+                                    Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:${context.packageName}")),
                                 )
                             }
                         }

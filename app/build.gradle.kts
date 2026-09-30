@@ -19,8 +19,8 @@ android {
         applicationId = "ua.nahadaika"
         minSdk = 26
         targetSdk = 35
-        versionCode = 15
-        versionName = "3.6"
+        versionCode = 16
+        versionName = "3.7"
         // Офлайн-розпізнавання мовлення (Vosk) — лише для ARM-телефонів.
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
         // Звідки застосунок бере оновлення (GitHub Releases).
