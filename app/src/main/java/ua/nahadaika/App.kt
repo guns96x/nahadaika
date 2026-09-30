@@ -6,6 +6,7 @@ import coil.ImageLoaderFactory
 import coil.decode.VideoFrameDecoder
 import ua.nahadaika.alarm.Notifier
 import ua.nahadaika.data.Repo
+import ua.nahadaika.media.OfflineSpeech
 import ua.nahadaika.ui.theme.ThemeSettings
 
 class App : Application(), ImageLoaderFactory {
@@ -14,6 +15,7 @@ class App : Application(), ImageLoaderFactory {
         Repo.init(this)
         ThemeSettings.init(this)
         Notifier.createChannel(this)
+        OfflineSpeech.init(this)
     }
 
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)

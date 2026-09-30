@@ -79,4 +79,28 @@ class VoiceParserTest {
     }
 
     @Test fun numbersInTextAreNotTimes() = check("завтра купити 2 кг картоплі", "Купити 2 кг картоплі", d(10, 1, 9))
+
+    // Так пише офлайн-розпізнавач: числа словами, без розділових знаків.
+    @Test fun spokenOrdinalHour() = check("нагадай завтра о дев'ятій купити хліб", "Купити хліб", d(10, 1, 9))
+    @Test fun spokenEvening() = check("завтра о сьомій вечора забрати посилку", "Забрати посилку", d(10, 1, 19))
+    @Test fun spokenHourMinutes() = check("сьогодні о вісімнадцять тридцять тренування", "Тренування", d(9, 30, 18, 30))
+    @Test fun spokenOrdinalHourMinutes() = check("о вісімнадцятій п'ятнадцять нарада", "Нарада", d(9, 30, 18, 15))
+    @Test fun spokenInMinutes() = check("нагадаю через двадцять хвилин вимкнути духовку", "Вимкнути духовку", d(9, 30, 10, 20))
+    @Test fun spokenInHours() = check("через дві години подзвонити мамі", "Подзвонити мамі", d(9, 30, 12))
+    @Test fun spokenDate() = check(
+        "нагадай двадцять п'ятого жовтня о дванадцять й день народження", "День народження", d(10, 25, 12),
+    )
+    @Test fun spokenCardinalHour() = check("в п'ятницю о дев'ять сорок п'ять здати звіт", "Здати звіт", d(10, 2, 9, 45))
+    @Test fun hourWithoutPreposition() = check("завтра вісім ранку пробіжка", "Пробіжка", d(10, 1, 8))
+
+    // Російською та суржиком.
+    @Test fun russianTomorrow() = check("напомни завтра в девять утра позвонить врачу", "Позвонить врачу", d(10, 1, 9))
+    @Test fun surzhykTomorrow() = check("напомню завтра в дев'ять утра подзвонить врачу", "Подзвонить врачу", d(10, 1, 9))
+    @Test fun russianInHour() = check("через час забрать детей", "Забрать детей", d(9, 30, 11))
+    @Test fun russianInMinutes() = check("через пятнадцать минут выключить плиту", "Выключить плиту", d(9, 30, 10, 15))
+    @Test fun russianWeekday() = check("в пятницу в семь вечера кино", "Кино", d(10, 2, 19))
+    @Test fun russianDate() = check("двадцать пятого октября в двенадцать день рождения", "День рождения", d(10, 25, 12))
+    @Test fun russianDaily() = check("каждый день в восемь витамины", "Витамины", d(10, 1, 8), Repeat.DAILY)
+    @Test fun russianDayAfterTomorrow() = check("послезавтра в 11 стоматолог", "Стоматолог", d(10, 2, 11))
+    @Test fun wordNumbersInTextStay() = check("завтра купити три хліби", "Купити 3 хліби", d(10, 1, 9))
 }

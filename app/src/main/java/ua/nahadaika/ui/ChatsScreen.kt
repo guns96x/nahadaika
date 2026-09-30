@@ -50,6 +50,8 @@ import androidx.compose.material.icons.filled.BatteryAlert
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -88,6 +90,8 @@ import ua.nahadaika.data.Chat
 import ua.nahadaika.data.Reminder
 import ua.nahadaika.data.Repeat
 import ua.nahadaika.data.Repo
+import ua.nahadaika.Prefs
+import ua.nahadaika.media.OfflineSpeech
 import ua.nahadaika.data.alarmAt
 import ua.nahadaika.previewText
 import ua.nahadaika.shortWhen
@@ -356,6 +360,7 @@ fun PermissionBanners() {
                 },
             )
         }
+        SpeechBanner()
         if (!batteryOk) {
             Banner(
                 icon = Icons.Default.BatteryAlert,
@@ -372,6 +377,40 @@ fun PermissionBanners() {
                 },
             )
         }
+    }
+}
+
+/** Офлайн-розпізнавання голосу: хід завантаження або пропозиція завантажити. */
+@Composable
+private fun SpeechBanner() {
+    val context = LocalContext.current
+    var dismissed by remember { mutableStateOf(Prefs.speechBannerDismissed(context)) }
+    when (val st = OfflineSpeech.state) {
+        is OfflineSpeech.State.Downloading -> Banner(
+            icon = Icons.Default.Download,
+            text = "Завантажую розпізнавання голосу… ${(st.progress * 100).toInt()}%",
+            action = "Скасувати",
+            onAction = OfflineSpeech::cancelDownload,
+        )
+        is OfflineSpeech.State.Failed -> Banner(
+            icon = Icons.Default.Download,
+            text = "Не вдалося завантажити розпізнавання: ${st.message}",
+            action = "Ще раз",
+            onAction = OfflineSpeech::download,
+        )
+        OfflineSpeech.State.Missing -> if (Prefs.speechOfferShown(context) && !dismissed) {
+            Banner(
+                icon = Icons.Default.GraphicEq,
+                text = "Розпізнавати час у голосових (≈${OfflineSpeech.DOWNLOAD_MB} МБ)",
+                action = "Завантажити",
+                onAction = OfflineSpeech::download,
+                onDismiss = {
+                    Prefs.setSpeechBannerDismissed(context)
+                    dismissed = true
+                },
+            )
+        }
+        OfflineSpeech.State.Ready -> Unit
     }
 }
 

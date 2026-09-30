@@ -32,4 +32,16 @@ object Prefs {
     /** Тема: AUTO / DARK / LIGHT (назва з ThemeMode). */
     fun themeMode(context: Context): String = prefs(context).getString("theme_mode", null) ?: "DARK"
     fun setThemeMode(context: Context, mode: String) = prefs(context).edit().putString("theme_mode", mode).apply()
+
+    /** Системний розпізнавач не вміє читати записи — не пробувати його щоразу. */
+    fun systemFileSpeechFailed(context: Context): Boolean = prefs(context).getBoolean("system_file_speech_failed", false)
+    fun setSystemFileSpeechFailed(context: Context) = prefs(context).edit().putBoolean("system_file_speech_failed", true).apply()
+
+    /** Пропозицію завантажити офлайн-розпізнавання вже показували. */
+    fun speechOfferShown(context: Context): Boolean = prefs(context).getBoolean("speech_offer_shown", false)
+    fun setSpeechOfferShown(context: Context) = prefs(context).edit().putBoolean("speech_offer_shown", true).apply()
+
+    /** Банер «завантажити розпізнавання» закрили. */
+    fun speechBannerDismissed(context: Context): Boolean = prefs(context).getBoolean("speech_banner_dismissed", false)
+    fun setSpeechBannerDismissed(context: Context) = prefs(context).edit().putBoolean("speech_banner_dismissed", true).apply()
 }

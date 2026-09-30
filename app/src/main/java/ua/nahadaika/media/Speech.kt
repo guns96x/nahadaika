@@ -12,6 +12,7 @@ import android.os.ParcelFileDescriptor
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import ua.nahadaika.Prefs
 import androidx.annotation.RequiresApi
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,25 +41,43 @@ private fun recognizerIntent() = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH
 private fun Bundle.firstResult(): String? =
     getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.takeIf { it.isNotBlank() }
 
+/** Що вдалося почути в записі. */
+sealed interface Hearing {
+    data class Heard(val text: String) : Hearing
+
+    /** Телефон сам не вміє розпізнавати записи, а офлайн-розпізнавання ще не завантажене. */
+    data object NeedsModel : Hearing
+
+    /** Розпізнавач спрацював, але слів не почув. */
+    data object Nothing : Hearing
+}
+
 /**
  * Розпізнавання вже записаного голосового чи відео — у фоні, без діалогу Google.
- * Звук із файлу декодується в PCM і передається системному розпізнавачу (Android 13+).
+ * Звук із файлу декодується в PCM і йде в офлайн-розпізнавач (Vosk), а якщо його ще немає —
+ * у системний розпізнавач (Android 13+; вміють далеко не всі телефони).
  */
 object Transcriber {
-    suspend fun transcribe(context: Context, file: File): String? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return null
-        val pcm = withContext(Dispatchers.IO) { runCatching { decodeToMono16k(file) }.getOrNull() } ?: return null
-        if (pcm.isEmpty()) return null
-        // Спершу розпізнавач на пристрої (без інтернету), потім стандартний.
-        val onDevice = listOfNotNull(
-            true.takeIf { SpeechRecognizer.isOnDeviceRecognitionAvailable(context) },
-            false.takeIf { SpeechRecognizer.isRecognitionAvailable(context) },
-        )
-        for (local in onDevice) {
-            val text = withTimeoutOrNull(20_000) { recognize(context, pcm, local) }
-            if (!text.isNullOrBlank()) return text
+    suspend fun transcribe(context: Context, file: File): Hearing {
+        val pcm = withContext(Dispatchers.IO) { runCatching { decodeToMono16k(file) }.getOrNull() }
+        if (pcm == null || pcm.isEmpty()) return Hearing.Nothing
+        if (OfflineSpeech.isReady) {
+            return OfflineSpeech.recognize(pcm)?.let(Hearing::Heard) ?: Hearing.Nothing
         }
-        return null
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !Prefs.systemFileSpeechFailed(context)) {
+            // Спершу розпізнавач на пристрої, потім стандартний.
+            val kinds = listOfNotNull(
+                true.takeIf { SpeechRecognizer.isOnDeviceRecognitionAvailable(context) },
+                false.takeIf { SpeechRecognizer.isRecognitionAvailable(context) },
+            )
+            for (local in kinds) {
+                val text = withTimeoutOrNull(10_000) { recognize(context, pcm, local) }
+                if (!text.isNullOrBlank()) return Hearing.Heard(text)
+            }
+            // Не вміє — більше не чекатимемо на нього щоразу.
+            Prefs.setSystemFileSpeechFailed(context)
+        }
+        return Hearing.NeedsModel
     }
 
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
@@ -203,7 +222,7 @@ class LiveDictation(private val context: Context) {
 
     fun isAvailable() = SpeechRecognizer.isRecognitionAvailable(context)
 
-    fun start(onResult: (String) -> Unit, onError: () -> Unit) {
+    fun start(onResult: (String) -> Unit, onError: (String) -> Unit) {
         cancel()
         val sr = SpeechRecognizer.createSpeechRecognizer(context)
         recognizer = sr
@@ -217,13 +236,13 @@ class LiveDictation(private val context: Context) {
             override fun onResults(results: Bundle) {
                 val text = results.firstResult() ?: partial.takeIf { it.isNotBlank() }
                 finish()
-                if (text != null) onResult(text) else onError()
+                if (text != null) onResult(text) else onError(errorMessage(SpeechRecognizer.ERROR_NO_MATCH))
             }
 
             override fun onError(error: Int) {
                 val text = partial.takeIf { it.isNotBlank() }
                 finish()
-                if (text != null) onResult(text) else onError()
+                if (text != null) onResult(text) else onError(errorMessage(error))
             }
         })
         sr.startListening(recognizerIntent().putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true))
@@ -244,6 +263,20 @@ class LiveDictation(private val context: Context) {
         recognizer = null
         listening = false
     }
+}
+
+/** Зрозуміле пояснення, чому розпізнавач не спрацював. */
+private fun errorMessage(error: Int): String = when (error) {
+    SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Не почув — спробуйте ще раз"
+    SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT, SpeechRecognizer.ERROR_SERVER,
+    SpeechRecognizer.ERROR_SERVER_DISCONNECTED,
+    -> "Немає зв'язку з розпізнаванням Google — перевірте інтернет"
+    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Немає доступу до мікрофона"
+    SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Розпізнавач зайнятий — спробуйте ще раз"
+    SpeechRecognizer.ERROR_AUDIO -> "Мікрофон зайнятий іншою програмою"
+    SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED, SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE ->
+        "Розпізнавач Google не підтримує українську на цьому телефоні"
+    else -> "Помилка розпізнавання (код $error)"
 }
 
 private open class SimpleListener : RecognitionListener {

@@ -54,6 +54,8 @@ import ua.nahadaika.Prefs
 import ua.nahadaika.VoiceParser
 import ua.nahadaika.media.LiveDictation
 import ua.nahadaika.media.Transcriber
+import ua.nahadaika.media.Hearing
+import ua.nahadaika.media.OfflineSpeech
 import kotlinx.coroutines.Job
 import androidx.compose.material3.CircularProgressIndicator
 import ua.nahadaika.previewText
@@ -219,6 +221,7 @@ fun ChatScreen(
     var showSchedule by remember { mutableStateOf(false) }
     // Фонове розпізнавання щойно записаного; голосова команда без вікна Google.
     var transcription by remember { mutableStateOf<Job?>(null) }
+    var offerSpeech by remember { mutableStateOf(false) }
     val dictation = remember { LiveDictation(context) }
     var rescheduling by remember { mutableStateOf<Reminder?>(null) }
     var actionsFor by remember { mutableStateOf<Reminder?>(null) }
@@ -329,7 +332,7 @@ fun ChatScreen(
         } else {
             text = combined
             showSchedule = true
-            toast("Не зрозумів, коли нагадати — оберіть час")
+            toast("Почув: «$spoken» — але не зрозумів, коли нагадати")
         }
     }
 
@@ -344,7 +347,7 @@ fun ChatScreen(
         playingVideoId = null
         showSchedule = false
         if (dictation.isAvailable()) {
-            dictation.start(onResult = ::applySpoken, onError = { toast("Не почув — спробуйте ще раз") })
+            dictation.start(onResult = ::applySpoken, onError = ::toast)
             return
         }
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
@@ -383,15 +386,26 @@ fun ChatScreen(
         cancelTranscription()
         replaceAttachment(a)
         transcription = scope.launch {
-            val spoken = Transcriber.transcribe(context, a.file)
+            val hearing = Transcriber.transcribe(context, a.file)
             transcription = null
             if (attachment !== a) return@launch
-            val cmd = spoken?.let { VoiceParser.parse(it) }
+            val cmd = (hearing as? Hearing.Heard)?.let { VoiceParser.parse(it.text) }
             if (cmd?.at != null) {
                 scheduleComposed(cmd.at, cmd.repeat, listOf(text.trim(), cmd.text).filter { it.isNotBlank() }.joinToString(" "))
-            } else {
-                showSchedule = true
+                return@launch
             }
+            when {
+                hearing is Hearing.Heard -> toast("Почув: «${hearing.text}» — але не зрозумів, коли нагадати")
+                hearing == Hearing.Nothing -> toast("Не розчув у записі, коли нагадати")
+                OfflineSpeech.state is OfflineSpeech.State.Downloading ->
+                    toast("Розпізнавання ще завантажується — оберіть час цього разу")
+                !Prefs.speechOfferShown(context) -> {
+                    // Один раз пояснюємо, чому не розпізнало, і пропонуємо офлайн-розпізнавання.
+                    offerSpeech = true
+                    return@launch
+                }
+            }
+            showSchedule = true
         }
     }
 
@@ -441,6 +455,8 @@ fun ChatScreen(
     fun beginRecording(kind: Kind, locked: Boolean): Boolean {
         player.stop()
         dictation.cancel()
+        // Поки йде запис, підвантажуємо офлайн-розпізнавач — тоді час розпізнається одразу після запису.
+        if (OfflineSpeech.isReady) scope.launch { OfflineSpeech.warmUp() }
         playingVideoId = null
         if (kind == Kind.VOICE && !recorder.start()) {
             toast("Не вдалося увімкнути мікрофон")
@@ -730,6 +746,34 @@ fun ChatScreen(
     }
 
     // ---- Діалоги ----
+
+    if (offerSpeech) {
+        fun close() {
+            Prefs.setSpeechOfferShown(context)
+            offerSpeech = false
+            showSchedule = true
+        }
+        AlertDialog(
+            onDismissRequest = ::close,
+            title = { Text("Розпізнавати час у голосових?") },
+            text = {
+                Text(
+                    "Цей телефон не вміє сам розпізнавати записані голосові й відео. " +
+                        "Можна один раз завантажити офлайн-розпізнавання української — " +
+                        "≈${OfflineSpeech.DOWNLOAD_MB} МБ (на телефоні ≈${OfflineSpeech.DISK_MB} МБ), краще через Wi-Fi.\n\n" +
+                        "Після цього «завтра о 9…» в записі ставитиметься саме, навіть без інтернету. " +
+                        "А поки що — оберіть час вручну.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    OfflineSpeech.download()
+                    close()
+                }) { Text("Завантажити") }
+            },
+            dismissButton = { TextButton(onClick = ::close) { Text("Не зараз") } },
+        )
+    }
 
     if (showSchedule) {
         ScheduleSheet(

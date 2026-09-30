@@ -31,11 +31,7 @@ object VoiceParser {
     )
     private val NUM = "(\\d+(?:[.,]\\d+)?|" + numberWords.keys.sortedByDescending { it.length }.joinToString("|") + ")"
 
-    // «о дев'ятій», «пів на восьму»
-    private val ordinalLocative = listOf(
-        "першій", "другій", "третій", "четвертій", "п'ятій", "шостій", "сьомій", "восьмій",
-        "дев'ятій", "десятій", "одинадцятій", "дванадцятій",
-    )
+    // «пів на восьму»
     private val ordinalAccusative = listOf(
         "першу", "другу", "третю", "четверту", "п'яту", "шосту", "сьому", "восьму",
         "дев'яту", "десяту", "одинадцяту", "дванадцяту",
@@ -44,14 +40,76 @@ object VoiceParser {
     private val months = listOf(
         "січня", "лютого", "березня", "квітня", "травня", "червня",
         "липня", "серпня", "вересня", "жовтня", "листопада", "грудня",
+    ).withIndex().associate { it.value to it.index + 1 } + listOf(
+        "января", "февраля", "марта", "апреля", "мая", "июня",
+        "июля", "августа", "сентября", "октября", "ноября", "декабря",
+    ).withIndex().associate { it.value to it.index + 1 }
+    private val MONTH = "(" + months.keys.joinToString("|") + ")"
+
+    // ---- Числа словами → цифри: розпізнавач часто пише «вісімнадцять тридцять», «двадцять п'ятого» ----
+    private val units = mapOf(
+        "нуль" to 0, "один" to 1, "одна" to 1, "одну" to 1, "одне" to 1, "два" to 2, "дві" to 2, "две" to 2,
+        "три" to 3, "чотири" to 4, "четыре" to 4, "п'ять" to 5, "пять" to 5, "шість" to 6, "шесть" to 6,
+        "сім" to 7, "семь" to 7, "вісім" to 8, "восемь" to 8, "дев'ять" to 9, "девять" to 9,
     )
+    private val teens = mapOf(
+        "десять" to 10, "одинадцять" to 11, "одиннадцать" to 11, "дванадцять" to 12, "двенадцать" to 12,
+        "тринадцять" to 13, "тринадцать" to 13, "чотирнадцять" to 14, "четырнадцать" to 14,
+        "п'ятнадцять" to 15, "пятнадцать" to 15, "шістнадцять" to 16, "шестнадцать" to 16,
+        "сімнадцять" to 17, "семнадцать" to 17, "вісімнадцять" to 18, "восемнадцать" to 18,
+        "дев'ятнадцять" to 19, "девятнадцать" to 19,
+    )
+    private val tens = mapOf(
+        "двадцять" to 20, "двадцать" to 20, "тридцять" to 30, "тридцать" to 30,
+        "сорок" to 40, "п'ятдесят" to 50, "пятьдесят" to 50,
+    )
+    private val ordinalStems = listOf(
+        "перш" to 1, "перв" to 1, "друг" to 2, "втор" to 2, "трет" to 3, "четверт" to 4, "п'ят" to 5, "пят" to 5,
+        "шост" to 6, "шест" to 6, "сьом" to 7, "седьм" to 7, "восьм" to 8, "дев'ят" to 9, "девят" to 9,
+        "десят" to 10, "одинадцят" to 11, "одиннадцат" to 11, "дванадцят" to 12, "двенадцат" to 12,
+        "тринадцят" to 13, "тринадцат" to 13, "чотирнадцят" to 14, "четырнадцат" to 14,
+        "п'ятнадцят" to 15, "пятнадцат" to 15, "шістнадцят" to 16, "шестнадцат" to 16,
+        "сімнадцят" to 17, "семнадцат" to 17, "вісімнадцят" to 18, "восемнадцат" to 18,
+        "дев'ятнадцят" to 19, "девятнадцат" to 19, "двадцят" to 20, "двадцат" to 20, "тридцят" to 30, "тридцат" to 30,
+    ).sortedByDescending { it.first.length }
+
+    private fun alt(words: Collection<String>) = words.sortedByDescending { it.length }.joinToString("|")
+    private val TENS = "(${alt(tens.keys)})"
+    private val ORD = "(${alt(ordinalStems.map { it.first })})"
+    private val ordinalHour = Regex("$B(о|об|в|у)\\s+(?:$TENS\\s+)?${ORD}ій$E", RegexOption.IGNORE_CASE)
+    private val ordinalDay = Regex("$B(?:$TENS\\s+)?$ORD(?:ого|ього|его|ьего|е)(?=\\s+(?:$MONTH|числа)$E)", RegexOption.IGNORE_CASE)
+    private val compound = Regex("$B$TENS(?:\\s+(${alt(units.keys - "нуль")}))?$E", RegexOption.IGNORE_CASE)
+    private val simple = Regex("$B(${alt(units.keys + teens.keys)})$E", RegexOption.IGNORE_CASE)
+
+    private fun ordinal(tensWord: String?, stem: String): Int =
+        (tensWord?.let { tens[it.lowercase()] } ?: 0) + ordinalStems.first { stem.lowercase() == it.first }.second
+
+    private fun normalizeNumbers(input: String): String = input
+        .replace(ordinalHour) { m ->
+            val h = ordinal(m.groups[2]?.value, m.groupValues[3])
+            if (h in 1..24) "${m.groupValues[1]} ${h % 24}" else m.value
+        }
+        .replace(ordinalDay) { m -> ordinal(m.groups[1]?.value, m.groupValues[2]).toString() }
+        .replace(compound) { m ->
+            ((tens[m.groupValues[1].lowercase()] ?: 0) + (m.groups[2]?.value?.let { units[it.lowercase()] } ?: 0)).toString()
+        }
+        .replace(simple) { m -> (units[m.value.lowercase()] ?: teens.getValue(m.value.lowercase())).toString() }
 
     private val weekdayStems = listOf(
         "понеділ" to DayOfWeek.MONDAY, "вівтор" to DayOfWeek.TUESDAY, "серед" to DayOfWeek.WEDNESDAY,
         "четвер" to DayOfWeek.THURSDAY, "п'ятниц" to DayOfWeek.FRIDAY, "субот" to DayOfWeek.SATURDAY,
         "неділ" to DayOfWeek.SUNDAY,
+        "понедельн" to DayOfWeek.MONDAY, "вторн" to DayOfWeek.TUESDAY, "сред" to DayOfWeek.WEDNESDAY,
+        "пятниц" to DayOfWeek.FRIDAY, "суббот" to DayOfWeek.SATURDAY, "воскресен" to DayOfWeek.SUNDAY,
     )
     private val WEEKDAY = "(" + weekdayStems.joinToString("|") { it.first } + ")\\p{L}*"
+
+    private const val EVERY = "(?:кожн|кажд)\\p{L}*\\s+"
+    private const val HOURS = "(?:годин\\p{L}*|год|час(?:а|ов)?)"
+    private const val MINUTES = "(?:хвилин\\p{L}*|хв|минут\\p{L}*|мин)"
+    private const val PERIOD = "(?:ранку|вранці|зранку|утра|вечора|ввечері|вечера|дня|ночі|ночи)"
+    // Після числа — одиниця виміру, тож це не година («на 5 днів», «2 кг»).
+    private const val UNIT = "(?:дн|тиж|міс|хв|мин|раз|рок|кг|шт|грн|%|[.,/]\\d)"
 
     private fun num(token: String?): Double? {
         if (token == null) return null
@@ -83,25 +141,27 @@ object VoiceParser {
     fun parse(input: String, now: LocalDateTime = LocalDateTime.now()): VoiceCommand {
         val base = now.truncatedTo(ChronoUnit.MINUTES)
         val c = Cursor(
-            " " + input
-                .replace(Regex("[’ʼ`‘]"), "'")
-                .replace(Regex("\\s+"), " ")
-                .trim() + " ",
+            " " + normalizeNumbers(
+                input
+                    .replace(Regex("[’ʼ`‘]"), "'")
+                    .replace(Regex("\\s+"), " ")
+                    .trim(),
+            ) + " ",
         )
 
         // ---- Повтор ----
         var repeat = Repeat.NONE
         var repeatWeekday: DayOfWeek? = null
-        c.take("$B(?:що|кожн\\p{L}*\\s+|по\\s+)$WEEKDAY$E")?.let {
+        c.take("$B(?:що|(?:кожн|кажд)\\p{L}*\\s+|по\\s+)$WEEKDAY$E")?.let {
             repeat = Repeat.WEEKLY
             repeatWeekday = weekday(it.groupValues[1])
         }
         if (repeat == Repeat.NONE) {
             val repeats = listOf(
-                "(?:щодня|щоденно|кожн\\p{L}*\\s+(?:дня|день))" to Repeat.DAILY,
-                "(?:щотижня|щотижнево|кожн\\p{L}*\\s+(?:тижня|тиждень))" to Repeat.WEEKLY,
-                "(?:щомісяця|щомісячно|кожн\\p{L}*\\s+(?:місяця|місяць))" to Repeat.MONTHLY,
-                "(?:щороку|щорічно|кожн\\p{L}*\\s+(?:року|рік))" to Repeat.YEARLY,
+                "(?:щодня|щоденно|ежедневно|$EVERY(?:дня|день))" to Repeat.DAILY,
+                "(?:щотижня|щотижнево|еженедельно|$EVERY(?:тижня|тиждень|неделю))" to Repeat.WEEKLY,
+                "(?:щомісяця|щомісячно|ежемесячно|$EVERY(?:місяця|місяць|месяц))" to Repeat.MONTHLY,
+                "(?:щороку|щорічно|ежегодно|$EVERY(?:року|рік|год))" to Repeat.YEARLY,
             )
             for ((p, r) in repeats) {
                 if (c.take("$B$p$E") != null) {
@@ -115,34 +175,34 @@ object VoiceParser {
         var absolute: LocalDateTime? = null
         var dayOffset: Long? = null
         var monthOffset: Long? = null
-        c.take("${B}через\\s+півгодини$E")?.let { absolute = base.plusMinutes(30) }
+        c.take("${B}через\\s+(?:півгодини|полчаса)$E")?.let { absolute = base.plusMinutes(30) }
         if (absolute == null) {
-            c.take("${B}через\\s+(?:$NUM\\s*)?(?:годин\\p{L}*|год)(?:\\s+(?:і\\s+|та\\s+)?$NUM\\s*(?:хвилин\\p{L}*|хв))?$E")?.let {
+            c.take("${B}через\\s+(?:$NUM\\s*)?$HOURS(?:\\s+(?:і\\s+|та\\s+|и\\s+)?$NUM\\s*$MINUTES)?$E")?.let {
                 val hours = num(it.groups[1]?.value) ?: 1.0
                 val minutes = num(it.groups[2]?.value) ?: 0.0
                 absolute = base.plusMinutes((hours * 60 + minutes).toLong())
             }
         }
         if (absolute == null) {
-            c.take("${B}через\\s+(?:$NUM\\s*)?(?:хвилин\\p{L}*|хв)$E")?.let {
+            c.take("${B}через\\s+(?:$NUM\\s*)?$MINUTES$E")?.let {
                 absolute = base.plusMinutes((num(it.groups[1]?.value) ?: 1.0).toLong())
             }
         }
-        c.take("${B}через\\s+(?:$NUM\\s*)?(?:дн\\p{L}*|день|добу)$E")?.let {
+        c.take("${B}через\\s+(?:$NUM\\s*)?(?:дн\\p{L}*|день|добу|сутки|суток)$E")?.let {
             dayOffset = (num(it.groups[1]?.value) ?: 1.0).toLong()
         }
-        c.take("${B}через\\s+(?:$NUM\\s*)?(?:тиждень|тижні|тижнів)$E")?.let {
+        c.take("${B}через\\s+(?:$NUM\\s*)?(?:тиждень|тижні|тижнів|неделю|недели|недель)$E")?.let {
             dayOffset = 7 * (num(it.groups[1]?.value) ?: 1.0).toLong()
         }
-        c.take("${B}через\\s+(?:$NUM\\s*)?(?:місяць|місяці|місяців)$E")?.let {
+        c.take("${B}через\\s+(?:$NUM\\s*)?(?:місяць|місяці|місяців|месяц|месяца|месяцев)$E")?.let {
             monthOffset = (num(it.groups[1]?.value) ?: 1.0).toLong()
         }
 
         // ---- Час доби ----
         var time: LocalTime? = null
         var hourIsExplicit12h = false // «о 7» без хвилин — може бути і ранок, і вечір
-        c.take("${B}опівдні$E")?.let { time = LocalTime.NOON }
-        if (time == null) c.take("${B}опівночі$E")?.let { time = LocalTime.MIDNIGHT }
+        c.take("$B(?:опівдні|(?:в\\s+)?полдень)$E")?.let { time = LocalTime.NOON }
+        if (time == null) c.take("$B(?:опівночі|(?:в\\s+)?полночь)$E")?.let { time = LocalTime.MIDNIGHT }
         if (time == null) {
             c.take("$B(?:о|об|в|у|на)?\\s*пів\\s*на\\s+(\\d{1,2}|${ordinalAccusative.joinToString("|")})$E")?.let {
                 val h = it.groupValues[1].toIntOrNull() ?: (ordinalAccusative.indexOf(it.groupValues[1]) + 1)
@@ -151,21 +211,15 @@ object VoiceParser {
             }
         }
         if (time == null) {
-            val ordinals = ordinalLocative.joinToString("|")
-            c.take("$B(?:о|об)\\s+($ordinals)(?:\\s+годині)?(?:\\s+$NUM(?:\\s+хвилин\\p{L}*)?)?$E")?.let {
-                val h = ordinalLocative.indexOf(it.groupValues[1]) + 1
-                val m = num(it.groups[2]?.value)?.toInt()?.takeIf { v -> v in 0..59 } ?: 0
-                time = LocalTime.of(h % 24, m)
-                hourIsExplicit12h = true
-            }
-        }
-        if (time == null) {
-            c.take(
-                "$B(?:о|об|в|у|на|до)\\s+(\\d{1,2})(?:[:.](\\d{2}))?(?!\\s*(?:дн|тиж|міс|хв|раз|рок|%))" +
-                    "(?:\\s+годин\\p{L}*)?(?:\\s+(\\d{1,2})\\s+хвилин\\p{L}*)?$E",
+            // «о 9», «в 18:30», «о 18 30», «о 9 годині 15 хвилин»; або без прийменника — «9 ранку».
+            val clock = "(\\d{1,2})(?:[:.](\\d{2})|\\s+([0-5]\\d)(?!\\s*(?:$UNIT|$MONTH|числа)))?(?!\\s*$UNIT)" +
+                "(?:\\s+(?:годин\\p{L}*|час\\p{L}*))?(?:\\s+(\\d{1,2})\\s+$MINUTES)?"
+            (
+                c.take("$B(?:о|об|в|у|на|до)\\s+$clock$E")
+                    ?: c.take("$B(?:о|об|в|у|на|до)?\\s*$clock(?=\\s+$PERIOD$E)")
             )?.let {
                 val h = it.groupValues[1].toInt()
-                val m = (it.groups[2]?.value ?: it.groups[3]?.value)?.toInt() ?: 0
+                val m = (it.groups[2]?.value ?: it.groups[3]?.value ?: it.groups[4]?.value)?.toInt() ?: 0
                 if (h in 0..23 && m in 0..59) {
                     time = LocalTime.of(h, m)
                     hourIsExplicit12h = h in 1..12
@@ -183,10 +237,10 @@ object VoiceParser {
         // «ранку», «ввечері» — уточнюють годину або задають її самі.
         var period: String? = null
         val periods = listOf(
-            "(?:ранку|вранці|зранку|уранці)" to "morning",
-            "(?:дня|вдень|удень|після\\s+обіду|пообіді)" to "day",
-            "(?:вечора|ввечері|увечері)" to "evening",
-            "(?:ночі|вночі|уночі)" to "night",
+            "(?:ранку|вранці|зранку|уранці|утра|утром)" to "morning",
+            "(?:дня|вдень|удень|після\\s+обіду|пообіді|днем|днём|после\\s+обеда)" to "day",
+            "(?:вечора|ввечері|увечері|звечора|вечера|вечером)" to "evening",
+            "(?:ночі|вночі|уночі|ночи|ночью)" to "night",
         )
         for ((p, name) in periods) {
             if (c.take("$B$p$E") != null) {
@@ -218,19 +272,19 @@ object VoiceParser {
         var dateWithoutYear = false
         var dateIsDayOfMonth = false
         when {
-            c.take("$B(?:на\\s+)?(?:післязавтра|позавтра)$E") != null -> date = today.plusDays(2)
+            c.take("$B(?:на\\s+)?(?:післязавтра|позавтра|послезавтра)$E") != null -> date = today.plusDays(2)
             c.take("$B(?:на\\s+)?завтра$E") != null -> date = today.plusDays(1)
-            c.take("$B(?:на\\s+)?сьогодні$E") != null -> date = today
+            c.take("$B(?:на\\s+)?(?:сьогодні|сегодня)$E") != null -> date = today
         }
         if (date == null) {
-            c.take("$B(?:(?:в|у|во|на)\\s+)?(?:цю\\s+|цей\\s+|наступн\\p{L}*\\s+)?$WEEKDAY$E")?.let {
+            c.take("$B(?:(?:в|у|во|на)\\s+)?(?:цю\\s+|цей\\s+|эту\\s+|этот\\s+|наступн\\p{L}*\\s+|следующ\\p{L}*\\s+)?$WEEKDAY$E")?.let {
                 date = today.with(TemporalAdjusters.nextOrSame(weekday(it.groupValues[1])))
                 dateIsWeekday = true
             }
         }
         if (date == null) {
-            c.take("$B(?:на\\s+)?(\\d{1,2})(?:-?го)?\\s+(${months.joinToString("|")})(?:\\s+(\\d{4}))?$E")?.let {
-                date = safeDate(it.groupValues[3].toIntOrNull() ?: today.year, months.indexOf(it.groupValues[2]) + 1, it.groupValues[1].toInt())
+            c.take("$B(?:на\\s+)?(\\d{1,2})(?:-?го)?\\s+$MONTH(?:\\s+(\\d{4}))?$E")?.let {
+                date = safeDate(it.groupValues[3].toIntOrNull() ?: today.year, months.getValue(it.groupValues[2]), it.groupValues[1].toInt())
                 dateWithoutYear = it.groupValues[3].isEmpty()
             }
         }
@@ -307,7 +361,7 @@ object VoiceParser {
 
     private val commandPrefix = Regex(
         "^\\s*(?:будь\\s+ласка,?\\s*)?" +
-            "(?:нагадай|нагадайте|нагадати|напомни|напомніть|постав|поставте|поставь|створи|створіть|зроби|зробіть|запиши|запишіть|додай|додайте)" +
+            "(?:нагадай|нагадайте|нагадати|нагадаю|нагадав|напомни|напомните|напомню|напомніть|поставь|создай|постав|поставте|поставь|створи|створіть|зроби|зробіть|запиши|запишіть|додай|додайте)" +
             "(?:\\s+(?:мені|нам|будь\\s+ласка))?" +
             "(?:\\s+(?:нагадування|нагадувалку|будильник|напоминалку))?$E",
         RegexOption.IGNORE_CASE,

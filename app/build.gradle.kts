@@ -19,8 +19,10 @@ android {
         applicationId = "ua.nahadaika"
         minSdk = 26
         targetSdk = 35
-        versionCode = 11
-        versionName = "3.2"
+        versionCode = 12
+        versionName = "3.3"
+        // Офлайн-розпізнавання мовлення (Vosk) — лише для ARM-телефонів.
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
     signingConfigs {
@@ -75,6 +77,8 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     implementation("androidx.core:core-ktx:1.15.0")
+    implementation("com.alphacephei:vosk-android:0.3.47")
+    implementation("net.java.dev.jna:jna:5.13.0@aar")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
 
