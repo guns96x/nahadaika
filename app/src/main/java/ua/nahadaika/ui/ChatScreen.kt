@@ -215,6 +215,8 @@ fun ChatScreen(
     var actionsFor by remember { mutableStateOf<Reminder?>(null) }
     var editingText by remember { mutableStateOf<Reminder?>(null) }
     var viewing by remember { mutableStateOf<Reminder?>(null) }
+    // Відео грає прямо в бульбашці; одночасно — одне відео або одне голосове.
+    var playingVideoId by remember { mutableStateOf<Long?>(null) }
     var highlightId by remember { mutableStateOf<Long?>(null) }
 
     val currentAttachment by rememberUpdatedState(attachment)
@@ -226,6 +228,7 @@ fun ChatScreen(
         }
     }
     LaunchedEffect(player.isPlaying) {
+        if (player.isPlaying) playingVideoId = null
         while (player.isPlaying) {
             player.tick()
             delay(100)
@@ -376,6 +379,7 @@ fun ChatScreen(
 
     fun beginRecording(kind: Kind, locked: Boolean): Boolean {
         player.stop()
+        playingVideoId = null
         if (kind == Kind.VOICE && !recorder.start()) {
             toast("Не вдалося увімкнути мікрофон")
             return false
@@ -640,7 +644,13 @@ fun ChatScreen(
                             player = player,
                             now = nowTick,
                             onClick = { actionsFor = row.reminder },
-                            onOpenMedia = { viewing = row.reminder },
+                            videoPlaying = row.reminder.id == playingVideoId,
+                            onOpenPhoto = { viewing = row.reminder },
+                            onPlayVideo = {
+                                player.stop()
+                                playingVideoId = row.reminder.id
+                            },
+                            onVideoEnded = { if (playingVideoId == row.reminder.id) playingVideoId = null },
                         )
                     }
                 }

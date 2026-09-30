@@ -1,7 +1,17 @@
 package ua.nahadaika.ui
 
-import android.widget.MediaController
-import android.widget.VideoView
+import android.graphics.Matrix
+import android.graphics.SurfaceTexture
+import android.media.MediaPlayer
+import android.view.Surface
+import android.view.TextureView
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import kotlin.math.max
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -156,8 +166,11 @@ fun ReminderBubble(
     highlighted: Boolean,
     player: AudioPlayer,
     now: Long,
+    videoPlaying: Boolean,
     onClick: () -> Unit,
-    onOpenMedia: () -> Unit,
+    onOpenPhoto: () -> Unit,
+    onPlayVideo: () -> Unit,
+    onVideoEnded: () -> Unit,
 ) {
     val tint by animateColorAsState(
         if (highlighted) Glass.Lavender.copy(alpha = 0.16f) else Color.Transparent,
@@ -186,34 +199,35 @@ fun ReminderBubble(
                         .height(240.dp)
                         .clip(RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp))
                         .background(Color.Black.copy(alpha = 0.3f))
-                        .clickable(onClick = onOpenMedia),
+                        .clickable(onClick = onOpenPhoto),
                 )
                 Kind.VIDEO -> Box(
                     Modifier
                         .padding(4.dp)
+                        .fillMaxWidth()
+                        .height(240.dp)
                         .clip(RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp))
-                        .clickable(onClick = onOpenMedia),
+                        .background(Color.Black),
                 ) {
+                    // Кадр-обкладинка лежить під плеєром, поки не з'явиться перший кадр відео.
                     AsyncImage(
                         model = reminder.mediaPath?.let(::File),
-                        contentDescription = "Відео",
+                        contentDescription = null,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxWidth().height(240.dp).background(Color.Black),
+                        modifier = Modifier.fillMaxSize(),
                     )
-                    Box(
-                        Modifier.align(Alignment.Center).size(54.dp).glass(CircleShape, Color.Black.copy(alpha = 0.35f)),
-                        contentAlignment = Alignment.Center,
-                    ) { Icon(Icons.Default.PlayArrow, null, tint = Color.White, modifier = Modifier.size(34.dp)) }
-                    Text(
-                        formatDuration(reminder.durationMs),
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .padding(8.dp)
-                            .glass(Glass.Pill, Color.Black.copy(alpha = 0.35f))
-                            .padding(horizontal = 8.dp, vertical = 2.dp),
-                    )
+                    val path = reminder.mediaPath
+                    if (videoPlaying && path != null) {
+                        InlineVideo(path, reminder.durationMs, onEnded = onVideoEnded, modifier = Modifier.fillMaxSize())
+                    } else {
+                        Box(Modifier.fillMaxSize().clickable(onClickLabel = "Відтворити відео", onClick = onPlayVideo)) {
+                            Box(
+                                Modifier.align(Alignment.Center).size(54.dp).glass(CircleShape, Color.Black.copy(alpha = 0.35f)),
+                                contentAlignment = Alignment.Center,
+                            ) { Icon(Icons.Default.PlayArrow, "Відтворити відео", tint = Color.White, modifier = Modifier.size(34.dp)) }
+                            VideoLabel(formatDuration(reminder.durationMs), Modifier.align(Alignment.TopStart))
+                        }
+                    }
                 }
                 Kind.VOICE -> VoiceContent(reminder, player)
                 Kind.TEXT -> Unit
@@ -299,7 +313,130 @@ private fun Footer(r: Reminder, now: Long) {
     }
 }
 
-/** Повноекранний перегляд фото або відео. */
+@Composable
+private fun VideoLabel(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text,
+        color = Color.White,
+        fontSize = 12.sp,
+        style = LocalTextStyle.current.copy(fontFeatureSettings = "tnum"),
+        modifier = modifier
+            .padding(8.dp)
+            .glass(Glass.Pill, Color.Black.copy(alpha = 0.35f))
+            .padding(horizontal = 8.dp, vertical = 2.dp),
+    )
+}
+
+/**
+ * Відео, що грає прямо в бульбашці, як у Telegram: тап — пауза/продовжити,
+ * внизу — прогрес, у кутку — скільки лишилось. Кадр обрізається по центру під рамку.
+ */
+@Composable
+private fun InlineVideo(path: String, durationMs: Long, onEnded: () -> Unit, modifier: Modifier = Modifier) {
+    val ended by rememberUpdatedState(onEnded)
+    val player = remember { MediaPlayer() }
+    var prepared by remember { mutableStateOf(false) }
+    var paused by remember { mutableStateOf(false) }
+    var position by remember { mutableLongStateOf(0L) }
+    var total by remember { mutableLongStateOf(durationMs) }
+
+    DisposableEffect(Unit) {
+        onDispose { player.release() }
+    }
+    LaunchedEffect(prepared, paused) {
+        while (prepared && !paused) {
+            position = runCatching { player.currentPosition.toLong() }.getOrDefault(position)
+            delay(100)
+        }
+    }
+
+    Box(
+        modifier
+            .clickable(onClickLabel = if (paused) "Продовжити" else "Пауза") {
+                if (!prepared) return@clickable
+                paused = !paused
+                if (paused) player.pause() else player.start()
+            }
+            .semantics { contentDescription = if (paused) "Відео на паузі" else "Відео відтворюється" },
+    ) {
+        AndroidView(
+            factory = { ctx ->
+                TextureView(ctx).apply {
+                    isOpaque = false
+                    var videoW = 0
+                    var videoH = 0
+                    fun crop() {
+                        if (width == 0 || height == 0 || videoW == 0 || videoH == 0) return
+                        val scale = max(width.toFloat() / videoW, height.toFloat() / videoH)
+                        setTransform(
+                            Matrix().apply {
+                                setScale(videoW * scale / width, videoH * scale / height, width / 2f, height / 2f)
+                            },
+                        )
+                    }
+                    surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+                        private var surface: Surface? = null
+                        override fun onSurfaceTextureAvailable(texture: SurfaceTexture, w: Int, h: Int) {
+                            surface = Surface(texture)
+                            try {
+                                player.setSurface(surface)
+                                if (!prepared) {
+                                    player.setDataSource(path)
+                                    player.setOnVideoSizeChangedListener { _, vw, vh ->
+                                        videoW = vw
+                                        videoH = vh
+                                        crop()
+                                    }
+                                    player.setOnPreparedListener {
+                                        total = it.duration.toLong().takeIf { d -> d > 0 } ?: total
+                                        prepared = true
+                                        it.start()
+                                    }
+                                    player.setOnCompletionListener { ended() }
+                                    player.setOnErrorListener { _, _, _ ->
+                                        ended()
+                                        true
+                                    }
+                                    player.prepareAsync()
+                                }
+                            } catch (_: Exception) {
+                                ended()
+                            }
+                        }
+
+                        override fun onSurfaceTextureSizeChanged(texture: SurfaceTexture, w: Int, h: Int) = crop()
+
+                        override fun onSurfaceTextureDestroyed(texture: SurfaceTexture): Boolean {
+                            surface?.release()
+                            surface = null
+                            return true
+                        }
+
+                        override fun onSurfaceTextureUpdated(texture: SurfaceTexture) = Unit
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxSize(),
+        )
+        if (paused) {
+            Box(
+                Modifier.align(Alignment.Center).size(54.dp).glass(CircleShape, Color.Black.copy(alpha = 0.35f)),
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Default.PlayArrow, null, tint = Color.White, modifier = Modifier.size(34.dp)) }
+        }
+        VideoLabel(formatDuration((total - position).coerceAtLeast(0)), Modifier.align(Alignment.TopStart))
+        LinearProgressIndicator(
+            progress = { if (total > 0) (position.toFloat() / total).coerceIn(0f, 1f) else 0f },
+            color = Color.White,
+            trackColor = Color.White.copy(alpha = 0.25f),
+            drawStopIndicator = {},
+            gapSize = 0.dp,
+            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp),
+        )
+    }
+}
+
+/** Повноекранний перегляд фото. */
 @Composable
 fun MediaViewer(reminder: Reminder, onDismiss: () -> Unit) {
     val path = reminder.mediaPath ?: return
@@ -314,19 +451,6 @@ fun MediaViewer(reminder: Reminder, onDismiss: () -> Unit) {
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize(),
-                )
-                Kind.VIDEO -> AndroidView(
-                    factory = { ctx ->
-                        VideoView(ctx).apply {
-                            val controller = MediaController(ctx)
-                            controller.setAnchorView(this)
-                            setMediaController(controller)
-                            setVideoPath(path)
-                            setOnPreparedListener { start() }
-                        }
-                    },
-                    onRelease = { it.stopPlayback() },
-                    modifier = Modifier.fillMaxWidth(),
                 )
                 else -> Unit
             }
