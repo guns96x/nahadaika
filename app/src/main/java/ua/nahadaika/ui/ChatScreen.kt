@@ -52,6 +52,10 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import ua.nahadaika.Prefs
 import ua.nahadaika.VoiceParser
+import ua.nahadaika.media.LiveDictation
+import ua.nahadaika.media.Transcriber
+import kotlinx.coroutines.Job
+import androidx.compose.material3.CircularProgressIndicator
 import ua.nahadaika.previewText
 import android.content.ActivityNotFoundException
 import android.content.pm.PackageManager
@@ -213,6 +217,9 @@ fun ChatScreen(
     var frontCamera by remember { mutableStateOf(Prefs.frontCamera(context)) }
     var pendingStart by remember { mutableStateOf<Pair<Kind, Boolean>?>(null) }
     var showSchedule by remember { mutableStateOf(false) }
+    // Фонове розпізнавання щойно записаного; голосова команда без вікна Google.
+    var transcription by remember { mutableStateOf<Job?>(null) }
+    val dictation = remember { LiveDictation(context) }
     var rescheduling by remember { mutableStateOf<Reminder?>(null) }
     var actionsFor by remember { mutableStateOf<Reminder?>(null) }
     var editingText by remember { mutableStateOf<Reminder?>(null) }
@@ -226,6 +233,7 @@ fun ChatScreen(
         onDispose {
             recorder.cancel()
             player.stop()
+            dictation.cancel()
             currentAttachment?.file?.delete()
         }
     }
@@ -266,6 +274,10 @@ fun ChatScreen(
     fun toast(msg: String) = Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
 
     fun replaceAttachment(new: Attachment?) {
+        if (new !== attachment) {
+            transcription?.cancel()
+            transcription = null
+        }
         attachment?.file?.delete()
         attachment = new
     }
@@ -308,23 +320,33 @@ fun ChatScreen(
 
     // ---- Голосова команда: «нагадай завтра о 9 купити хліб» ----
 
-    val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val spoken = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
-        if (result.resultCode != Activity.RESULT_OK || spoken.isNullOrBlank()) return@rememberLauncherForActivityResult
+    /** Розібрати сказане: є час — одразу планувати, немає — лишити текст і відкрити вибір часу. */
+    fun applySpoken(spoken: String) {
         val cmd = VoiceParser.parse(spoken)
         val combined = listOf(text.trim(), cmd.text).filter { it.isNotBlank() }.joinToString(" ")
         if (cmd.at != null) {
             scheduleComposed(cmd.at, cmd.repeat, combined)
         } else {
-            // Час не почули — лишаємо текст і відкриваємо вибір часу.
             text = combined
             showSchedule = true
             toast("Не зрозумів, коли нагадати — оберіть час")
         }
     }
 
-    fun dictate() {
+    // Запасний варіант — вікно Google, якщо фонового розпізнавання на телефоні немає.
+    val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val spoken = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+        if (result.resultCode == Activity.RESULT_OK && !spoken.isNullOrBlank()) applySpoken(spoken)
+    }
+
+    fun startDictation() {
         player.stop()
+        playingVideoId = null
+        showSchedule = false
+        if (dictation.isAvailable()) {
+            dictation.start(onResult = ::applySpoken, onError = { toast("Не почув — спробуйте ще раз") })
+            return
+        }
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "uk-UA")
@@ -333,6 +355,43 @@ fun ChatScreen(
             speech.launch(intent)
         } catch (_: ActivityNotFoundException) {
             toast("На телефоні немає розпізнавання мовлення (потрібен застосунок Google)")
+        }
+    }
+
+    val dictatePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) startDictation() else toast("Потрібен доступ до мікрофона")
+    }
+
+    fun dictate() {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            startDictation()
+        } else {
+            showSchedule = false
+            dictatePermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    // ---- Записали голосове чи відео: у фоні дізнатися, коли нагадати ----
+
+    fun cancelTranscription() {
+        transcription?.cancel()
+        transcription = null
+    }
+
+    /** Прикріпити запис і розпізнати в ньому час («завтра о 9…»); не вийшло — відкрити вибір часу. */
+    fun attachRecording(a: Attachment) {
+        cancelTranscription()
+        replaceAttachment(a)
+        transcription = scope.launch {
+            val spoken = Transcriber.transcribe(context, a.file)
+            transcription = null
+            if (attachment !== a) return@launch
+            val cmd = spoken?.let { VoiceParser.parse(it) }
+            if (cmd?.at != null) {
+                scheduleComposed(cmd.at, cmd.repeat, listOf(text.trim(), cmd.text).filter { it.isNotBlank() }.joinToString(" "))
+            } else {
+                showSchedule = true
+            }
         }
     }
 
@@ -381,6 +440,7 @@ fun ChatScreen(
 
     fun beginRecording(kind: Kind, locked: Boolean): Boolean {
         player.stop()
+        dictation.cancel()
         playingVideoId = null
         if (kind == Kind.VOICE && !recorder.start()) {
             toast("Не вдалося увімкнути мікрофон")
@@ -430,8 +490,7 @@ fun ChatScreen(
         }
         val voice = recorder.stop()
         if (voice != null && voice.durationMs >= 700) {
-            replaceAttachment(voice)
-            showSchedule = true
+            attachRecording(voice)
         } else {
             voice?.file?.delete()
             toast("Утримуйте кнопку довше, щоб записати")
@@ -441,10 +500,7 @@ fun ChatScreen(
     fun onVideoResult(video: Attachment?) {
         rec = null
         videoFinish = null
-        if (video != null) {
-            replaceAttachment(video)
-            showSchedule = true
-        }
+        if (video != null) attachRecording(video)
     }
 
     // Таймер голосового (для відео час приходить від камери).
@@ -560,7 +616,7 @@ fun ChatScreen(
             ) {
                 if (rec == null) {
                     attachment?.let { a ->
-                        AttachmentPreview(a, player, hazeState, onRemove = {
+                        AttachmentPreview(a, player, hazeState, recognizing = transcription != null, onRemove = {
                             if (player.currentPath == a.file.absolutePath) player.stop()
                             replaceAttachment(null)
                         })
@@ -584,7 +640,14 @@ fun ChatScreen(
                         }
                     },
                     onDictate = ::dictate,
-                    onSend = { showSchedule = true },
+                    listening = dictation.listening,
+                    heard = dictation.partial,
+                    onDictationDone = dictation::stop,
+                    onDictationCancel = dictation::cancel,
+                    onSend = {
+                        cancelTranscription()
+                        showSchedule = true
+                    },
                     onToggleMode = ::toggleMode,
                     onHoldStart = { requestRecording(recordMode, locked = false) },
                     onDrag = { x, y ->
@@ -758,6 +821,10 @@ private fun Composer(
     dragY: Float,
     onAttach: (Kind?) -> Unit,
     onDictate: () -> Unit,
+    listening: Boolean,
+    heard: String,
+    onDictationDone: () -> Unit,
+    onDictationCancel: () -> Unit,
     onSend: () -> Unit,
     onToggleMode: () -> Unit,
     onHoldStart: () -> Boolean,
@@ -770,6 +837,8 @@ private fun Composer(
         Box(Modifier.weight(1f)) {
             if (rec != null) {
                 RecordingPill(haze, rec, elapsed, dragX, onCancel)
+            } else if (listening) {
+                ListeningPill(haze, heard, onDictationCancel)
             } else {
                 InputPill(haze, text, onTextChange, onAttach, onDictate)
             }
@@ -777,11 +846,12 @@ private fun Composer(
         Spacer(Modifier.width(8.dp))
         // Одна й та сама кнопка весь час — щоб жест утримання не переривався.
         RecordButton(
-            canSend = canSend,
+            canSend = canSend || listening,
+            done = listening,
             recordMode = recordMode,
             rec = rec,
             dragY = dragY,
-            onSend = onSend,
+            onSend = if (listening) onDictationDone else onSend,
             onToggleMode = onToggleMode,
             onHoldStart = onHoldStart,
             onDrag = onDrag,
@@ -835,6 +905,34 @@ private fun InputPill(
     }
 }
 
+/** Голосова команда без вікна Google: «Слухаю…», сказане з'являється наживо; ✕ — скасувати. */
+@Composable
+private fun ListeningPill(haze: HazeState, heard: String, onCancel: () -> Unit) {
+    val pulse by rememberInfiniteTransition(label = "listen").animateFloat(
+        initialValue = 1f,
+        targetValue = 0.3f,
+        animationSpec = infiniteRepeatable(tween(650), RepeatMode.Reverse),
+        label = "pulse",
+    )
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = BarHeight).glassHaze(haze, RoundedCornerShape(BarHeight / 2)).padding(start = 18.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(10.dp).alpha(pulse).background(Glass.Lavender, CircleShape))
+        Spacer(Modifier.width(12.dp))
+        Text(
+            heard.ifBlank { "Слухаю… «завтра о 9 купити хліб»" },
+            color = if (heard.isBlank()) Glass.TextDim else Glass.Text,
+            fontSize = 16.sp,
+            lineHeight = 22.sp,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).padding(vertical = 14.dp),
+        )
+        IconButton(onClick = onCancel) { Icon(Icons.Default.Close, "Скасувати", tint = Glass.TextDim) }
+    }
+}
+
 /** Смуга запису: ● таймер і «‹ посуньте, щоб скасувати» (або «Скасувати» в режимі 🔒). */
 @Composable
 private fun RecordingPill(haze: HazeState, rec: Rec, elapsed: Long, dragX: Float, onCancel: () -> Unit) {
@@ -884,6 +982,7 @@ private fun RecordingPill(haze: HazeState, rec: Rec, elapsed: Long, dragX: Float
 @Composable
 private fun RecordButton(
     canSend: Boolean,
+    done: Boolean,
     recordMode: Kind,
     rec: Rec?,
     dragY: Float,
@@ -986,6 +1085,7 @@ private fun RecordButton(
             contentAlignment = Alignment.Center,
         ) {
             val icon = when {
+                done -> Icons.Default.Check
                 canSend -> Icons.Default.AlarmAdd
                 rec?.locked == true -> Icons.Default.Check
                 (rec?.kind ?: recordMode) == Kind.VIDEO -> Icons.Default.Videocam
@@ -1045,7 +1145,7 @@ private fun MenuItem(icon: ImageVector, label: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun AttachmentPreview(attachment: Attachment, player: AudioPlayer, haze: HazeState, onRemove: () -> Unit) {
+private fun AttachmentPreview(attachment: Attachment, player: AudioPlayer, haze: HazeState, recognizing: Boolean, onRemove: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().glassHaze(haze, RoundedCornerShape(22.dp)).padding(8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1073,16 +1173,24 @@ private fun AttachmentPreview(attachment: Attachment, player: AudioPlayer, haze:
             Kind.TEXT -> Unit
         }
         Spacer(Modifier.width(12.dp))
-        Text(
-            when (attachment.kind) {
-                Kind.PHOTO -> "Фото"
-                Kind.VIDEO -> "Відео · ${formatDuration(attachment.durationMs)}"
-                Kind.VOICE -> "Голосове · ${formatDuration(attachment.durationMs)}"
-                Kind.TEXT -> ""
-            },
-            color = Glass.Text,
-            modifier = Modifier.weight(1f),
-        )
+        Column(Modifier.weight(1f)) {
+            Text(
+                when (attachment.kind) {
+                    Kind.PHOTO -> "Фото"
+                    Kind.VIDEO -> "Відео · ${formatDuration(attachment.durationMs)}"
+                    Kind.VOICE -> "Голосове · ${formatDuration(attachment.durationMs)}"
+                    Kind.TEXT -> ""
+                },
+                color = Glass.Text,
+            )
+            if (recognizing) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 3.dp)) {
+                    CircularProgressIndicator(Modifier.size(11.dp), color = Glass.Lavender, strokeWidth = 1.5.dp)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Розпізнаю, коли нагадати…", color = Glass.TextDim, fontSize = 13.sp)
+                }
+            }
+        }
         IconButton(onClick = onRemove) { Icon(Icons.Default.Close, "Прибрати", tint = Glass.TextDim) }
     }
 }
