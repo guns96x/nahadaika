@@ -50,6 +50,7 @@ import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material3.AlertDialog
@@ -92,6 +93,7 @@ import ua.nahadaika.data.Repeat
 import ua.nahadaika.data.Repo
 import ua.nahadaika.Prefs
 import ua.nahadaika.media.OfflineSpeech
+import ua.nahadaika.update.Updates
 import ua.nahadaika.media.SpeechPack
 import ua.nahadaika.data.alarmAt
 import ua.nahadaika.previewText
@@ -361,6 +363,7 @@ fun PermissionBanners() {
                 },
             )
         }
+        UpdateBanner()
         SpeechBanner()
         if (!batteryOk) {
             Banner(
@@ -378,6 +381,33 @@ fun PermissionBanners() {
                 },
             )
         }
+    }
+}
+
+/** Нова версія застосунку: «Оновити» одним натиском, далі — хід завантаження. */
+@Composable
+private fun UpdateBanner() {
+    val context = LocalContext.current
+    when (val st = Updates.state) {
+        is Updates.State.Available -> Banner(
+            icon = Icons.Default.SystemUpdate,
+            text = "Доступна нова версія ${st.info.versionName}",
+            action = "Оновити",
+            onAction = { Updates.download(context, st.info) },
+        )
+        is Updates.State.Downloading -> Banner(
+            icon = Icons.Default.SystemUpdate,
+            text = "Оновлення… ${(st.progress * 100).toInt()}%",
+            action = "",
+            onAction = {},
+        )
+        is Updates.State.ReadyToInstall -> Banner(
+            icon = Icons.Default.SystemUpdate,
+            text = "Версія ${st.info.versionName} завантажена",
+            action = "Встановити",
+            onAction = { Updates.install(context, st.info, st.file) },
+        )
+        else -> Unit
     }
 }
 

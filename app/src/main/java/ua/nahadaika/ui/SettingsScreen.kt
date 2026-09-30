@@ -36,6 +36,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Autorenew
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.Mic
@@ -48,6 +50,7 @@ import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Scaffold
@@ -80,6 +83,8 @@ import ua.nahadaika.alarm.Notifier
 import ua.nahadaika.data.Kind
 import ua.nahadaika.media.OfflineSpeech
 import ua.nahadaika.media.SpeechPack
+import ua.nahadaika.update.UpdateWorker
+import ua.nahadaika.update.Updates
 import ua.nahadaika.ui.theme.AppBackground
 import ua.nahadaika.ui.theme.Glass
 import ua.nahadaika.ui.theme.GlassIconButton
@@ -106,6 +111,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     var recordMode by remember { mutableStateOf(Prefs.recordMode(context)) }
     var frontCamera by remember { mutableStateOf(Prefs.frontCamera(context)) }
     var deleting by remember { mutableStateOf<SpeechPack?>(null) }
+    var autoUpdate by remember { mutableStateOf(Prefs.autoUpdate(context)) }
 
     var refresh by remember { mutableIntStateOf(0) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { refresh++ }
@@ -309,6 +315,22 @@ fun SettingsScreen(onBack: () -> Unit) {
                     }
                 }
                 item {
+                    Section("Оновлення") {
+                        UpdateRow()
+                        Divider()
+                        SwitchRow(
+                            Icons.Default.Autorenew,
+                            "Перевіряти автоматично",
+                            "Раз на пів дня; про нову версію прийде сповіщення",
+                            autoUpdate,
+                        ) {
+                            autoUpdate = it
+                            Prefs.setAutoUpdate(context, it)
+                            UpdateWorker.schedule(context, it)
+                        }
+                    }
+                }
+                item {
                     Section("Про застосунок") {
                         val version = remember {
                             runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: ""
@@ -500,6 +522,69 @@ private fun PackRow(pack: SpeechPack, onDelete: () -> Unit) {
                 trackColor = Glass.Fill,
                 strokeCap = StrokeCap.Round,
                 modifier = Modifier.padding(start = 38.dp, end = 8.dp, top = 8.dp).fillMaxWidth().height(4.dp),
+            )
+        }
+    }
+}
+
+private fun mb(bytes: Long) = "%.1f".format(bytes / 1048576f).replace('.', ',') + " МБ"
+
+/** Поточна версія, кнопка «Перевірити оновлення» і хід оновлення. */
+@Composable
+fun UpdateRow() {
+    val context = LocalContext.current
+    val current = remember { Updates.currentVersionName(context) }
+    val st = Updates.state
+    Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            RowIcon(Icons.Default.SystemUpdate, if (st is Updates.State.Available) Glass.Lavender else Glass.TextDim)
+            Spacer(Modifier.width(16.dp))
+            val (title, subtitle) = when (st) {
+                Updates.State.Idle -> "Версія $current" to "Натисніть, щоб перевірити"
+                Updates.State.Checking -> "Версія $current" to "Перевіряю…"
+                Updates.State.UpToDate -> "Версія $current" to "Це найновіша версія ✓"
+                is Updates.State.Available -> "Доступна версія ${st.info.versionName}" to
+                    if (st.info.patch != null) "Завантажити ${mb(st.info.downloadSize)} замість ${mb(st.info.apk.size)}"
+                    else "Завантажити ${mb(st.info.apk.size)}"
+                is Updates.State.Downloading -> "Оновлення до ${st.info.versionName}" to
+                    "${if (st.patch) "Патч" else "Повний APK"} · ${(st.progress * 100).toInt()}%"
+                is Updates.State.ReadyToInstall -> "Версія ${st.info.versionName} готова" to "Дозвольте встановлення й натисніть «Встановити»"
+                is Updates.State.Failed -> "Версія $current" to st.message
+            }
+            Titles(title, subtitle, Modifier.weight(1f))
+            val (label, action) = when (st) {
+                Updates.State.Idle, Updates.State.UpToDate -> "Перевірити" to { Updates.check(context) }
+                Updates.State.Checking, is Updates.State.Downloading -> null to {}
+                is Updates.State.Available -> "Оновити" to { Updates.download(context, st.info) }
+                is Updates.State.ReadyToInstall -> "Встановити" to { Updates.install(context, st.info, st.file) }
+                is Updates.State.Failed -> "Ще раз" to {
+                    if (st.info != null) Updates.download(context, st.info) else Updates.check(context)
+                }
+            }
+            if (label != null) {
+                TextButton(onClick = action) { Text(label, color = Glass.Text, fontWeight = FontWeight.Medium) }
+            } else {
+                CircularProgressIndicator(Modifier.padding(end = 12.dp).size(22.dp), color = Glass.Lavender, strokeWidth = 2.dp)
+            }
+        }
+        if (st is Updates.State.Downloading) {
+            LinearProgressIndicator(
+                progress = { st.progress },
+                color = Glass.Lavender,
+                trackColor = Glass.Fill,
+                strokeCap = StrokeCap.Round,
+                modifier = Modifier.padding(start = 38.dp, end = 8.dp, top = 8.dp).fillMaxWidth().height(4.dp),
+            )
+        }
+        val notes = (st as? Updates.State.Available)?.info?.notes
+        if (!notes.isNullOrBlank()) {
+            Text(
+                notes,
+                color = Glass.TextDim,
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                maxLines = 8,
+                modifier = Modifier.padding(start = 38.dp, end = 12.dp, top = 8.dp),
             )
         }
     }

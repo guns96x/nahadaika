@@ -70,4 +70,16 @@ object Prefs {
     fun defaultHour(context: Context): Int = prefs(context).getInt("default_hour", 9)
     fun setDefaultHour(context: Context, hour: Int) = prefs(context).edit().putInt("default_hour", hour).apply()
     fun defaultTime(context: Context): LocalTime = LocalTime.of(defaultHour(context), 0)
+
+    // ---- Оновлення ----
+
+    fun autoUpdate(context: Context): Boolean = prefs(context).getBoolean("auto_update", true)
+    fun setAutoUpdate(context: Context, on: Boolean) = prefs(context).edit().putBoolean("auto_update", on).apply()
+
+    fun lastUpdateCheck(context: Context): Long = prefs(context).getLong("last_update_check", 0)
+    fun setLastUpdateCheck(context: Context, at: Long) = prefs(context).edit().putLong("last_update_check", at).apply()
+
+    /** Про яку версію вже сповіщали, щоб не нагадувати щоразу. */
+    fun notifiedUpdate(context: Context): Long = prefs(context).getLong("notified_update", 0)
+    fun setNotifiedUpdate(context: Context, code: Long) = prefs(context).edit().putLong("notified_update", code).apply()
 }

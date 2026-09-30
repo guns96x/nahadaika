@@ -19,10 +19,12 @@ android {
         applicationId = "ua.nahadaika"
         minSdk = 26
         targetSdk = 35
-        versionCode = 14
-        versionName = "3.5"
+        versionCode = 15
+        versionName = "3.6"
         // Офлайн-розпізнавання мовлення (Vosk) — лише для ARM-телефонів.
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
+        // Звідки застосунок бере оновлення (GitHub Releases).
+        buildConfigField("String", "UPDATE_REPO", "\"guns96x/golf5\"")
     }
 
     signingConfigs {
@@ -54,6 +56,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     lint {
         // Тести перевіряються самим запуском; lint аналізує лише код застосунку.
@@ -78,6 +81,7 @@ dependencies {
 
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("com.alphacephei:vosk-android:0.3.47")
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
     implementation("net.java.dev.jna:jna:5.13.0@aar")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")

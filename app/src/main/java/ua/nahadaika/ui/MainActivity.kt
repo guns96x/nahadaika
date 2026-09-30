@@ -21,6 +21,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import ua.nahadaika.Prefs
+import ua.nahadaika.update.Updates
 import ua.nahadaika.alarm.Notifier
 import ua.nahadaika.data.Repo
 import ua.nahadaika.ui.theme.NahadaikaTheme
@@ -36,6 +37,7 @@ data class Quick(val action: QuickAction, val nonce: Long = System.nanoTime())
 class MainActivity : ComponentActivity() {
     private val focus = mutableStateOf<Focus?>(null)
     private val quick = mutableStateOf<Quick?>(null)
+    private val openUpdates = mutableLongStateOf(0L)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -60,7 +62,7 @@ class MainActivity : ComponentActivity() {
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
             }
             NahadaikaTheme {
-                AppRoot(focus.value, quick.value, onQuickConsumed = { quick.value = null })
+                AppRoot(focus.value, quick.value, onQuickConsumed = { quick.value = null }, openUpdates = openUpdates.longValue)
             }
         }
     }
@@ -75,6 +77,7 @@ class MainActivity : ComponentActivity() {
             ACTION_QUICK_VIDEO -> quick.value = Quick(QuickAction.VIDEO)
             ACTION_QUICK_VOICE -> quick.value = Quick(QuickAction.VOICE)
             ACTION_QUICK_DICTATE -> quick.value = Quick(QuickAction.DICTATE)
+            ACTION_OPEN_UPDATES -> openUpdates.longValue = System.nanoTime()
         }
         val chatId = intent.getLongExtra(EXTRA_CHAT_ID, -1)
         if (chatId <= 0) return
@@ -91,17 +94,28 @@ class MainActivity : ComponentActivity() {
         const val ACTION_QUICK_VIDEO = "ua.nahadaika.QUICK_VIDEO"
         const val ACTION_QUICK_VOICE = "ua.nahadaika.QUICK_VOICE"
         const val ACTION_QUICK_DICTATE = "ua.nahadaika.QUICK_DICTATE"
+        const val ACTION_OPEN_UPDATES = "ua.nahadaika.OPEN_UPDATES"
     }
 }
 
 /** Застосунок одразу відкривається в останньому чаті; список чатів — окремим екраном. */
 @Composable
-private fun AppRoot(focus: Focus?, quick: Quick?, onQuickConsumed: () -> Unit) {
+private fun AppRoot(focus: Focus?, quick: Quick?, onQuickConsumed: () -> Unit, openUpdates: Long = 0L) {
     val context = LocalContext.current
     val chats by Repo.chats.collectAsStateWithLifecycle(null)
     var chatId by rememberSaveable { mutableLongStateOf(Prefs.lastChatId(context)) }
     var showList by rememberSaveable { mutableStateOf(false) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
+    // Зі сповіщення про нову версію — одразу в налаштування.
+    LaunchedEffect(openUpdates) {
+        if (openUpdates != 0L) showSettings = true
+    }
+    // Тиха перевірка оновлень при відкритті (не частіше ніж раз на 6 годин).
+    LaunchedEffect(Unit) {
+        if (Prefs.autoUpdate(context) && System.currentTimeMillis() - Prefs.lastUpdateCheck(context) > 6 * 3_600_000L) {
+            Updates.check(context, silent = true)
+        }
+    }
     var activeFocus by remember { mutableStateOf<Focus?>(null) }
 
     LaunchedEffect(focus) {
