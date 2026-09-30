@@ -52,6 +52,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import ua.nahadaika.Prefs
 import ua.nahadaika.VoiceParser
+import ua.nahadaika.VoiceCommand
 import ua.nahadaika.media.LiveDictation
 import ua.nahadaika.media.Transcriber
 import ua.nahadaika.media.Hearing
@@ -328,10 +329,60 @@ fun ChatScreen(
         schedule(reminder)
     }
 
+    /**
+     * Кілька нагадувань з однієї фрази. Якщо до них записане голосове чи відео — кожне отримує свою копію файлу
+     * (видалення одного нагадування не зачепить інші).
+     */
+    fun scheduleMany(cmds: List<VoiceCommand>, media: Attachment?) {
+        val a = media
+        if (a != null && player.currentPath == a.file.absolutePath) player.stop()
+        if (a != null && attachment === a) attachment = null
+        showSchedule = false
+        composeAlarm = false
+        val caption = a == null || Prefs.voiceCaption(context)
+        scope.launch {
+            val ids = cmds.mapIndexed { i, cmd ->
+                val file = when {
+                    a == null -> null
+                    i == 0 -> a.file
+                    else -> withContext(Dispatchers.IO) { MediaFiles.newFile(context, a.file.extension).also { a.file.copyTo(it, overwrite = true) } }
+                }
+                Repo.createReminder(
+                    Reminder(
+                        chatId = chatId,
+                        kind = a?.kind ?: Kind.TEXT,
+                        text = if (a == null) cmd.text.ifEmpty { "Нагадування" } else if (caption) cmd.text else "",
+                        mediaPath = file?.absolutePath,
+                        durationMs = a?.durationMs ?: 0,
+                        triggerAt = cmd.at!!,
+                        repeat = cmd.repeat,
+                        alarm = cmd.alarm,
+                    ),
+                )
+            }
+            selectedDate = cmds.first().at!!.toLocalDate()
+            highlightId = ids.first()
+            val n = cmds.size
+            val word = if (n % 10 in 2..4 && n % 100 !in 12..14) "нагадування" else "нагадувань"
+            snackbar.showSnackbar(
+                "Поставив $n $word: " + cmds.joinToString("; ") { c ->
+                    soonLabel(c.at!!) + if (c.text.isNotBlank()) " — ${c.text.take(24)}" else ""
+                },
+                withDismissAction = true,
+                duration = SnackbarDuration.Long,
+            )
+        }
+    }
+
     // ---- Голосова команда: «нагадай завтра о 9 купити хліб» ----
 
     /** Розібрати сказане: є час — одразу планувати, немає — лишити текст і відкрити вибір часу. */
     fun applySpoken(spoken: String) {
+        val many = VoiceParser.parseMany(spoken, defaultTime = Prefs.defaultTime(context))
+        if (many.size > 1 && many.all { it.at != null }) {
+            scheduleMany(many, media = null)
+            return
+        }
         val cmd = VoiceParser.parse(spoken, defaultTime = Prefs.defaultTime(context))
         val combined = listOf(text.trim(), cmd.text).filter { it.isNotBlank() }.joinToString(" ")
         if (cmd.at != null) {
@@ -403,6 +454,11 @@ fun ChatScreen(
             val hearing = Transcriber.transcribe(context, a.file) { VoiceParser.parse(it, defaultTime = defaultTime).at != null }
             transcription = null
             if (attachment !== a) return@launch
+            val many = (hearing as? Hearing.Heard)?.let { VoiceParser.parseMany(it.text, defaultTime = defaultTime) }.orEmpty()
+            if (many.size > 1 && many.all { it.at != null }) {
+                scheduleMany(many, a)
+                return@launch
+            }
             val cmd = (hearing as? Hearing.Heard)?.let { VoiceParser.parse(it.text, defaultTime = defaultTime) }
             if (cmd?.at != null) {
                 val caption = if (Prefs.voiceCaption(context)) cmd.text else ""

@@ -79,6 +79,35 @@ class DictationTest {
         compose.onNodeWithText("Нагадування").assertIsDisplayed()
     }
 
+    @Test
+    fun severalRemindersFromOnePhrase() {
+        shadowOf(app).grantPermissions(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS)
+        Prefs.setGestureHintShown(app)
+        val service = ComponentName("com.google.android.tts", "com.google.Recognizer")
+        shadowOf(app.packageManager).apply {
+            addServiceIfNotPresent(service)
+            addIntentFilterForService(service, IntentFilter(RecognitionService.SERVICE_INTERFACE))
+        }
+        val chatId = runBlocking {
+            Repo.init(app)
+            Repo.createChat("Дім")
+        }
+        compose.setContent {
+            NahadaikaTheme {
+                ChatScreen(chatId = chatId, focus = null, onFocusConsumed = {}, quick = null, onQuickConsumed = {}, onOpenChats = {})
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Сказати нагадування").performClick()
+        compose.waitForIdle()
+        shadowOf(ShadowSpeechRecognizer.getLatestSpeechRecognizer())
+            .triggerOnResults(results("завтра о 9 купити хліб, о 12 подзвонити в банк, а в п'ятницю о 18 кіно"))
+        compose.waitUntil(5_000) { runBlocking { Repo.reminders(chatId).first() }.size == 3 }
+        val saved = runBlocking { Repo.reminders(chatId).first() }.sortedBy { it.triggerAt }
+        assertEquals(listOf("Купити хліб", "Подзвонити в банк", "Кіно"), saved.map { it.text })
+        compose.onNodeWithText("Поставив 3 нагадування", substring = true).assertExists()
+    }
+
     private fun results(text: String) = Bundle().apply {
         putStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION, arrayListOf(text))
     }

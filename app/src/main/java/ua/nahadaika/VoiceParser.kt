@@ -169,7 +169,65 @@ object VoiceParser {
     }
 
     /** [defaultTime] — коли нагадувати, якщо названо лише день. */
-    fun parse(input: String, now: LocalDateTime = LocalDateTime.now(), defaultTime: LocalTime = LocalTime.of(9, 0)): VoiceCommand {
+    fun parse(input: String, now: LocalDateTime = LocalDateTime.now(), defaultTime: LocalTime = LocalTime.of(9, 0)): VoiceCommand =
+        parseDetailed(input, now, defaultTime, inheritDate = null).first
+
+    // Де може починатися наступне нагадування у фразі (після коми, «і», «а потім»…).
+    private val nextStart = run {
+        val clock = "(?:о|об|в|у|на|до|к)\\s+(?:\\d|пів|чверть|без)"
+        val words = "через\\s|за\\s+\\d|завтра|післязавтра|позавтра|сьогодні|послезавтра|сегодня|опівдні|опівночі|" +
+            "що(?:дня|ранку|вечора|тижня|місяця|року|понеділ|вівтор|серед|четвер|п'ятниц|субот|неділ)|кожн|" +
+            "(?:в|у|во|на)\\s+(?:понеділ|вівтор|серед|четвер|п'ятниц|субот|неділ|обід)|\\d{1,2}\\s+$MONTH|" +
+            "вранці|зранку|ввечері|увечері|після\\s+роботи|перед\\s+сном"
+        Regex(
+            "(?:\\s*[,;.!?]\\s*|\\s+)(?:(?:а|і|й|та|ще|і\\s+ще|а\\s+ще|потім|а\\s+потім|також|а\\s+також|плюс)\\s+)?(?=(?:$clock|$words))",
+            RegexOption.IGNORE_CASE,
+        )
+    }
+
+    /**
+     * Кілька нагадувань в одній фразі: «завтра о 9 купити хліб, о 12 подзвонити в банк, а в п'ятницю о 18 кіно».
+     * День переходить на наступні частини, якщо там його не названо; частина без тексту бере текст попередньої
+     * («випити таблетку о 9 і о 21»). Якщо розділити не вдалося — повертається одна команда, як [parse].
+     */
+    fun parseMany(input: String, now: LocalDateTime = LocalDateTime.now(), defaultTime: LocalTime = LocalTime.of(9, 0)): List<VoiceCommand> {
+        val text = normalizeNumbers(input.replace(Regex("[’ʼ`‘]"), "'").replace(Regex("\\s+"), " ").trim())
+        // Межа — лише там, де ліва частина вже є повним нагадуванням: має і час, і текст.
+        val pieces = mutableListOf<String>()
+        var start = 0
+        for (m in nextStart.findAll(text)) {
+            if (m.range.first <= start) continue
+            val left = text.substring(start, m.range.first)
+            val cmd = parse(left, now, defaultTime)
+            if (cmd.at != null && cmd.text.isNotBlank()) {
+                pieces += left
+                start = m.range.last + 1
+            }
+        }
+        pieces += text.substring(start)
+        if (pieces.size == 1) return listOf(parse(input, now, defaultTime))
+
+        val result = mutableListOf<VoiceCommand>()
+        var date: LocalDate? = null
+        for (piece in pieces) {
+            val (cmd, used) = parseDetailed(piece, now, defaultTime, inheritDate = date)
+            date = used ?: date
+            val withText = if (cmd.text.isBlank() && result.isNotEmpty()) cmd.copy(text = result.last().text) else cmd
+            // Частина без часу — продовження тексту попереднього нагадування.
+            if (withText.at == null && result.isNotEmpty()) {
+                val prev = result.removeAt(result.lastIndex)
+                result += prev.copy(text = listOf(prev.text, cleanTail(piece)).filter { it.isNotBlank() }.joinToString(" "))
+            } else {
+                result += withText
+            }
+        }
+        return result
+    }
+
+    private fun cleanTail(s: String) = s.trim().trim(',', '.', ';').trim()
+
+    /** Розбір однієї частини; повертає також день, який вона задає (для наступних частин). */
+    private fun parseDetailed(input: String, now: LocalDateTime, defaultTime: LocalTime, inheritDate: LocalDate?): Pair<VoiceCommand, LocalDate?> {
         val base = now.truncatedTo(ChronoUnit.MINUTES)
         val c = Cursor(
             " " + normalizeNumbers(
@@ -400,6 +458,8 @@ object VoiceParser {
         }
         if (date == null && dayOffset != null) date = today.plusDays(dayOffset!!)
         if (date == null && monthOffset != null) date = today.plusMonths(monthOffset!!)
+        val ownDate = date
+        if (date == null && absolute == null && time != null && inheritDate != null) date = inheritDate
 
         // ---- Збираємо дату й час ----
         val at: LocalDateTime? = when {
@@ -436,7 +496,7 @@ object VoiceParser {
             repeat = repeat,
             // Будильник і таймер дзвонять, поки їх не вимкнуть.
             alarm = mode != null,
-        )
+        ) to (if (ownDate != null) at?.toLocalDate() else null)
     }
 
     private fun nextAfter(start: LocalDateTime, repeat: Repeat, now: LocalDateTime): LocalDateTime {

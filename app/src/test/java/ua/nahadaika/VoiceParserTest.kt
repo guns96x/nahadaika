@@ -157,4 +157,40 @@ class VoiceParserTest {
     @Test fun russianToPreposition() = check("к 9 утра позвонить в банк", "Позвонить в банк", d(10, 1, 9))
     @Test fun alarmHalfPast() = check("постав будильник на пів на сьому", "Будильник", d(10, 1, 6, 30))
     @Test fun timerHourAndHalf() = check("таймер на півтори години", "Таймер", d(9, 30, 11, 30))
+
+    // Кілька нагадувань в одній фразі.
+    private fun many(phrase: String) = VoiceParser.parseMany(phrase, now).map {
+        Triple(it.text, it.at?.let { a -> LocalDateTime.ofInstant(Instant.ofEpochMilli(a), ZoneId.systemDefault()) }, it.repeat)
+    }
+
+    @Test fun threeRemindersInOnePhrase() = assertEquals(
+        listOf(
+            Triple("Купити хліб", d(10, 1, 9), Repeat.NONE),
+            Triple("Подзвонити в банк", d(10, 1, 12), Repeat.NONE),
+            Triple("Кіно", d(10, 2, 18), Repeat.NONE),
+        ),
+        many("завтра о 9 купити хліб, о 12 подзвонити в банк, а в п'ятницю о 18 кіно"),
+    )
+
+    @Test fun sameTextTwoTimes() = assertEquals(
+        listOf(Triple("Випити таблетку", d(9, 30, 12), Repeat.NONE), Triple("Випити таблетку", d(9, 30, 21), Repeat.NONE)),
+        many("випити таблетку о 12 і о 21"),
+    )
+
+    @Test fun spokenWordsAndThen() = assertEquals(
+        listOf(Triple("Зарядка", d(10, 1, 7), Repeat.NONE), Triple("Нарада", d(10, 1, 10, 30), Repeat.NONE)),
+        many("нагадай завтра о сьомій зарядка а потім о десятій тридцять нарада"),
+    )
+
+    @Test fun relativeAndDate() = assertEquals(
+        listOf(Triple("Вимкнути плиту", d(9, 30, 10, 30), Repeat.NONE), Triple("День народження мами", d(10, 25, 12), Repeat.NONE)),
+        many("через пів години вимкнути плиту. 25 жовтня о 12 день народження мами"),
+    )
+
+    @Test fun singleReminderStaysSingle() {
+        assertEquals(1, many("завтра о 9 купити хліб і молоко").size)
+        assertEquals(1, many("нагадай завтра о 9").size)
+        assertEquals(1, many("о 9 ранку зарядка").size)
+        assertEquals(1, many("в понеділок о 10 планірка").size)
+    }
 }
