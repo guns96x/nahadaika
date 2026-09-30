@@ -139,16 +139,15 @@ fun WheelPicker(
 }
 
 /** Скляна смуга вибору по центру барабанів. */
-fun Modifier.wheelSelectionBand(): Modifier = drawBehind {
-    val h = WheelItemHeight.toPx()
-    val top = (size.height - h) / 2
-    val radius = CornerRadius(h / 2.6f)
-    drawRoundRect(Color.White.copy(alpha = 0.06f), Offset(0f, top), Size(size.width, h), radius)
-    drawRoundRect(
-        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.16f), Color.White.copy(alpha = 0.04f)), startY = top, endY = top + h),
-        Offset(0f, top),
-        Size(size.width, h),
-        radius,
-        style = Stroke(0.8.dp.toPx()),
-    )
+@Composable
+fun Modifier.wheelSelectionBand(): Modifier {
+    val fill = Glass.Fill
+    val stroke = Glass.Stroke
+    return drawBehind {
+        val h = WheelItemHeight.toPx()
+        val top = (size.height - h) / 2
+        val radius = CornerRadius(h / 2.6f)
+        drawRoundRect(fill, Offset(0f, top), Size(size.width, h), radius)
+        drawRoundRect(stroke, Offset(0f, top), Size(size.width, h), radius, style = Stroke(0.8.dp.toPx()))
+    }
 }

@@ -9,6 +9,7 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import ua.nahadaika.ui.theme.PrimaryCircle
+import ua.nahadaika.ui.theme.ThemeModeButton
 import ua.nahadaika.ui.theme.AppBackground
 import ua.nahadaika.ui.theme.Glass
 import ua.nahadaika.ui.theme.GlassIconButton
@@ -124,7 +125,8 @@ fun ChatsScreen(onOpenChat: (Long) -> Unit, onBack: () -> Unit) {
             ) {
                 GlassIconButton(Icons.AutoMirrored.Filled.ArrowBack, "Назад", onClick = onBack)
                 Spacer(Modifier.width(14.dp))
-                Text("Чати", color = Glass.Text, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+                Text("Чати", color = Glass.Text, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                ThemeModeButton()
             }
         },
         floatingActionButton = {
@@ -261,12 +263,12 @@ fun Avatar(chat: Chat, size: Int) {
     Box(
         modifier = Modifier
             .size(size.dp)
-            .glass(CircleShape, tone.copy(alpha = 0.20f)),
+            .glass(CircleShape, tone.copy(alpha = if (Glass.palette.isDark) 0.20f else 0.22f)),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             chat.name.trim().take(1).uppercase().ifEmpty { "?" },
-            color = lerp(tone, Color.White, 0.45f),
+            color = if (Glass.palette.isDark) lerp(tone, Color.White, 0.45f) else lerp(tone, Color.Black, 0.25f),
             fontSize = (size * 0.40).sp,
             fontWeight = FontWeight.Medium,
         )

@@ -161,7 +161,7 @@ fun ScheduleSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = Glass.Sheet,
-        scrimColor = Color.Black.copy(alpha = 0.55f),
+        scrimColor = Glass.Scrim,
     ) {
         Column(
             Modifier

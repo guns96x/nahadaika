@@ -9,6 +9,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -23,6 +24,7 @@ import ua.nahadaika.Prefs
 import ua.nahadaika.alarm.Notifier
 import ua.nahadaika.data.Repo
 import ua.nahadaika.ui.theme.NahadaikaTheme
+import ua.nahadaika.ui.theme.isDarkTheme
 
 /** Запит відкрити конкретне нагадування (зі сповіщення). */
 data class Focus(val chatId: Long, val reminderId: Long, val autoplay: Boolean, val nonce: Long = System.nanoTime())
@@ -37,7 +39,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Завжди темний інтерфейс — світлі іконки в системних панелях.
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
@@ -48,6 +49,16 @@ class MainActivity : ComponentActivity() {
             Repo.rescheduleAll()
         }
         setContent {
+            // Колір іконок у системних панелях — під обрану тему.
+            val dark = isDarkTheme()
+            SideEffect {
+                val style = if (dark) {
+                    SystemBarStyle.dark(Color.TRANSPARENT)
+                } else {
+                    SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+                }
+                enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
+            }
             NahadaikaTheme {
                 AppRoot(focus.value, quick.value, onQuickConsumed = { quick.value = null })
             }

@@ -8,6 +8,7 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import ua.nahadaika.ui.theme.PrimaryCircle
+import ua.nahadaika.ui.theme.ThemeModeButton
 import ua.nahadaika.ui.theme.AppBackground
 import ua.nahadaika.ui.theme.Glass
 import ua.nahadaika.ui.theme.GlassIconButton
@@ -454,6 +455,7 @@ fun ChatScreen(
                             }
                         }
                     }
+                    ThemeModeButton()
                 }
                 Spacer(Modifier.height(10.dp))
                 GlassSegmented(
@@ -848,7 +850,7 @@ private fun ReminderActions(
     onDelete: () -> Unit,
 ) {
     var confirmDelete by remember { mutableStateOf(false) }
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Glass.Sheet, scrimColor = Color.Black.copy(alpha = 0.55f)) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Glass.Sheet, scrimColor = Glass.Scrim) {
         Column(
             Modifier.sheetGlow().navigationBarsPadding().padding(horizontal = 16.dp).padding(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),

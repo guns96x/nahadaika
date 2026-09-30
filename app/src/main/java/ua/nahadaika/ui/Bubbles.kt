@@ -96,6 +96,7 @@ fun NextUpCard(reminder: Reminder, onClick: () -> Unit) {
             delay(1_000)
         }
     }
+    val accent = Glass.Lavender
     val left = (reminder.alarmAt() - now).coerceAtLeast(0)
     val totalSec = left / 1000
     val countdown = if (totalSec < 24 * 3600) {
@@ -110,7 +111,7 @@ fun NextUpCard(reminder: Reminder, onClick: () -> Unit) {
             .glass(RoundedCornerShape(30.dp))
             .drawBehind {
                 drawCircle(
-                    Brush.radialGradient(listOf(Glass.Lavender.copy(alpha = 0.10f), Color.Transparent), center, size.width * 0.6f),
+                    Brush.radialGradient(listOf(accent.copy(alpha = 0.10f), Color.Transparent), center, size.width * 0.6f),
                     size.width * 0.6f,
                     center,
                 )

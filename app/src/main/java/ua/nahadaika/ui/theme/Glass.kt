@@ -24,6 +24,9 @@ import androidx.compose.material3.SnackbarData
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,77 +45,148 @@ import androidx.compose.ui.unit.sp
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
 
+/** Кольори «скла» для однієї теми. */
+@Immutable
+data class GlassPalette(
+    val isDark: Boolean,
+    val base: Color,
+    val text: Color,
+    val textDim: Color,
+    val textFaint: Color,
+    val fill: Color,
+    val fillStrong: Color,
+    val fillSubtle: Color,
+    val accent: Color,
+    val primary: Color,
+    val onPrimary: Color,
+    val danger: Color,
+    val sheet: Color,
+    val scrim: Color,
+    val glows: List<Pair<Color, Float>>,
+    val stroke: Brush,
+    val hazeTint: Color,
+    val hazeFallback: Color,
+)
+
+/** Темна: майже чорний фон з глибоким сяйвом, тонке скло, світлі кнопки. */
+val DarkGlass = GlassPalette(
+    isDark = true,
+    base = Color(0xFF050507),
+    text = Color(0xFFF5F5F7),
+    textDim = Color(0x99F5F5F7),
+    textFaint = Color(0x57F5F5F7),
+    fill = Color(0x0FFFFFFF),
+    fillStrong = Color(0x1FFFFFFF),
+    fillSubtle = Color(0x08FFFFFF),
+    accent = Color(0xFFB4A8FF),
+    primary = Color(0xFFF5F5F7),
+    onPrimary = Color(0xFF0B0B10),
+    danger = Color(0xFFFF6B6B),
+    sheet = Color(0xF50B0B10),
+    scrim = Color(0x8C000000),
+    glows = listOf(Color(0xFF3A2E9E) to 0.55f, Color(0xFF0B5C7A) to 0.40f, Color(0xFF5B1F6B) to 0.35f),
+    stroke = Brush.verticalGradient(listOf(Color(0x2EFFFFFF), Color(0x0AFFFFFF))),
+    hazeTint = Color(0xB3050507),
+    hazeFallback = Color(0xF0070709),
+)
+
+/** Світла: світлий фон з пастельним сяйвом, біле матове скло, темні кнопки. */
+val LightGlass = GlassPalette(
+    isDark = false,
+    base = Color(0xFFEFF0F5),
+    text = Color(0xFF101015),
+    textDim = Color(0x99101015),
+    textFaint = Color(0x5C101015),
+    fill = Color(0x99FFFFFF),
+    fillStrong = Color(0xE6FFFFFF),
+    fillSubtle = Color(0x59FFFFFF),
+    accent = Color(0xFF5B4BDB),
+    primary = Color(0xFF111118),
+    onPrimary = Color(0xFFF7F7FA),
+    danger = Color(0xFFE5484D),
+    sheet = Color(0xF5F6F6FA),
+    scrim = Color(0x40000000),
+    glows = listOf(Color(0xFFC6BDFF) to 0.75f, Color(0xFFB7E3F8) to 0.65f, Color(0xFFF6C8E1) to 0.55f),
+    stroke = Brush.verticalGradient(listOf(Color(0xF2FFFFFF), Color(0x0F000000))),
+    hazeTint = Color(0x9EEFF0F5),
+    hazeFallback = Color(0xEBEFF0F5),
+)
+
+val LocalGlass = staticCompositionLocalOf { DarkGlass }
+
 /**
- * Стримане «преміальне» скло в темному режимі: майже чорний фон з глибоким сяйвом,
- * тонке скло з волосяною кромкою, білий — для головних дій, лавандовий — лише для акцентів.
+ * Токени поточної теми. Стримане «преміальне» скло: тонкі панелі з волосяною кромкою,
+ * головні дії — контрастні кнопки, акцентний колір — лише для дрібних деталей.
  */
 object Glass {
-    val Base = Color(0xFF050507)
-    val Text = Color(0xFFF5F5F7)
-    val TextDim = Color(0x99F5F5F7)
-    val TextFaint = Color(0x57F5F5F7)
-
-    val Fill = Color(0x0FFFFFFF)
-    val FillStrong = Color(0x1FFFFFFF)
-    val FillSubtle = Color(0x08FFFFFF)
-
-    /** Акцент — лише для дрібних деталей (відлік, посилання, активні стани). */
-    val Lavender = Color(0xFFB4A8FF)
-    val Primary = Color(0xFFF5F5F7)
-    val OnPrimary = Color(0xFF0B0B10)
-    val Danger = Color(0xFFFF6B6B)
-    val Sheet = Color(0xF50B0B10)
-
-    private val GlowIndigo = Color(0xFF3A2E9E)
-    private val GlowTeal = Color(0xFF0B5C7A)
-    private val GlowPlum = Color(0xFF5B1F6B)
-    val glows = listOf(GlowIndigo, GlowTeal, GlowPlum)
-
-    /** Волосяна кромка скла: світліша зверху. */
-    val Stroke = Brush.verticalGradient(listOf(Color(0x2EFFFFFF), Color(0x0AFFFFFF)))
+    val palette: GlassPalette @Composable @ReadOnlyComposable get() = LocalGlass.current
+    val Base: Color @Composable @ReadOnlyComposable get() = palette.base
+    val Text: Color @Composable @ReadOnlyComposable get() = palette.text
+    val TextDim: Color @Composable @ReadOnlyComposable get() = palette.textDim
+    val TextFaint: Color @Composable @ReadOnlyComposable get() = palette.textFaint
+    val Fill: Color @Composable @ReadOnlyComposable get() = palette.fill
+    val FillStrong: Color @Composable @ReadOnlyComposable get() = palette.fillStrong
+    val FillSubtle: Color @Composable @ReadOnlyComposable get() = palette.fillSubtle
+    val Lavender: Color @Composable @ReadOnlyComposable get() = palette.accent
+    val Primary: Color @Composable @ReadOnlyComposable get() = palette.primary
+    val OnPrimary: Color @Composable @ReadOnlyComposable get() = palette.onPrimary
+    val Danger: Color @Composable @ReadOnlyComposable get() = palette.danger
+    val Sheet: Color @Composable @ReadOnlyComposable get() = palette.sheet
+    val Scrim: Color @Composable @ReadOnlyComposable get() = palette.scrim
+    val Stroke: Brush @Composable @ReadOnlyComposable get() = palette.stroke
     val Pill = RoundedCornerShape(percent = 50)
 
     /** Розмиття того, що під панеллю (Android 12+); на старіших — напівпрозора підкладка. */
-    val Haze = HazeStyle(
-        backgroundColor = Base,
-        tint = HazeTint(Color(0xB3050507)),
-        blurRadius = 32.dp,
-        noiseFactor = 0.04f,
-        fallbackTint = HazeTint(Color(0xF0070709)),
-    )
+    val Haze: HazeStyle
+        @Composable @ReadOnlyComposable get() = HazeStyle(
+            backgroundColor = palette.base,
+            tint = HazeTint(palette.hazeTint),
+            blurRadius = 32.dp,
+            noiseFactor = if (palette.isDark) 0.04f else 0.02f,
+            fallbackTint = HazeTint(palette.hazeFallback),
+        )
 }
 
+@Composable
 fun Modifier.glass(
     shape: Shape = RoundedCornerShape(22.dp),
     fill: Brush = SolidColor(Glass.Fill),
     stroke: Brush = Glass.Stroke,
 ): Modifier = clip(shape).background(fill, shape).border(0.8.dp, stroke, shape)
 
+@Composable
 fun Modifier.glass(shape: Shape, fill: Color): Modifier = glass(shape, SolidColor(fill))
 
-/** Майже чорний фон з глибоким, ледь помітним сяйвом. */
+/** Фон з м'яким сяйвом — під ним видно, що панелі скляні. */
 @Composable
 fun AppBackground(modifier: Modifier = Modifier) {
+    val p = Glass.palette
     Canvas(modifier.fillMaxSize()) {
-        drawRect(Glass.Base)
+        drawRect(p.base)
         val w = size.width
         val h = size.height
-        fun glow(color: Color, center: Offset, radius: Float) =
-            drawCircle(Brush.radialGradient(listOf(color, Color.Transparent), center, radius), radius, center)
-        glow(Glass.glows[0].copy(alpha = 0.55f), Offset(w * 0.15f, -h * 0.02f), w * 1.1f)
-        glow(Glass.glows[1].copy(alpha = 0.40f), Offset(w * 1.1f, h * 0.55f), w * 0.95f)
-        glow(Glass.glows[2].copy(alpha = 0.35f), Offset(-w * 0.1f, h * 1.02f), w * 1.0f)
+        fun glow(i: Int, center: Offset, radius: Float) {
+            val (color, alpha) = p.glows[i]
+            drawCircle(Brush.radialGradient(listOf(color.copy(alpha = alpha), Color.Transparent), center, radius), radius, center)
+        }
+        glow(0, Offset(w * 0.15f, -h * 0.02f), w * 1.1f)
+        glow(1, Offset(w * 1.1f, h * 0.55f), w * 0.95f)
+        glow(2, Offset(-w * 0.1f, h * 1.02f), w * 1.0f)
     }
 }
 
 /** Ледь помітне сяйво всередині нижніх вікон. */
-fun Modifier.sheetGlow(): Modifier = drawBehind {
-    val w = size.width
-    drawCircle(
-        Brush.radialGradient(listOf(Glass.glows[0].copy(alpha = 0.35f), Color.Transparent), Offset(w * 0.2f, 0f), w * 0.9f),
-        w * 0.9f,
-        Offset(w * 0.2f, 0f),
-    )
+@Composable
+fun Modifier.sheetGlow(): Modifier {
+    val (color, alpha) = Glass.palette.glows[0]
+    return drawBehind {
+        val w = size.width
+        drawCircle(
+            Brush.radialGradient(listOf(color.copy(alpha = alpha * 0.6f), Color.Transparent), Offset(w * 0.2f, 0f), w * 0.9f),
+            w * 0.9f,
+            Offset(w * 0.2f, 0f),
+        )
+    }
 }
 
 @Composable

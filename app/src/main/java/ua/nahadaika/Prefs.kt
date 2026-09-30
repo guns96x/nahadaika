@@ -28,4 +28,8 @@ object Prefs {
     /** Останнє значення таймера «через», у секундах. */
     fun timerSeconds(context: Context): Int = prefs(context).getInt("timer_seconds", 30 * 60)
     fun setTimerSeconds(context: Context, seconds: Int) = prefs(context).edit().putInt("timer_seconds", seconds).apply()
+
+    /** Тема: AUTO / DARK / LIGHT (назва з ThemeMode). */
+    fun themeMode(context: Context): String = prefs(context).getString("theme_mode", null) ?: "DARK"
+    fun setThemeMode(context: Context, mode: String) = prefs(context).edit().putString("theme_mode", mode).apply()
 }

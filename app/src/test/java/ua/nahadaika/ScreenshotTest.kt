@@ -30,6 +30,8 @@ import ua.nahadaika.ui.ChatScreen
 import ua.nahadaika.ui.ChatsScreen
 import ua.nahadaika.ui.ScheduleSheet
 import ua.nahadaika.ui.theme.NahadaikaTheme
+import ua.nahadaika.ui.theme.ThemeMode
+import ua.nahadaika.ui.theme.ThemeSettings
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -105,5 +107,34 @@ class ScreenshotTest {
         compose.onNodeWithText("Через").performClick()
         compose.waitForIdle()
         captureScreenRoboImage("build/screenshots/4_schedule_in.png")
+    }
+
+    @Test
+    fun chatLight() {
+        val home = seed()
+        ThemeSettings.set(app, ThemeMode.LIGHT)
+        compose.setContent { NahadaikaTheme { ChatScreen(chatId = home, focus = null, onFocusConsumed = {}, quick = null, onQuickConsumed = {}, onOpenChats = {}) } }
+        compose.waitForIdle()
+        compose.onRoot().captureRoboImage("build/screenshots/5_chat_light.png")
+    }
+
+    @OptIn(ExperimentalRoborazziApi::class)
+    @Test
+    fun scheduleLight() {
+        ThemeSettings.set(app, ThemeMode.LIGHT)
+        compose.setContent {
+            NahadaikaTheme { ScheduleSheet(initialAt = null, initialRepeat = Repeat.NONE, confirmLabel = "Запланувати", onDismiss = {}, onDictate = {}) { _, _ -> } }
+        }
+        compose.waitForIdle()
+        captureScreenRoboImage("build/screenshots/6_schedule_light.png")
+    }
+
+    @Test
+    fun chatsLight() {
+        seed()
+        ThemeSettings.set(app, ThemeMode.LIGHT)
+        compose.setContent { NahadaikaTheme { ChatsScreen(onOpenChat = {}, onBack = {}) } }
+        compose.waitForIdle()
+        compose.onRoot().captureRoboImage("build/screenshots/7_chats_light.png")
     }
 }
