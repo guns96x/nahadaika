@@ -1,0 +1,56 @@
+name: Нагадайка (Android APK)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Реліз на GitHub — звідти застосунок бере оновлення (кнопка «Перевірити оновлення»).
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Тести
+        run: ./gradlew testDebugUnitTest
+
+      - name: Ключ підпису (з Secrets)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.NAHADAIKA_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "NAHADAIKA_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          else
+            echo "::warning::NAHADAIKA_KEYSTORE_BASE64 не задано — APK підпишеться тимчасовим ключем, реліз не створюється."
+          fi
+
+      - name: Збірка APK
+        env:
+          NAHADAIKA_KEYSTORE_PASSWORD: ${{ secrets.NAHADAIKA_KEYSTORE_PASSWORD }}
+        run: ./gradlew assembleRelease
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nahadaika-apk
+          path: app/build/outputs/apk/release/app-release.apk
+
+      - name: Реліз для оновлення в застосунку (APK + патч від попередньої версії)
+        if: github.event_name != 'pull_request' && env.NAHADAIKA_KEYSTORE != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pip install --quiet bsdiff4
+          bash tools/release.sh
