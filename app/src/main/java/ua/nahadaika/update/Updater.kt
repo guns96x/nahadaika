@@ -74,6 +74,9 @@ object Updates {
         data object Idle : State
         data object Checking : State
         data object UpToDate : State
+
+        /** У репозиторії ще немає жодної опублікованої версії. */
+        data object NoReleases : State
         data class Available(val info: UpdateInfo) : State
         data class Downloading(val info: UpdateInfo, val progress: Float, val patch: Boolean) : State
         data class ReadyToInstall(val info: UpdateInfo, val file: File) : State
@@ -102,17 +105,21 @@ object Updates {
                 val info = fetch(app)
                 Prefs.setLastUpdateCheck(app, System.currentTimeMillis())
                 if (info != null) State.Available(info) else State.UpToDate
+            } catch (_: NoReleasesException) {
+                if (silent) state else State.NoReleases
             } catch (e: Exception) {
                 if (silent) state else State.Failed("Не вдалося перевірити: ${e.message ?: "немає інтернету"}")
             }
         }
     }
 
+    class NoReleasesException : Exception("на GitHub ще немає опублікованих версій")
+
     /** Остання версія з GitHub або null, якщо встановлена вже найновіша. */
     suspend fun fetch(context: Context): UpdateInfo? = withContext(Dispatchers.IO) {
         val conn = open("https://api.github.com/repos/${BuildConfig.UPDATE_REPO}/releases/latest")
         conn.setRequestProperty("Accept", "application/vnd.github+json")
-        if (conn.responseCode == HttpURLConnection.HTTP_NOT_FOUND) return@withContext null // релізів ще немає
+        if (conn.responseCode == HttpURLConnection.HTTP_NOT_FOUND) throw NoReleasesException()
         if (conn.responseCode != HttpURLConnection.HTTP_OK) error("GitHub відповів ${conn.responseCode}")
         val release = JSONObject(conn.inputStream.bufferedReader().readText())
         val assets = release.getJSONArray("assets")
@@ -120,7 +127,7 @@ object Updates {
             val a = assets.getJSONObject(it)
             a.getString("name") to a.getString("browser_download_url")
         }
-        val json = urls["update.json"] ?: return@withContext null
+        val json = urls["update.json"] ?: throw NoReleasesException()
         val text = open(json).inputStream.bufferedReader().readText()
         val current = currentVersionCode(context)
         UpdateInfo.parse(text, urls, current).takeIf { it.versionCode > current }

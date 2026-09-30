@@ -539,6 +539,7 @@ fun UpdateRow() {
                 Updates.State.Idle -> "Версія $current" to "Натисніть, щоб перевірити"
                 Updates.State.Checking -> "Версія $current" to "Перевіряю…"
                 Updates.State.UpToDate -> "Версія $current" to "Це найновіша версія ✓"
+                Updates.State.NoReleases -> "Версія $current" to "На GitHub ще немає опублікованих версій"
                 is Updates.State.Available -> "Доступна версія ${st.info.versionName}" to
                     if (st.info.patch != null) "Завантажити ${mb(st.info.downloadSize)} замість ${mb(st.info.apk.size)}"
                     else "Завантажити ${mb(st.info.apk.size)}"
@@ -549,7 +550,7 @@ fun UpdateRow() {
             }
             Titles(title, subtitle, Modifier.weight(1f))
             val (label, action) = when (st) {
-                Updates.State.Idle, Updates.State.UpToDate -> "Перевірити" to { Updates.check(context) }
+                Updates.State.Idle, Updates.State.UpToDate, Updates.State.NoReleases -> "Перевірити" to { Updates.check(context) }
                 Updates.State.Checking, is Updates.State.Downloading -> null to {}
                 is Updates.State.Available -> "Оновити" to { Updates.download(context, st.info) }
                 is Updates.State.ReadyToInstall -> "Встановити" to { Updates.install(context, st.info, st.file) }
