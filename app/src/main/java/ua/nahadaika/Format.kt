@@ -36,6 +36,17 @@ fun whenLabel(ms: Long): String {
     return "$day о ${formatTime(ms)}"
 }
 
+/** Для підтвердження: «через 10 с», «через 25 хв» — якщо скоро, інакше «завтра о 9:00». */
+fun soonLabel(ms: Long, now: Long = System.currentTimeMillis()): String {
+    val d = (ms - now + 500) / 1000
+    return when {
+        d in 0 until 60 -> "через $d с"
+        d in 60 until 600 && d % 60 != 0L -> "через ${d / 60} хв ${d % 60} с"
+        d in 60 until 3600 -> "через ${(d + 30) / 60} хв"
+        else -> whenLabel(ms)
+    }
+}
+
 /** Коротко для списку чатів: "20:00", "завтра", "5 жовт.". */
 fun shortWhen(ms: Long): String {
     val date = ms.toLocalDate()

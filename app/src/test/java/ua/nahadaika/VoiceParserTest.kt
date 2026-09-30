@@ -108,4 +108,23 @@ class VoiceParserTest {
         val cmd = VoiceParser.parse("завтра купити хліб", now, defaultTime = java.time.LocalTime.of(8, 0))
         assertEquals(d(10, 1, 8), LocalDateTime.ofInstant(Instant.ofEpochMilli(cmd.at!!), ZoneId.systemDefault()))
     }
+
+    private fun dt(h: Int, m: Int, sec: Int) = LocalDateTime.of(2026, 9, 30, h, m, sec)
+
+    // Час перед командою, секунди, таймер і будильник.
+    @Test fun timeBeforeCommand() = check("через пів години нагадай вимкнути плиту", "Вимкнути плиту", d(9, 30, 10, 30))
+    @Test fun halfHourThenCommandOnly() = check("через півгодини нагадай", "", d(9, 30, 10, 30))
+    @Test fun inSeconds() = check("через 10 секунд", "", dt(10, 0, 10))
+    @Test fun inSecondsWords() = check("нагадай через десять секунд зняти чайник", "Зняти чайник", dt(10, 0, 10))
+    @Test fun halfMinute() = check("через півхвилини", "", dt(10, 0, 30))
+    @Test fun minuteAndSeconds() = check("через хвилину і 20 секунд", "", dt(10, 1, 20))
+    @Test fun timerMinutes() = check("постав таймер на 10 хвилин", "Таймер", d(9, 30, 10, 10))
+    @Test fun timerSeconds() = check("таймер на 30 секунд", "Таймер", dt(10, 0, 30))
+    @Test fun timerWithText() = check("постав таймер на 15 хвилин макарони", "Макарони", d(9, 30, 10, 15))
+    @Test fun timerStartKeyword() = check("засічи 5 хвилин", "Таймер", d(9, 30, 10, 5))
+    @Test fun alarmMorning() = check("постав будильник на 7 ранку", "Будильник", d(10, 1, 7))
+    @Test fun alarmClock() = check("будильник на 6:30", "Будильник", d(10, 1, 6, 30))
+    @Test fun wakeMeUp() = check("розбуди мене завтра о пів на восьму", "Будильник", d(10, 1, 7, 30))
+    @Test fun oClockLocative() = check("о 9 годині нарада", "Нарада", d(10, 1, 9))
+    @Test fun durationIsNotClockTime() = check("завтра зустріч на 2 години", "Зустріч на 2 години", d(10, 1, 9))
 }

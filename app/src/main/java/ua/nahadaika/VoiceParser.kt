@@ -84,7 +84,14 @@ object VoiceParser {
     private fun ordinal(tensWord: String?, stem: String): Int =
         (tensWord?.let { tens[it.lowercase()] } ?: 0) + ordinalStems.first { stem.lowercase() == it.first }.second
 
-    private fun normalizeNumbers(input: String): String = input
+    private val halfWords = listOf(
+        Regex("${B}півгодини$E", RegexOption.IGNORE_CASE) to "пів години",
+        Regex("${B}полчаса$E", RegexOption.IGNORE_CASE) to "пів часа",
+        Regex("${B}півхвилини$E", RegexOption.IGNORE_CASE) to "пів хвилини",
+        Regex("${B}полминуты$E", RegexOption.IGNORE_CASE) to "пів минуты",
+    )
+
+    private fun normalizeNumbers(input: String): String = halfWords.fold(input) { acc, (r, v) -> acc.replace(r, v) }
         .replace(ordinalHour) { m ->
             val h = ordinal(m.groups[2]?.value, m.groupValues[3])
             if (h in 1..24) "${m.groupValues[1]} ${h % 24}" else m.value
@@ -104,12 +111,15 @@ object VoiceParser {
     )
     private val WEEKDAY = "(" + weekdayStems.joinToString("|") { it.first } + ")\\p{L}*"
 
+    private const val TIMER = "timer"
+    private const val ALARM = "alarm"
     private const val EVERY = "(?:кожн|кажд)\\p{L}*\\s+"
     private const val HOURS = "(?:годин\\p{L}*|год|час(?:а|ов)?)"
     private const val MINUTES = "(?:хвилин\\p{L}*|хв|минут\\p{L}*|мин)"
+    private const val SECONDS = "(?:секунд\\p{L}*|сек)"
     private const val PERIOD = "(?:ранку|вранці|зранку|утра|вечора|ввечері|вечера|дня|ночі|ночи)"
     // Після числа — одиниця виміру, тож це не година («на 5 днів», «2 кг»).
-    private const val UNIT = "(?:дн|тиж|міс|хв|мин|раз|рок|кг|шт|грн|%|[.,/]\\d)"
+    private const val UNIT = "(?:дн|тиж|міс|хв|мин|сек|годин[уи]?(?![\\p{L}])|раз|рок|кг|шт|грн|%|[.,/]\\d)"
 
     private fun num(token: String?): Double? {
         if (token == null) return null
@@ -176,18 +186,27 @@ object VoiceParser {
         var absolute: LocalDateTime? = null
         var dayOffset: Long? = null
         var monthOffset: Long? = null
-        c.take("${B}через\\s+(?:півгодини|полчаса)$E")?.let { absolute = base.plusMinutes(30) }
-        if (absolute == null) {
-            c.take("${B}через\\s+(?:$NUM\\s*)?$HOURS(?:\\s+(?:і\\s+|та\\s+|и\\s+)?$NUM\\s*$MINUTES)?$E")?.let {
-                val hours = num(it.groups[1]?.value) ?: 1.0
-                val minutes = num(it.groups[2]?.value) ?: 0.0
-                absolute = base.plusMinutes((hours * 60 + minutes).toLong())
-            }
+        // Таймер і будильник: «постав таймер на 10 хвилин», «засічи 5 хвилин», «розбуди мене о 7».
+        var mode: String? = null
+        c.take("$B(?:(?:постав\\p{L}*|заведи|увімкни|включи)\\s+)?(?:мені\\s+)?(таймер\\p{L}*|будильник\\p{L}*)$E")?.let {
+            mode = if (it.groupValues[1].lowercase().startsWith("таймер")) TIMER else ALARM
         }
-        if (absolute == null) {
-            c.take("${B}через\\s+(?:$NUM\\s*)?$MINUTES$E")?.let {
-                absolute = base.plusMinutes((num(it.groups[1]?.value) ?: 1.0).toLong())
-            }
+        if (mode == null) c.take("$B(?:розбуди(?:ти)?|разбуди)(?:\\s+(?:мене|меня))?$E")?.let { mode = ALARM }
+        if (mode == null) c.take("$B(?:засічи|засікти|засеки)$E")?.let { mode = TIMER }
+
+        // Тривалість: «годину 30 хвилин», «пів години», «хвилину і 20 секунд», «10 секунд».
+        val j = "\\s+(?:і\\s+|та\\s+|и\\s+)?"
+        val h = "(?:$NUM\\s*)?$HOURS"
+        val m = "(?:$NUM\\s*)?$MINUTES"
+        val sec = "(?:$NUM\\s*)?$SECONDS"
+        val dur = "(?:$h(?:$j$m)?(?:$j$sec)?|$m(?:$j$sec)?|$sec)"
+        val durMatch = c.take("${B}через\\s+$dur$E")
+            ?: if (mode != null) c.take("$B(?:на\\s+)?$dur$E") else null
+        durMatch?.let {
+            fun part(unit: String): Double? =
+                Regex("(?:$NUM\\s*)?$unit$E", RegexOption.IGNORE_CASE).find(it.value)?.let { u -> num(u.groups[1]?.value) ?: 1.0 }
+            val total = ((part(HOURS) ?: 0.0) * 3600 + (part(MINUTES) ?: 0.0) * 60 + (part(SECONDS) ?: 0.0)).toLong()
+            absolute = if (total % 60 == 0L) base.plusSeconds(total) else now.truncatedTo(ChronoUnit.SECONDS).plusSeconds(total)
         }
         c.take("${B}через\\s+(?:$NUM\\s*)?(?:дн\\p{L}*|день|добу|сутки|суток)$E")?.let {
             dayOffset = (num(it.groups[1]?.value) ?: 1.0).toLong()
@@ -332,8 +351,15 @@ object VoiceParser {
             }
         }
 
+        val text = cleanText(c.text).ifEmpty {
+            when (mode) {
+                TIMER -> "Таймер"
+                ALARM -> "Будильник"
+                else -> ""
+            }
+        }
         return VoiceCommand(
-            text = cleanText(c.text),
+            text = text,
             at = at?.atZone(ZoneId.systemDefault())?.toInstant()?.toEpochMilli(),
             repeat = repeat,
         )
@@ -367,12 +393,17 @@ object VoiceParser {
             "(?:\\s+(?:нагадування|нагадувалку|будильник|напоминалку))?$E",
         RegexOption.IGNORE_CASE,
     )
+    // Команда посеред фрази: «через пів години нагадай вимкнути плиту».
+    private val commandAnywhere = Regex(
+        "$B(?:нагадай|нагадайте|нагадати|нагадаю|напомни|напомните|напомню)(?:\\s+(?:мені|нам|будь\\s+ласка))?$E",
+        RegexOption.IGNORE_CASE,
+    )
     private val leadingFiller = Regex("^(?:[\\s,.:;!\\-—]+|(?:на|що|щоб|про|те|мені|і|та|й|нагадування)$E)+", RegexOption.IGNORE_CASE)
     private val trailingFiller = Regex("(?:[\\s,.:;\\-—]+|$B(?:на|о|об|в|у|і|та|що|щоб|про)$E)+$", RegexOption.IGNORE_CASE)
 
     private fun cleanText(s: String): String {
         var t = s.replace(Regex("\\s+"), " ").trim()
-        t = t.replace(commandPrefix, "")
+        t = t.replace(commandPrefix, "").replace(commandAnywhere, " ").replace(Regex("\\s+"), " ").trim()
         t = t.replace(leadingFiller, "").replace(trailingFiller, "")
         t = t.replace(Regex("\\s+([,.!?])"), "$1").replace(Regex("\\s+"), " ").trim()
         return t.replaceFirstChar { it.titlecase() }

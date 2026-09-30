@@ -160,6 +160,7 @@ import ua.nahadaika.media.MediaFiles
 import ua.nahadaika.media.VoiceRecorder
 import ua.nahadaika.toLocalDate
 import ua.nahadaika.whenLabel
+import ua.nahadaika.soonLabel
 import java.time.LocalDate
 
 /** Рядок таймлайну: нагадування або лінія «зараз». */
@@ -294,7 +295,7 @@ fun ChatScreen(
             highlightId = id
             val label = previewText(reminder).take(40)
             val result = snackbar.showSnackbar(
-                message = "Нагадаю ${whenLabel(reminder.triggerAt)}" + if (label.isNotBlank()) ": $label" else "",
+                message = "Нагадаю ${soonLabel(reminder.triggerAt)}" + if (label.isNotBlank()) ": $label" else "",
                 actionLabel = "Змінити",
                 withDismissAction = true,
                 duration = SnackbarDuration.Long,
@@ -806,7 +807,7 @@ fun ChatScreen(
             scope.launch {
                 Repo.reschedule(r, at, repeat)
                 highlightId = r.id
-                snackbar.showSnackbar("Нагадаю ${whenLabel(at)}")
+                snackbar.showSnackbar("Нагадаю ${soonLabel(at)}")
             }
         }
     }
