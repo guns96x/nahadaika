@@ -12,10 +12,8 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import kotlin.math.max
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,12 +28,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Snooze
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
@@ -48,15 +42,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -66,192 +54,18 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 import ua.nahadaika.data.Kind
 import ua.nahadaika.data.Reminder
-import ua.nahadaika.data.Repeat
-import ua.nahadaika.data.alarmAt
 import ua.nahadaika.formatDuration
-import ua.nahadaika.formatTime
-import ua.nahadaika.inLabel
 import ua.nahadaika.media.AudioPlayer
-import ua.nahadaika.previewText
-import ua.nahadaika.repeatLabel
 import ua.nahadaika.ui.theme.Glass
-import ua.nahadaika.ui.theme.Inter
 import ua.nahadaika.ui.theme.glass
-import ua.nahadaika.whenLabel
 import java.io.File
 
-private val BubbleShape = RoundedCornerShape(22.dp, 22.dp, 8.dp, 22.dp)
-
 @Composable
-fun DateHeader(label: String) {
-    Box(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 8.dp), contentAlignment = Alignment.Center) {
-        Text(
-            label.uppercase(),
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Medium,
-            letterSpacing = 1.4.sp,
-            color = Glass.TextFaint,
-        )
-    }
-}
-
-/** Велика картка найближчого нагадування з живим відліком, як у таймері. */
-@Composable
-fun NextUpCard(reminder: Reminder, onClick: () -> Unit) {
-    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            now = System.currentTimeMillis()
-            delay(1_000)
-        }
-    }
-    val accent = Glass.Lavender
-    val left = (reminder.alarmAt() - now).coerceAtLeast(0)
-    val totalSec = left / 1000
-    val countdown = if (totalSec < 24 * 3600) {
-        "%02d:%02d:%02d".format(totalSec / 3600, totalSec / 60 % 60, totalSec % 60)
-    } else {
-        "${totalSec / 86400} дн ${totalSec / 3600 % 24} год"
-    }
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-            .glass(RoundedCornerShape(30.dp))
-            .drawBehind {
-                drawCircle(
-                    Brush.radialGradient(listOf(accent.copy(alpha = 0.10f), Color.Transparent), center, size.width * 0.6f),
-                    size.width * 0.6f,
-                    center,
-                )
-            }
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 22.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            "НАЙБЛИЖЧЕ",
-            color = Glass.Lavender,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Medium,
-            letterSpacing = 2.sp,
-        )
-        Text(
-            countdown,
-            color = Glass.Text,
-            style = TextStyle(
-                fontFamily = Inter,
-                fontSize = 58.sp,
-                fontWeight = FontWeight.ExtraLight,
-                fontFeatureSettings = "tnum",
-                letterSpacing = (-1).sp,
-            ),
-            modifier = Modifier.padding(top = 4.dp, bottom = 6.dp),
-        )
-        Text(
-            previewText(reminder).ifBlank { "Нагадування" },
-            color = Glass.Text,
-            fontSize = 16.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Spacer(Modifier.height(2.dp))
-        Text(whenLabel(reminder.alarmAt()).replaceFirstChar { it.uppercase() }, color = Glass.TextDim, fontSize = 13.sp)
-    }
-}
-
-@Composable
-fun ReminderBubble(
-    reminder: Reminder,
-    highlighted: Boolean,
-    player: AudioPlayer,
-    now: Long,
-    videoPlaying: Boolean,
-    onClick: () -> Unit,
-    onOpenPhoto: () -> Unit,
-    onPlayVideo: () -> Unit,
-    onVideoEnded: () -> Unit,
-) {
-    val tint by animateColorAsState(
-        if (highlighted) Glass.Lavender.copy(alpha = 0.16f) else Color.Transparent,
-        label = "highlight",
-    )
-    val fill: Brush = SolidColor(if (reminder.fired) Glass.FillSubtle else Glass.Fill)
-    Row(
-        Modifier.fillMaxWidth().padding(start = 56.dp, end = 12.dp, top = 3.dp, bottom = 3.dp),
-        horizontalArrangement = Arrangement.End,
-    ) {
-        Column(
-            Modifier
-                .widthIn(max = 320.dp)
-                .glass(BubbleShape, fill)
-                .background(tint)
-                .clickable(onClick = onClick),
-        ) {
-            when (reminder.kind) {
-                Kind.PHOTO -> AsyncImage(
-                    model = reminder.mediaPath?.let(::File),
-                    contentDescription = "Фото",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .padding(4.dp)
-                        .fillMaxWidth()
-                        .height(240.dp)
-                        .clip(RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp))
-                        .background(Color.Black.copy(alpha = 0.3f))
-                        .clickable(onClick = onOpenPhoto),
-                )
-                Kind.VIDEO -> Box(
-                    Modifier
-                        .padding(4.dp)
-                        .fillMaxWidth()
-                        .height(240.dp)
-                        .clip(RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp))
-                        .background(Color.Black),
-                ) {
-                    // Кадр-обкладинка лежить під плеєром, поки не з'явиться перший кадр відео.
-                    AsyncImage(
-                        model = reminder.mediaPath?.let(::File),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                    val path = reminder.mediaPath
-                    if (videoPlaying && path != null) {
-                        InlineVideo(path, reminder.durationMs, onEnded = onVideoEnded, modifier = Modifier.fillMaxSize())
-                    } else {
-                        Box(Modifier.fillMaxSize().clickable(onClickLabel = "Відтворити відео", onClick = onPlayVideo)) {
-                            Box(
-                                Modifier.align(Alignment.Center).size(54.dp).glass(CircleShape, Color.Black.copy(alpha = 0.35f)),
-                                contentAlignment = Alignment.Center,
-                            ) { Icon(Icons.Default.PlayArrow, "Відтворити відео", tint = Color.White, modifier = Modifier.size(34.dp)) }
-                            VideoLabel(formatDuration(reminder.durationMs), Modifier.align(Alignment.TopStart))
-                        }
-                    }
-                }
-                Kind.VOICE -> VoiceContent(reminder, player)
-                Kind.TEXT -> Unit
-            }
-            if (reminder.text.isNotBlank()) {
-                Text(
-                    reminder.text,
-                    color = if (reminder.fired) Glass.TextDim else Glass.Text,
-                    fontSize = 16.sp,
-                    lineHeight = 23.sp,
-                    modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 10.dp),
-                )
-            }
-            Footer(reminder, now)
-        }
-    }
-}
-
-@Composable
-private fun VoiceContent(reminder: Reminder, player: AudioPlayer) {
+internal fun VoicePlayer(reminder: Reminder, player: AudioPlayer, modifier: Modifier = Modifier) {
     val path = reminder.mediaPath ?: return
     val active = player.currentPath == path
     Row(
-        Modifier.padding(start = 10.dp, end = 14.dp, top = 10.dp).width(240.dp),
+        modifier.widthIn(max = 280.dp).fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
@@ -279,37 +93,35 @@ private fun VoiceContent(reminder: Reminder, player: AudioPlayer) {
     }
 }
 
+/** Відео-нагадування: кадр-обкладинка з ▶; після тапу грає прямо тут, без окремого вікна. */
 @Composable
-private fun Footer(r: Reminder, now: Long) {
-    Row(
-        Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 8.dp),
-        horizontalArrangement = Arrangement.End,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (!r.fired) {
-            // Скільки лишилось — графічна «пігулка» зліва.
-            Text(inLabel(r.alarmAt() - now), fontSize = 12.sp, color = Glass.Lavender)
-            Spacer(Modifier.weight(1f))
-        }
-        if (r.repeat != Repeat.NONE) {
-            Icon(Icons.Default.Repeat, null, Modifier.size(13.dp), tint = Glass.TextDim)
-            Spacer(Modifier.width(2.dp))
-            Text(repeatLabel(r.repeat).lowercase(), fontSize = 12.sp, color = Glass.TextDim)
-            Spacer(Modifier.width(6.dp))
-        }
-        if (r.snoozedUntil != null) {
-            Icon(Icons.Default.Snooze, null, Modifier.size(13.dp), tint = Glass.TextDim)
-            Spacer(Modifier.width(2.dp))
-        }
-        val time = if (r.fired) r.lastFiredAt ?: r.triggerAt else r.alarmAt()
-        Text(formatTime(time), fontSize = 12.sp, color = Glass.TextFaint)
-        Spacer(Modifier.width(3.dp))
-        Icon(
-            if (r.fired) Icons.Default.DoneAll else Icons.Default.Schedule,
-            contentDescription = if (r.fired) "Надіслано" else "Заплановано",
-            modifier = Modifier.size(14.dp),
-            tint = if (r.fired) Glass.Lavender else Glass.TextFaint,
+internal fun VideoMedia(
+    reminder: Reminder,
+    playing: Boolean,
+    onPlay: () -> Unit,
+    onEnded: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier.clip(RoundedCornerShape(16.dp)).background(Color.Black)) {
+        // Кадр-обкладинка лежить під плеєром, поки не з'явиться перший кадр відео.
+        AsyncImage(
+            model = reminder.mediaPath?.let(::File),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
         )
+        val path = reminder.mediaPath
+        if (playing && path != null) {
+            InlineVideo(path, reminder.durationMs, onEnded = onEnded, modifier = Modifier.fillMaxSize())
+        } else {
+            Box(Modifier.fillMaxSize().clickable(onClickLabel = "Відтворити відео", onClick = onPlay)) {
+                Box(
+                    Modifier.align(Alignment.Center).size(54.dp).glass(CircleShape, Color.Black.copy(alpha = 0.35f)),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Default.PlayArrow, "Відтворити відео", tint = Color.White, modifier = Modifier.size(34.dp)) }
+                VideoLabel(formatDuration(reminder.durationMs), Modifier.align(Alignment.TopStart))
+            }
+        }
     }
 }
 

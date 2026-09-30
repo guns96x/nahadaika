@@ -1,6 +1,11 @@
 package ua.nahadaika.ui
 
 import android.Manifest
+import androidx.compose.foundation.lazy.itemsIndexed
+import ua.nahadaika.Occurrence
+import ua.nahadaika.inLabel
+import ua.nahadaika.occurrencesOn
+import java.time.ZoneId
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -24,7 +29,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import ua.nahadaika.ui.theme.edgeFade
 import ua.nahadaika.ui.theme.glassHaze
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.ui.unit.sp
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
@@ -32,7 +36,6 @@ import ua.nahadaika.ui.theme.ThemeModeButton
 import ua.nahadaika.ui.theme.AppBackground
 import ua.nahadaika.ui.theme.Glass
 import ua.nahadaika.ui.theme.GlassIconButton
-import ua.nahadaika.ui.theme.GlassSegmented
 import ua.nahadaika.ui.theme.GlassSnackbar
 import ua.nahadaika.ui.theme.sheetGlow
 import ua.nahadaika.ui.theme.glass
@@ -113,7 +116,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -130,7 +132,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -154,23 +155,10 @@ import ua.nahadaika.toLocalDate
 import ua.nahadaika.whenLabel
 import java.time.LocalDate
 
-private sealed interface ListRow {
-    data class Header(val label: String) : ListRow
-    data class Msg(val reminder: Reminder) : ListRow
-}
-
-private fun buildRows(list: List<Reminder>, timeOf: (Reminder) -> Long): List<ListRow> {
-    val rows = mutableListOf<ListRow>()
-    var lastDate: LocalDate? = null
-    for (r in list) {
-        val date = timeOf(r).toLocalDate()
-        if (date != lastDate) {
-            rows += ListRow.Header(dayLabel(date))
-            lastDate = date
-        }
-        rows += ListRow.Msg(r)
-    }
-    return rows
+/** Рядок таймлайну: нагадування або лінія «зараз». */
+private sealed interface Entry {
+    data class Item(val occurrence: Occurrence) : Entry
+    data object Now : Entry
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -189,11 +177,25 @@ fun ChatScreen(
     val chat by Repo.chat(chatId).collectAsStateWithLifecycle(null)
     val all by Repo.reminders(chatId).collectAsStateWithLifecycle(emptyList())
 
-    var tab by rememberSaveable { mutableIntStateOf(0) }
     val scheduled = remember(all) { all.filter { !it.fired }.sortedBy { it.alarmAt() } }
-    val history = remember(all) { all.filter { it.fired }.sortedBy { it.lastFiredAt ?: it.triggerAt } }
-    val rows = remember(tab, scheduled, history) {
-        if (tab == 0) buildRows(scheduled) { it.alarmAt() } else buildRows(history) { it.lastFiredAt ?: it.triggerAt }
+    var nowTick by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000)
+            nowTick = System.currentTimeMillis()
+        }
+    }
+    // Таймлайн обраного дня (як у Structured): нагадування по часу + лінія «зараз» сьогодні.
+    val today = remember(nowTick) { nowTick.toLocalDate() }
+    var selectedDate by rememberSaveable { mutableStateOf(LocalDate.now()) }
+    val entries = remember(all, selectedDate, nowTick) {
+        val items = occurrencesOn(all, selectedDate).map { Entry.Item(it) }
+        if (selectedDate != today) {
+            items
+        } else {
+            val split = items.indexOfFirst { it.occurrence.at > nowTick }.let { if (it < 0) items.size else it }
+            items.take(split) + Entry.Now + items.drop(split)
+        }
     }
 
     val player = remember { AudioPlayer() }
@@ -235,23 +237,23 @@ fun ChatScreen(
         }
     }
 
-    // Відкриття зі сповіщення: перемкнути вкладку, підсвітити, за потреби — програти голосове.
+    // Відкриття зі сповіщення: показати день нагадування, підсвітити, за потреби — програти голосове.
     LaunchedEffect(focus, all) {
         val f = focus ?: return@LaunchedEffect
         val r = all.find { it.id == f.reminderId } ?: return@LaunchedEffect
-        tab = if (r.fired) 1 else 0
+        selectedDate = (if (r.fired) r.lastFiredAt ?: r.triggerAt else r.alarmAt()).toLocalDate()
         highlightId = r.id
         if (f.autoplay && r.kind == Kind.VOICE) r.mediaPath?.let(player::play)
         onFocusConsumed()
     }
 
     val listState = rememberLazyListState()
-    // Перед повідомленнями в списку йдуть банери та (у «Запланованих») картка найближчого.
-    val lead = if (tab == 0 && scheduled.isNotEmpty()) 2 else 1
-    LaunchedEffect(tab, highlightId, rows.size) {
-        val target = highlightId?.let { id -> rows.indexOfFirst { it is ListRow.Msg && it.reminder.id == id } }?.takeIf { it >= 0 }
-            ?: if (tab == 1 && rows.isNotEmpty()) rows.lastIndex else null
-        target?.let { listState.animateScrollToItem(it + lead) }
+    // Перед таймлайном у списку — рядок банерів.
+    LaunchedEffect(selectedDate, highlightId, entries.size) {
+        val target = highlightId?.let { id -> entries.indexOfFirst { it is Entry.Item && it.occurrence.reminder.id == id } }
+            ?.takeIf { it >= 0 }
+            ?: entries.indexOf(Entry.Now).takeIf { it > 1 }?.minus(1)
+        target?.let { listState.animateScrollToItem(it + 1) }
     }
     LaunchedEffect(highlightId) {
         if (highlightId != null) {
@@ -270,7 +272,7 @@ fun ChatScreen(
 
     /** Створити нагадування й показати підтвердження з кнопкою «Змінити». */
     fun schedule(reminder: Reminder) {
-        tab = 0
+        selectedDate = reminder.triggerAt.toLocalDate()
         scope.launch {
             val id = Repo.createReminder(reminder)
             highlightId = id
@@ -486,14 +488,6 @@ fun ChatScreen(
     }
 
     val hazeState = remember { HazeState() }
-    var nowTick by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(30_000)
-            nowTick = System.currentTimeMillis()
-        }
-    }
-
     Scaffold(
         containerColor = Color.Transparent,
         snackbarHost = { SnackbarHost(snackbar) { GlassSnackbar(it) } },
@@ -532,7 +526,7 @@ fun ChatScreen(
                                     overflow = TextOverflow.Ellipsis,
                                 )
                                 Text(
-                                    if (scheduled.isEmpty()) "немає запланованих" else "заплановано: ${scheduled.size}",
+                                    scheduled.firstOrNull()?.let { inLabel(it.alarmAt() - nowTick) } ?: "немає запланованих",
                                     color = Glass.TextDim,
                                     fontSize = 13.sp,
                                     maxLines = 1,
@@ -544,15 +538,13 @@ fun ChatScreen(
                     Spacer(Modifier.width(8.dp))
                     ThemeModeButton(size = HeaderHeight, haze = hazeState)
                 }
-                GlassSegmented(
-                    options = listOf(
-                        Icons.Default.Schedule to "Заплановані · ${scheduled.size}",
-                        Icons.Default.DoneAll to "Історія · ${history.size}",
-                    ),
-                    selected = tab,
-                    onSelect = { tab = it },
+                DayStrip(
+                    selected = selectedDate,
+                    today = today,
+                    dotsFor = { day -> occurrencesOn(all, day).map { kindColor(it.reminder.kind) }.distinct() },
+                    onSelect = { selectedDate = it },
                     haze = hazeState,
-                    modifier = Modifier.fillMaxWidth().height(46.dp),
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         },
@@ -617,41 +609,43 @@ fun ChatScreen(
                 ),
             ) {
                 item(key = "banners") { PermissionBanners() }
-                if (tab == 0 && scheduled.isNotEmpty()) {
-                    item(key = "next") {
-                        val next = scheduled.first()
-                        NextUpCard(next, onClick = { actionsFor = next })
-                    }
-                }
-                if (rows.isEmpty()) {
+                if (entries.none { it is Entry.Item }) {
                     item(key = "empty") {
-                        Box(Modifier.fillParentMaxHeight(0.75f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            EmptyState(tab)
+                        Box(Modifier.fillParentMaxHeight(0.6f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            EmptyDay(if (selectedDate == today) "На сьогодні" else "На ${dayLabel(selectedDate).replaceFirstChar { it.lowercase() }}")
                         }
                     }
-                }
-                items(rows, key = { row ->
-                    when (row) {
-                        is ListRow.Header -> "h-${row.label}"
-                        is ListRow.Msg -> row.reminder.id
-                    }
-                }) { row ->
-                    when (row) {
-                        is ListRow.Header -> DateHeader(row.label)
-                        is ListRow.Msg -> ReminderBubble(
-                            reminder = row.reminder,
-                            highlighted = row.reminder.id == highlightId,
-                            player = player,
-                            now = nowTick,
-                            onClick = { actionsFor = row.reminder },
-                            videoPlaying = row.reminder.id == playingVideoId,
-                            onOpenPhoto = { viewing = row.reminder },
-                            onPlayVideo = {
-                                player.stop()
-                                playingVideoId = row.reminder.id
-                            },
-                            onVideoEnded = { if (playingVideoId == row.reminder.id) playingVideoId = null },
-                        )
+                } else {
+                    itemsIndexed(entries, key = { _, e ->
+                        when (e) {
+                            is Entry.Item -> "${e.occurrence.reminder.id}-${e.occurrence.at}"
+                            Entry.Now -> "now"
+                        }
+                    }) { index, e ->
+                        val isFirst = index == 0
+                        val isLast = index == entries.lastIndex
+                        when (e) {
+                            Entry.Now -> NowLine(nowTick, isFirst, isLast)
+                            is Entry.Item -> {
+                                val r = e.occurrence.reminder
+                                TimelineItem(
+                                    occurrence = e.occurrence,
+                                    now = nowTick,
+                                    isFirst = isFirst,
+                                    isLast = isLast,
+                                    highlighted = r.id == highlightId,
+                                    player = player,
+                                    videoPlaying = r.id == playingVideoId,
+                                    onClick = { actionsFor = r },
+                                    onOpenPhoto = { viewing = r },
+                                    onPlayVideo = {
+                                        player.stop()
+                                        playingVideoId = r.id
+                                    },
+                                    onVideoEnded = { if (playingVideoId == r.id) playingVideoId = null },
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -676,7 +670,8 @@ fun ChatScreen(
 
     if (showSchedule) {
         ScheduleSheet(
-            initialAt = null,
+            // Обрано інший день на смужці — пропонуємо саме його (о 9:00).
+            initialAt = if (selectedDate != today) selectedDate.atTime(9, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli() else null,
             initialRepeat = Repeat.NONE,
             confirmLabel = "Запланувати",
             onDismiss = { showSchedule = false },
@@ -692,7 +687,7 @@ fun ChatScreen(
             onDismiss = { rescheduling = null },
         ) { at, repeat ->
             rescheduling = null
-            tab = 0
+            selectedDate = at.toLocalDate()
             scope.launch {
                 Repo.reschedule(r, at, repeat)
                 highlightId = r.id
@@ -739,41 +734,6 @@ fun ChatScreen(
     }
 
     viewing?.let { MediaViewer(it, onDismiss = { viewing = null }) }
-}
-
-@Composable
-private fun EmptyState(tab: Int) {
-    Column(
-        Modifier
-            .padding(horizontal = 44.dp)
-            .glass(RoundedCornerShape(26.dp))
-            .padding(horizontal = 24.dp, vertical = 26.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Icon(
-            if (tab == 0) Icons.Default.Schedule else Icons.Default.NotificationsActive,
-            contentDescription = null,
-            modifier = Modifier.size(40.dp),
-            tint = Glass.TextFaint,
-        )
-        Spacer(Modifier.height(14.dp))
-        Text(
-            if (tab == 0) "Нагадувань ще немає" else "Історія порожня",
-            color = Glass.Text,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            if (tab == 0) "Напишіть, скажіть або запишіть відео — і оберіть, коли нагадати."
-            else "Тут з'являться нагадування, які вже надійшли.",
-            textAlign = TextAlign.Center,
-            color = Glass.TextDim,
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
-        )
-    }
 }
 
 private val HeaderHeight = 56.dp

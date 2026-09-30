@@ -66,6 +66,15 @@ class ScreenshotTest {
         val meds = Repo.createChat("Ліки")
         Repo.createReminder(Reminder(chatId = home, kind = Kind.TEXT, text = "Забрати посилку на пошті 📦", triggerAt = at(0, 18, 30)))
         Repo.createReminder(
+            Reminder(
+                chatId = home, kind = Kind.TEXT, text = "Вітамін D", triggerAt = at(1, 8), repeat = Repeat.DAILY,
+                lastFiredAt = at(0, 8),
+            ),
+        )
+        Repo.createReminder(
+            Reminder(chatId = home, kind = Kind.VOICE, mediaPath = "/evening.m4a", durationMs = 9_000, text = "Що купити на вечерю", triggerAt = at(0, 20)),
+        )
+        Repo.createReminder(
             Reminder(chatId = home, kind = Kind.VOICE, mediaPath = "/voice.m4a", durationMs = 14_000, triggerAt = at(1, 9)),
         )
         Repo.createReminder(
