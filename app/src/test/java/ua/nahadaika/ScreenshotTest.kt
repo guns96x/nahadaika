@@ -7,9 +7,13 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Shader
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
+import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.captureRoboImage
+import com.github.takahirom.roborazzi.captureScreenRoboImage
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
@@ -90,12 +94,16 @@ class ScreenshotTest {
         compose.onRoot().captureRoboImage("build/screenshots/2_chat.png")
     }
 
+    @OptIn(ExperimentalRoborazziApi::class)
     @Test
     fun schedule() {
         compose.setContent {
             NahadaikaTheme { ScheduleSheet(initialAt = null, initialRepeat = Repeat.NONE, confirmLabel = "Запланувати", onDismiss = {}, onDictate = {}) { _, _ -> } }
         }
         compose.waitForIdle()
-        com.github.takahirom.roborazzi.captureScreenRoboImage("build/screenshots/3_schedule.png")
+        captureScreenRoboImage("build/screenshots/3_schedule_at.png")
+        compose.onNodeWithText("Через").performClick()
+        compose.waitForIdle()
+        captureScreenRoboImage("build/screenshots/4_schedule_in.png")
     }
 }

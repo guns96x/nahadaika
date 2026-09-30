@@ -49,6 +49,20 @@ fun shortWhen(ms: Long): String {
 
 fun shortDate(date: LocalDate): String = date.format(shortDateFmt)
 
+/** «через 1 год 17 хв», «через 45 хв», «через 2 дн 3 год». */
+fun inLabel(ms: Long): String {
+    val totalMin = (ms + 59_999) / 60_000
+    val days = totalMin / (24 * 60)
+    val hours = totalMin / 60 % 24
+    val minutes = totalMin % 60
+    val parts = buildList {
+        if (days > 0) add("$days дн")
+        if (hours > 0) add("$hours год")
+        if (minutes > 0 && days == 0L) add("$minutes хв")
+    }
+    return if (parts.isEmpty()) "менш ніж за хвилину" else "через " + parts.joinToString(" ")
+}
+
 fun formatDuration(ms: Long): String {
     val total = ms / 1000
     return "%d:%02d".format(total / 60, total % 60)

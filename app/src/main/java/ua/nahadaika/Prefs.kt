@@ -20,4 +20,12 @@ object Prefs {
 
     fun modeHintShown(context: Context): Boolean = prefs(context).getBoolean("mode_hint", false)
     fun setModeHintShown(context: Context) = prefs(context).edit().putBoolean("mode_hint", true).apply()
+
+    /** Вкладка у вікні вибору часу: 0 — «Через» (таймер), 1 — «Коли» (дата й час). */
+    fun scheduleMode(context: Context): Int = prefs(context).getInt("schedule_mode", 1)
+    fun setScheduleMode(context: Context, mode: Int) = prefs(context).edit().putInt("schedule_mode", mode).apply()
+
+    /** Останнє значення таймера «через», у секундах. */
+    fun timerSeconds(context: Context): Int = prefs(context).getInt("timer_seconds", 30 * 60)
+    fun setTimerSeconds(context: Context, seconds: Int) = prefs(context).edit().putInt("timer_seconds", seconds).apply()
 }
