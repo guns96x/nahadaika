@@ -1,5 +1,10 @@
 package ua.nahadaika.ui
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import android.graphics.Matrix
 import android.graphics.SurfaceTexture
 import android.media.MediaPlayer
@@ -93,7 +98,7 @@ internal fun VoicePlayer(reminder: Reminder, player: AudioPlayer, modifier: Modi
     }
 }
 
-/** Відео-нагадування: кадр-обкладинка з ▶; після тапу грає прямо тут, без окремого вікна. */
+/** Відео-«кружечок», як у Telegram: кадр-обкладинка з ▶; після тапу грає прямо тут, без окремого вікна. */
 @Composable
 internal fun VideoMedia(
     reminder: Reminder,
@@ -102,7 +107,7 @@ internal fun VideoMedia(
     onEnded: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier.clip(RoundedCornerShape(16.dp)).background(Color.Black)) {
+    Box(modifier.clip(CircleShape).background(Color.Black)) {
         // Кадр-обкладинка лежить під плеєром, поки не з'явиться перший кадр відео.
         AsyncImage(
             model = reminder.mediaPath?.let(::File),
@@ -116,10 +121,10 @@ internal fun VideoMedia(
         } else {
             Box(Modifier.fillMaxSize().clickable(onClickLabel = "Відтворити відео", onClick = onPlay)) {
                 Box(
-                    Modifier.align(Alignment.Center).size(54.dp).glass(CircleShape, Color.Black.copy(alpha = 0.35f)),
+                    Modifier.align(Alignment.Center).size(46.dp).glass(CircleShape, Color.Black.copy(alpha = 0.35f)),
                     contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Default.PlayArrow, "Відтворити відео", tint = Color.White, modifier = Modifier.size(34.dp)) }
-                VideoLabel(formatDuration(reminder.durationMs), Modifier.align(Alignment.TopStart))
+                ) { Icon(Icons.Default.PlayArrow, "Відтворити відео", tint = Color.White, modifier = Modifier.size(28.dp)) }
+                VideoLabel(formatDuration(reminder.durationMs), Modifier.align(Alignment.BottomCenter))
             }
         }
     }
@@ -133,7 +138,7 @@ private fun VideoLabel(text: String, modifier: Modifier = Modifier) {
         fontSize = 12.sp,
         style = LocalTextStyle.current.copy(fontFeatureSettings = "tnum"),
         modifier = modifier
-            .padding(8.dp)
+            .padding(bottom = 12.dp)
             .glass(Glass.Pill, Color.Black.copy(alpha = 0.35f))
             .padding(horizontal = 8.dp, vertical = 2.dp),
     )
@@ -232,19 +237,20 @@ private fun InlineVideo(path: String, durationMs: Long, onEnded: () -> Unit, mod
         )
         if (paused) {
             Box(
-                Modifier.align(Alignment.Center).size(54.dp).glass(CircleShape, Color.Black.copy(alpha = 0.35f)),
+                Modifier.align(Alignment.Center).size(46.dp).glass(CircleShape, Color.Black.copy(alpha = 0.35f)),
                 contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Default.PlayArrow, null, tint = Color.White, modifier = Modifier.size(34.dp)) }
+            ) { Icon(Icons.Default.PlayArrow, null, tint = Color.White, modifier = Modifier.size(28.dp)) }
         }
-        VideoLabel(formatDuration((total - position).coerceAtLeast(0)), Modifier.align(Alignment.TopStart))
-        LinearProgressIndicator(
-            progress = { if (total > 0) (position.toFloat() / total).coerceIn(0f, 1f) else 0f },
-            color = Color.White,
-            trackColor = Color.White.copy(alpha = 0.25f),
-            drawStopIndicator = {},
-            gapSize = 0.dp,
-            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp),
-        )
+        VideoLabel(formatDuration((total - position).coerceAtLeast(0)), Modifier.align(Alignment.BottomCenter))
+        // Прогрес — тонке кільце по краю «кружечка», як у Telegram.
+        val fraction = if (total > 0) (position.toFloat() / total).coerceIn(0f, 1f) else 0f
+        Canvas(Modifier.fillMaxSize()) {
+            val stroke = 3.dp.toPx()
+            val inset = stroke / 2
+            val arcSize = Size(size.width - stroke, size.height - stroke)
+            drawArc(Color.White.copy(alpha = 0.25f), 0f, 360f, false, Offset(inset, inset), arcSize, style = Stroke(stroke))
+            drawArc(Color.White, -90f, 360f * fraction, false, Offset(inset, inset), arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+        }
     }
 }
 

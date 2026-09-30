@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Snooze
@@ -237,22 +238,23 @@ fun TimelineItem(
                 Icon(if (done) Icons.Default.Check else kindIcon(r.kind), null, tint = Color.White, modifier = Modifier.size(18.dp))
             }
         }
+        // Відео без підпису — «кружечок» без картки, як у Telegram; дії — через «⋯» під ним.
+        val bare = r.kind == Kind.VIDEO && r.text.isBlank()
         Column(
             Modifier
                 .weight(1f)
-                .glass(RoundedCornerShape(20.dp), cardFill)
-                .clickable(onClick = onClick)
-                .padding(12.dp),
+                .then(
+                    if (bare) {
+                        Modifier.padding(top = 2.dp)
+                    } else {
+                        Modifier.glass(RoundedCornerShape(20.dp), cardFill).clickable(onClick = onClick).padding(12.dp)
+                    },
+                ),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            val title = when {
-                r.text.isNotBlank() -> r.text
-                r.kind == Kind.VOICE -> "Голосове нагадування"
-                r.kind == Kind.VIDEO -> "Відео-нагадування"
-                r.kind == Kind.PHOTO -> "Фото-нагадування"
-                else -> "Нагадування"
-            }
-            Text(
+            // Заголовок — лише справжній текст; медіа говорить саме за себе.
+            val title = r.text.ifBlank { if (r.kind == Kind.TEXT) "Нагадування" else "" }
+            if (title.isNotEmpty()) Text(
                 title,
                 color = if (done) Glass.TextDim else Glass.Text,
                 fontSize = 16.sp,
@@ -269,7 +271,7 @@ fun TimelineItem(
                     playing = videoPlaying,
                     onPlay = onPlayVideo,
                     onEnded = onVideoEnded,
-                    modifier = Modifier.fillMaxWidth().height(200.dp),
+                    modifier = Modifier.size(160.dp),
                 )
                 Kind.PHOTO -> AsyncImage(
                     model = r.mediaPath?.let(::File),
@@ -284,7 +286,10 @@ fun TimelineItem(
                 )
                 Kind.TEXT -> Unit
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.then(if (bare) Modifier.clip(Glass.Pill).clickable(onClickLabel = "Дії", onClick = onClick).padding(start = 6.dp) else Modifier),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 if (done) {
                     Icon(Icons.Default.Check, null, Modifier.size(14.dp), tint = Glass.TextFaint)
                     Spacer(Modifier.width(4.dp))
@@ -301,6 +306,10 @@ fun TimelineItem(
                     Icon(Icons.Default.Repeat, null, Modifier.size(14.dp), tint = Glass.TextFaint)
                     Spacer(Modifier.width(3.dp))
                     Text(repeatLabel(r.repeat).lowercase(), fontSize = 12.sp, color = Glass.TextFaint)
+                }
+                if (bare) {
+                    Spacer(Modifier.width(8.dp))
+                    Icon(Icons.Default.MoreHoriz, "Дії", Modifier.padding(8.dp).size(18.dp), tint = Glass.TextDim)
                 }
             }
         }

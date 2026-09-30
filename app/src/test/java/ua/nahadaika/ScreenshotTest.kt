@@ -9,6 +9,8 @@ import android.graphics.Shader
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
@@ -75,6 +77,9 @@ class ScreenshotTest {
             Reminder(chatId = home, kind = Kind.VOICE, mediaPath = "/evening.m4a", durationMs = 9_000, text = "Що купити на вечерю", triggerAt = at(0, 20)),
         )
         Repo.createReminder(
+            Reminder(chatId = home, kind = Kind.VIDEO, mediaPath = "/circle.mp4", durationMs = 7_000, triggerAt = at(0, 21, 30)),
+        )
+        Repo.createReminder(
             Reminder(chatId = home, kind = Kind.VOICE, mediaPath = "/voice.m4a", durationMs = 14_000, triggerAt = at(1, 9)),
         )
         Repo.createReminder(
@@ -104,6 +109,9 @@ class ScreenshotTest {
         compose.setContent { NahadaikaTheme { ChatScreen(chatId = home, focus = null, onFocusConsumed = {}, quick = null, onQuickConsumed = {}, onOpenChats = {}) } }
         compose.waitForIdle()
         compose.onRoot().captureRoboImage("build/screenshots/2_chat.png")
+        compose.onAllNodes(hasScrollToIndexAction())[0].performScrollToIndex(5)
+        compose.waitForIdle()
+        compose.onRoot().captureRoboImage("build/screenshots/2b_chat_bottom.png")
     }
 
     @OptIn(ExperimentalRoborazziApi::class)
