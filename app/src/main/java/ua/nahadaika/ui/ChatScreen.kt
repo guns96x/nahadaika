@@ -1,6 +1,23 @@
 package ua.nahadaika.ui
 
 import android.Manifest
+import android.app.Activity
+import android.content.Intent
+import android.speech.RecognizerIntent
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import ua.nahadaika.Prefs
+import ua.nahadaika.VoiceParser
+import ua.nahadaika.previewText
 import android.content.ActivityNotFoundException
 import android.content.pm.PackageManager
 import android.widget.Toast
@@ -35,7 +52,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AlarmAdd
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.CameraAlt
@@ -136,9 +152,17 @@ private fun buildRows(list: List<Reminder>, timeOf: (Reminder) -> Long): List<Li
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatScreen(chatId: Long, focus: Focus?, onFocusConsumed: () -> Unit, onBack: () -> Unit) {
+fun ChatScreen(
+    chatId: Long,
+    focus: Focus?,
+    onFocusConsumed: () -> Unit,
+    quick: Quick?,
+    onQuickConsumed: () -> Unit,
+    onOpenChats: () -> Unit,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val snackbar = remember { SnackbarHostState() }
     val chat by Repo.chat(chatId).collectAsStateWithLifecycle(null)
     val all by Repo.reminders(chatId).collectAsStateWithLifecycle(emptyList())
 
@@ -155,6 +179,8 @@ fun ChatScreen(chatId: Long, focus: Focus?, onFocusConsumed: () -> Unit, onBack:
     var text by rememberSaveable { mutableStateOf("") }
     var attachment by remember { mutableStateOf<Attachment?>(null) }
     var recording by remember { mutableStateOf(false) }
+    var recordingVideo by remember { mutableStateOf(false) }
+    var recordMode by remember { mutableStateOf(Prefs.recordMode(context)) }
     var showSchedule by remember { mutableStateOf(false) }
     var rescheduling by remember { mutableStateOf<Reminder?>(null) }
     var actionsFor by remember { mutableStateOf<Reminder?>(null) }
@@ -204,7 +230,6 @@ fun ChatScreen(chatId: Long, focus: Focus?, onFocusConsumed: () -> Unit, onBack:
         recorder.cancel()
         recording = false
     }
-    BackHandler(enabled = !recording, onBack = onBack)
 
     fun toast(msg: String) = Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
 
@@ -213,27 +238,83 @@ fun ChatScreen(chatId: Long, focus: Focus?, onFocusConsumed: () -> Unit, onBack:
         attachment = new
     }
 
+    /** Створити нагадування й показати підтвердження з кнопкою «Змінити». */
+    fun schedule(reminder: Reminder) {
+        tab = 0
+        scope.launch {
+            val id = Repo.createReminder(reminder)
+            highlightId = id
+            val label = previewText(reminder).take(40)
+            val result = snackbar.showSnackbar(
+                message = "Нагадаю ${whenLabel(reminder.triggerAt)}" + if (label.isNotBlank()) ": $label" else "",
+                actionLabel = "Змінити",
+                withDismissAction = true,
+                duration = SnackbarDuration.Long,
+            )
+            if (result == SnackbarResult.ActionPerformed) rescheduling = reminder.copy(id = id)
+        }
+    }
+
+    fun scheduleComposed(at: Long, repeat: Repeat, textOverride: String? = null) {
+        val a = attachment
+        val body = (textOverride ?: text).trim()
+        val reminder = Reminder(
+            chatId = chatId,
+            kind = a?.kind ?: Kind.TEXT,
+            text = if (a == null) body.ifEmpty { "Нагадування" } else body,
+            mediaPath = a?.file?.absolutePath,
+            durationMs = a?.durationMs ?: 0,
+            triggerAt = at,
+            repeat = repeat,
+        )
+        if (a != null && player.currentPath == a.file.absolutePath) player.stop()
+        attachment = null
+        text = ""
+        showSchedule = false
+        schedule(reminder)
+    }
+
+    // ---- Голосова команда: «нагадай завтра о 9 купити хліб» ----
+
+    val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val spoken = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+        if (result.resultCode != Activity.RESULT_OK || spoken.isNullOrBlank()) return@rememberLauncherForActivityResult
+        val cmd = VoiceParser.parse(spoken)
+        val combined = listOf(text.trim(), cmd.text).filter { it.isNotBlank() }.joinToString(" ")
+        if (cmd.at != null) {
+            scheduleComposed(cmd.at, cmd.repeat, combined)
+        } else {
+            // Час не почули — лишаємо текст і відкриваємо вибір часу.
+            text = combined
+            showSchedule = true
+            toast("Не зрозумів, коли нагадати — оберіть час")
+        }
+    }
+
+    fun dictate() {
+        player.stop()
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "uk-UA")
+            .putExtra(RecognizerIntent.EXTRA_PROMPT, "Наприклад: «нагадай завтра о 9 купити хліб»")
+        try {
+            speech.launch(intent)
+        } catch (_: ActivityNotFoundException) {
+            toast("На телефоні немає розпізнавання мовлення (потрібен застосунок Google)")
+        }
+    }
+
     // ---- Камера, галерея, мікрофон ----
 
-    var pendingCapture by remember { mutableStateOf<Attachment?>(null) }
+    var pendingPhoto by remember { mutableStateOf<Attachment?>(null) }
     val takePhoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
-        val p = pendingCapture
-        pendingCapture = null
+        val p = pendingPhoto
+        pendingPhoto = null
         if (ok && p != null && p.file.length() > 0) {
             replaceAttachment(p)
         } else {
             p?.file?.delete()
             if (ok) toast("Камера не зберегла фото")
-        }
-    }
-    val takeVideo = rememberLauncherForActivityResult(ActivityResultContracts.CaptureVideo()) { ok ->
-        val p = pendingCapture
-        pendingCapture = null
-        if (ok && p != null && p.file.length() > 0) {
-            replaceAttachment(p.copy(durationMs = MediaFiles.durationOf(p.file)))
-        } else {
-            p?.file?.delete()
-            if (ok) toast("Камера не зберегла відео — спробуйте вибрати його з галереї")
         }
     }
     val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -245,36 +326,91 @@ fun ChatScreen(chatId: Long, focus: Focus?, onFocusConsumed: () -> Unit, onBack:
         }
     }
 
-    fun startRecording() {
-        player.stop()
-        if (recorder.start()) recording = true else toast("Не вдалося увімкнути мікрофон")
-    }
-    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) startRecording() else toast("Потрібен доступ до мікрофона для голосових")
-    }
-
-    fun capture(kind: Kind) {
-        val file = MediaFiles.newFile(context, if (kind == Kind.PHOTO) "jpg" else "mp4")
-        val uri = MediaFiles.uriFor(context, file)
-        pendingCapture = Attachment(kind, file)
+    fun launchPhoto() {
+        val file = MediaFiles.newFile(context, "jpg")
+        pendingPhoto = Attachment(Kind.PHOTO, file)
         try {
-            if (kind == Kind.PHOTO) takePhoto.launch(uri) else takeVideo.launch(uri)
+            takePhoto.launch(MediaFiles.uriFor(context, file))
         } catch (_: ActivityNotFoundException) {
-            pendingCapture = null
+            pendingPhoto = null
             file.delete()
             toast("Не знайдено застосунок камери")
         }
     }
+    val photoPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) launchPhoto() else toast("Потрібен доступ до камери")
+    }
+
+    fun startVoice() {
+        player.stop()
+        if (recorder.start()) recording = true else toast("Не вдалося увімкнути мікрофон")
+    }
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) startVoice() else toast("Потрібен доступ до мікрофона для голосових")
+    }
+    val videoPermissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        if (result[Manifest.permission.CAMERA] == true) {
+            player.stop()
+            recordingVideo = true
+        } else {
+            toast("Потрібен доступ до камери для відео")
+        }
+    }
+
+    fun granted(permission: String) =
+        ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+
+    fun record(kind: Kind) {
+        when (kind) {
+            Kind.VIDEO -> if (granted(Manifest.permission.CAMERA) && granted(Manifest.permission.RECORD_AUDIO)) {
+                player.stop()
+                recordingVideo = true
+            } else {
+                videoPermissions.launch(arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO))
+            }
+            else -> if (granted(Manifest.permission.RECORD_AUDIO)) startVoice() else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    fun toggleMode() {
+        recordMode = if (recordMode == Kind.VIDEO) Kind.VOICE else Kind.VIDEO
+        Prefs.setRecordMode(context, recordMode)
+        toast(if (recordMode == Kind.VIDEO) "Режим: відео" else "Режим: голосове")
+    }
+
+    // Підказка один раз: кнопку запису можна перемикати.
+    LaunchedEffect(Unit) {
+        if (!Prefs.modeHintShown(context)) {
+            Prefs.setModeHintShown(context)
+            delay(800)
+            snackbar.showSnackbar("Утримуйте кнопку запису, щоб перемкнути відео ↔ голосове", duration = SnackbarDuration.Long)
+        }
+    }
+
+    // Ярлик на головному екрані: одразу запис або голосова команда.
+    LaunchedEffect(quick) {
+        val q = quick ?: return@LaunchedEffect
+        onQuickConsumed()
+        when (q.action) {
+            QuickAction.VIDEO -> record(Kind.VIDEO)
+            QuickAction.VOICE -> record(Kind.VOICE)
+            QuickAction.DICTATE -> dictate()
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад") }
+                    IconButton(onClick = onOpenChats) { Icon(Icons.Default.Menu, "Усі чати") }
                 },
                 title = {
                     chat?.let { c ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onOpenChats),
+                        ) {
                             Avatar(c, size = 40)
                             Spacer(Modifier.width(12.dp))
                             Column {
@@ -321,17 +457,17 @@ fun ChatScreen(chatId: Long, focus: Focus?, onFocusConsumed: () -> Unit, onBack:
                         text = text,
                         onTextChange = { text = it },
                         canSend = text.isNotBlank() || attachment != null,
+                        recordMode = recordMode,
                         onAttach = { kind ->
                             when (kind) {
-                                null -> pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
-                                else -> capture(kind)
+                                Kind.PHOTO -> if (granted(Manifest.permission.CAMERA)) launchPhoto() else photoPermission.launch(Manifest.permission.CAMERA)
+                                Kind.VIDEO -> record(Kind.VIDEO)
+                                else -> pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
                             }
                         },
-                        onMic = {
-                            val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
-                                PackageManager.PERMISSION_GRANTED
-                            if (granted) startRecording() else micPermission.launch(Manifest.permission.RECORD_AUDIO)
-                        },
+                        onRecord = { record(recordMode) },
+                        onToggleMode = ::toggleMode,
+                        onDictate = ::dictate,
                         onSend = { showSchedule = true },
                     )
                 }
@@ -339,6 +475,7 @@ fun ChatScreen(chatId: Long, focus: Focus?, onFocusConsumed: () -> Unit, onBack:
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.surfaceContainerLow)) {
+            PermissionBanners()
             PrimaryTabRow(selectedTabIndex = tab) {
                 Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Заплановані (${scheduled.size})") })
                 Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Історія (${history.size})") })
@@ -375,33 +512,25 @@ fun ChatScreen(chatId: Long, focus: Focus?, onFocusConsumed: () -> Unit, onBack:
 
     // ---- Діалоги ----
 
+    if (recordingVideo) {
+        VideoRecorderDialog(
+            onDone = { video ->
+                recordingVideo = false
+                replaceAttachment(video)
+                showSchedule = true
+            },
+            onCancel = { recordingVideo = false },
+        )
+    }
+
     if (showSchedule) {
         ScheduleSheet(
             initialAt = null,
             initialRepeat = Repeat.NONE,
             confirmLabel = "Запланувати",
             onDismiss = { showSchedule = false },
-        ) { at, repeat ->
-            val a = attachment
-            val reminder = Reminder(
-                chatId = chatId,
-                kind = a?.kind ?: Kind.TEXT,
-                text = text.trim(),
-                mediaPath = a?.file?.absolutePath,
-                durationMs = a?.durationMs ?: 0,
-                triggerAt = at,
-                repeat = repeat,
-            )
-            if (a != null && player.currentPath == a.file.absolutePath) player.stop()
-            attachment = null
-            text = ""
-            showSchedule = false
-            tab = 0
-            scope.launch {
-                highlightId = Repo.createReminder(reminder)
-                toast("Нагадаю ${whenLabel(at)}")
-            }
-        }
+            onDictate = ::dictate,
+        ) { at, repeat -> scheduleComposed(at, repeat) }
     }
 
     rescheduling?.let { r ->
@@ -416,7 +545,7 @@ fun ChatScreen(chatId: Long, focus: Focus?, onFocusConsumed: () -> Unit, onBack:
             scope.launch {
                 Repo.reschedule(r, at, repeat)
                 highlightId = r.id
-                toast("Нагадаю ${whenLabel(at)}")
+                snackbar.showSnackbar("Нагадаю ${whenLabel(at)}")
             }
         }
     }
@@ -485,45 +614,80 @@ private fun EmptyState(tab: Int) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun Composer(
     text: String,
     onTextChange: (String) -> Unit,
     canSend: Boolean,
+    recordMode: Kind,
     onAttach: (Kind?) -> Unit,
-    onMic: () -> Unit,
+    onRecord: () -> Unit,
+    onToggleMode: () -> Unit,
+    onDictate: () -> Unit,
     onSend: () -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
+    val haptics = LocalHapticFeedback.current
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.Bottom) {
         Box {
             IconButton(onClick = { menu = true }) { Icon(Icons.Default.AttachFile, "Додати") }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                MenuItem(Icons.Default.Videocam, "Записати відео") { menu = false; onAttach(Kind.VIDEO) }
                 MenuItem(Icons.Default.CameraAlt, "Зняти фото") { menu = false; onAttach(Kind.PHOTO) }
-                MenuItem(Icons.Default.Videocam, "Зняти відео") { menu = false; onAttach(Kind.VIDEO) }
                 MenuItem(Icons.Default.PhotoLibrary, "З галереї") { menu = false; onAttach(null) }
             }
         }
         TextField(
             value = text,
             onValueChange = onTextChange,
-            placeholder = { Text("Нагадування") },
+            placeholder = { Text("Напишіть або скажіть") },
             maxLines = 6,
             shape = RoundedCornerShape(24.dp),
             colors = TextFieldDefaults.colors(
                 focusedIndicatorColor = Color.Transparent,
                 unfocusedIndicatorColor = Color.Transparent,
             ),
+            trailingIcon = {
+                IconButton(onClick = onDictate) {
+                    Icon(Icons.Default.RecordVoiceOver, "Сказати нагадування", tint = MaterialTheme.colorScheme.primary)
+                }
+            },
             modifier = Modifier.weight(1f),
         )
         Spacer(Modifier.width(6.dp))
         if (canSend) {
-            FilledIconButton(onClick = onSend, modifier = Modifier.size(48.dp)) {
+            FilledIconButton(onClick = onSend, modifier = Modifier.size(52.dp)) {
                 Icon(Icons.Default.AlarmAdd, "Запланувати")
             }
         } else {
-            FilledIconButton(onClick = onMic, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.Default.Mic, "Записати голосове")
+            // Натиснути — записати; утримати — перемкнути відео ↔ голосове.
+            Box(
+                Modifier
+                    .size(52.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary)
+                    .combinedClickable(
+                        onClick = onRecord,
+                        onLongClick = {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onToggleMode()
+                        },
+                        onLongClickLabel = "Перемкнути відео або голосове",
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    if (recordMode == Kind.VIDEO) Icons.Default.Videocam else Icons.Default.Mic,
+                    contentDescription = if (recordMode == Kind.VIDEO) "Записати відео" else "Записати голосове",
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                )
+                Icon(
+                    Icons.Default.SwapHoriz,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f),
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 7.dp, bottom = 5.dp).size(12.dp),
+                )
             }
         }
     }

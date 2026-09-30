@@ -16,12 +16,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -96,6 +98,7 @@ fun ScheduleSheet(
     initialRepeat: Repeat,
     confirmLabel: String,
     onDismiss: () -> Unit,
+    onDictate: (() -> Unit)? = null,
     onConfirm: (at: Long, repeat: Repeat) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -123,7 +126,21 @@ fun ScheduleSheet(
                 .navigationBarsPadding()
                 .padding(bottom = 16.dp),
         ) {
-            Text("Коли нагадати?", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Коли нагадати?",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f),
+                )
+                if (onDictate != null) {
+                    FilledTonalButton(onClick = onDictate) {
+                        Icon(Icons.Default.RecordVoiceOver, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Сказати")
+                    }
+                }
+            }
             Spacer(Modifier.height(12.dp))
 
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

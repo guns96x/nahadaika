@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -28,6 +29,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BatteryAlert
 import androidx.compose.material.icons.filled.NotificationsOff
@@ -43,6 +45,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -82,7 +85,7 @@ import ua.nahadaika.shortWhen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatsScreen(onOpenChat: (Long) -> Unit) {
+fun ChatsScreen(onOpenChat: (Long) -> Unit, onBack: () -> Unit) {
     val chats by Repo.chats.collectAsStateWithLifecycle(emptyList())
     val reminders by Repo.allReminders.collectAsStateWithLifecycle(emptyList())
     val scope = rememberCoroutineScope()
@@ -91,8 +94,17 @@ fun ChatsScreen(onOpenChat: (Long) -> Unit) {
     var renaming by remember { mutableStateOf<Chat?>(null) }
     var deleting by remember { mutableStateOf<Chat?>(null) }
 
+    BackHandler(onBack = onBack)
+
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Нагадайка", fontWeight = FontWeight.SemiBold) }) },
+        topBar = {
+            TopAppBar(
+                navigationIcon = {
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад") }
+                },
+                title = { Text("Чати", fontWeight = FontWeight.SemiBold) },
+            )
+        },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { creating = true },
@@ -107,7 +119,6 @@ fun ChatsScreen(onOpenChat: (Long) -> Unit) {
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(bottom = 88.dp),
         ) {
-            item { PermissionBanners() }
             items(chats, key = { it.id }) { chat ->
                 val pending = reminders.filter { it.chatId == chat.id && !it.fired }.sortedBy { it.alarmAt() }
                 ChatRow(
@@ -261,7 +272,7 @@ private const val KEY_BATTERY_DISMISSED = "battery_dismissed"
 
 @SuppressLint("BatteryLife")
 @Composable
-private fun PermissionBanners() {
+fun PermissionBanners() {
     val context = LocalContext.current
     var refresh by remember { mutableIntStateOf(0) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { refresh++ }
@@ -287,7 +298,7 @@ private fun PermissionBanners() {
             prefs.getBoolean(KEY_BATTERY_DISMISSED, false)
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(horizontal = 12.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
         if (!canNotify) {
             Banner(
                 icon = Icons.Default.NotificationsOff,

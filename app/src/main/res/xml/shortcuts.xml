@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_sc_video"
+        android:shortcutId="video"
+        android:shortcutLongLabel="@string/sc_video_long"
+        android:shortcutShortLabel="@string/sc_video_short">
+        <intent
+            android:action="ua.nahadaika.QUICK_VIDEO"
+            android:targetClass="ua.nahadaika.ui.MainActivity"
+            android:targetPackage="ua.nahadaika" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_sc_voice"
+        android:shortcutId="voice"
+        android:shortcutLongLabel="@string/sc_voice_long"
+        android:shortcutShortLabel="@string/sc_voice_short">
+        <intent
+            android:action="ua.nahadaika.QUICK_VOICE"
+            android:targetClass="ua.nahadaika.ui.MainActivity"
+            android:targetPackage="ua.nahadaika" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_sc_dictate"
+        android:shortcutId="dictate"
+        android:shortcutLongLabel="@string/sc_dictate_long"
+        android:shortcutShortLabel="@string/sc_dictate_short">
+        <intent
+            android:action="ua.nahadaika.QUICK_DICTATE"
+            android:targetClass="ua.nahadaika.ui.MainActivity"
+            android:targetPackage="ua.nahadaika" />
+    </shortcut>
+</shortcuts>

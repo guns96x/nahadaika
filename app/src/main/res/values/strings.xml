@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Нагадайка</string>
+    <string name="sc_video_short">Відео</string>
+    <string name="sc_video_long">Записати відео-нагадування</string>
+    <string name="sc_voice_short">Голосове</string>
+    <string name="sc_voice_long">Записати голосове нагадування</string>
+    <string name="sc_dictate_short">Сказати</string>
+    <string name="sc_dictate_long">Сказати нагадування</string>
 </resources>

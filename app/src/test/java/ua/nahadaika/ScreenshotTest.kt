@@ -77,7 +77,7 @@ class ScreenshotTest {
     @Test
     fun chats() {
         seed()
-        compose.setContent { NahadaikaTheme { ChatsScreen(onOpenChat = {}) } }
+        compose.setContent { NahadaikaTheme { ChatsScreen(onOpenChat = {}, onBack = {}) } }
         compose.waitForIdle()
         compose.onRoot().captureRoboImage("build/screenshots/1_chats.png")
     }
@@ -85,7 +85,7 @@ class ScreenshotTest {
     @Test
     fun chat() {
         val home = seed()
-        compose.setContent { NahadaikaTheme { ChatScreen(chatId = home, focus = null, onFocusConsumed = {}, onBack = {}) } }
+        compose.setContent { NahadaikaTheme { ChatScreen(chatId = home, focus = null, onFocusConsumed = {}, quick = null, onQuickConsumed = {}, onOpenChats = {}) } }
         compose.waitForIdle()
         compose.onRoot().captureRoboImage("build/screenshots/2_chat.png")
     }
@@ -93,7 +93,7 @@ class ScreenshotTest {
     @Test
     fun schedule() {
         compose.setContent {
-            NahadaikaTheme { ScheduleSheet(initialAt = null, initialRepeat = Repeat.NONE, confirmLabel = "Запланувати", onDismiss = {}) { _, _ -> } }
+            NahadaikaTheme { ScheduleSheet(initialAt = null, initialRepeat = Repeat.NONE, confirmLabel = "Запланувати", onDismiss = {}, onDictate = {}) { _, _ -> } }
         }
         compose.waitForIdle()
         com.github.takahirom.roborazzi.captureScreenRoboImage("build/screenshots/3_schedule.png")
