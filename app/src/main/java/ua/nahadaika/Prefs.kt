@@ -18,8 +18,8 @@ object Prefs {
     fun frontCamera(context: Context): Boolean = prefs(context).getBoolean("front_camera", true)
     fun setFrontCamera(context: Context, front: Boolean) = prefs(context).edit().putBoolean("front_camera", front).apply()
 
-    fun modeHintShown(context: Context): Boolean = prefs(context).getBoolean("mode_hint", false)
-    fun setModeHintShown(context: Context) = prefs(context).edit().putBoolean("mode_hint", true).apply()
+    fun gestureHintShown(context: Context): Boolean = prefs(context).getBoolean("gesture_hint", false)
+    fun setGestureHintShown(context: Context) = prefs(context).edit().putBoolean("gesture_hint", true).apply()
 
     /** Вкладка у вікні вибору часу: 0 — «Через» (таймер), 1 — «Коли» (дата й час). */
     fun scheduleMode(context: Context): Int = prefs(context).getInt("schedule_mode", 1)

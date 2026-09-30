@@ -1,6 +1,21 @@
 package ua.nahadaika.ui
 
 import android.Manifest
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.LocalTextStyle
@@ -12,9 +27,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.ui.unit.sp
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
-import ua.nahadaika.ui.theme.PrimaryCircle
 import ua.nahadaika.ui.theme.ThemeModeButton
 import ua.nahadaika.ui.theme.AppBackground
 import ua.nahadaika.ui.theme.Glass
@@ -26,11 +39,8 @@ import ua.nahadaika.ui.theme.glass
 import android.app.Activity
 import android.content.Intent
 import android.speech.RecognizerIntent
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.RecordVoiceOver
-import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -92,22 +102,13 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -200,9 +201,15 @@ fun ChatScreen(
 
     var text by rememberSaveable { mutableStateOf("") }
     var attachment by remember { mutableStateOf<Attachment?>(null) }
-    var recording by remember { mutableStateOf(false) }
-    var recordingVideo by remember { mutableStateOf(false) }
     var recordMode by remember { mutableStateOf(Prefs.recordMode(context)) }
+    // Поточний запис (голосове чи відео), зсув пальця під час утримання, стан відео-«кружечка».
+    var rec by remember { mutableStateOf<Rec?>(null) }
+    var dragX by remember { mutableFloatStateOf(0f) }
+    var dragY by remember { mutableFloatStateOf(0f) }
+    var elapsed by remember { mutableLongStateOf(0L) }
+    var videoFinish by remember { mutableStateOf<Boolean?>(null) }
+    var frontCamera by remember { mutableStateOf(Prefs.frontCamera(context)) }
+    var pendingStart by remember { mutableStateOf<Pair<Kind, Boolean>?>(null) }
     var showSchedule by remember { mutableStateOf(false) }
     var rescheduling by remember { mutableStateOf<Reminder?>(null) }
     var actionsFor by remember { mutableStateOf<Reminder?>(null) }
@@ -250,10 +257,6 @@ fun ChatScreen(
         }
     }
 
-    BackHandler(enabled = recording) {
-        recorder.cancel()
-        recording = false
-    }
 
     fun toast(msg: String) = Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
 
@@ -365,59 +368,115 @@ fun ChatScreen(
         if (granted) launchPhoto() else toast("Потрібен доступ до камери")
     }
 
-    fun startVoice() {
-        player.stop()
-        if (recorder.start()) recording = true else toast("Не вдалося увімкнути мікрофон")
-    }
-    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) startVoice() else toast("Потрібен доступ до мікрофона для голосових")
-    }
-    val videoPermissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-        if (result[Manifest.permission.CAMERA] == true) {
-            player.stop()
-            recordingVideo = true
-        } else {
-            toast("Потрібен доступ до камери для відео")
-        }
-    }
-
     fun granted(permission: String) =
         ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
 
-    fun record(kind: Kind) {
-        when (kind) {
-            Kind.VIDEO -> if (granted(Manifest.permission.CAMERA) && granted(Manifest.permission.RECORD_AUDIO)) {
-                player.stop()
-                recordingVideo = true
-            } else {
-                videoPermissions.launch(arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO))
-            }
-            else -> if (granted(Manifest.permission.RECORD_AUDIO)) startVoice() else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+    fun hasRecordPermissions(kind: Kind) =
+        granted(Manifest.permission.RECORD_AUDIO) && (kind != Kind.VIDEO || granted(Manifest.permission.CAMERA))
+
+    fun beginRecording(kind: Kind, locked: Boolean): Boolean {
+        player.stop()
+        if (kind == Kind.VOICE && !recorder.start()) {
+            toast("Не вдалося увімкнути мікрофон")
+            return false
+        }
+        videoFinish = null
+        elapsed = 0
+        dragX = 0f
+        dragY = 0f
+        rec = Rec(kind, locked)
+        return true
+    }
+
+    val recordPermissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        val (kind, locked) = pendingStart ?: return@rememberLauncherForActivityResult
+        pendingStart = null
+        when {
+            !hasRecordPermissions(kind) ->
+                toast(if (kind == Kind.VIDEO) "Потрібен доступ до камери й мікрофона" else "Потрібен доступ до мікрофона")
+            locked -> beginRecording(kind, locked = true)
+            else -> toast("Готово! Утримуйте кнопку, щоб записати")
         }
     }
+
+    /** Почати запис; якщо бракує дозволів — попросити їх (і повернути false). */
+    fun requestRecording(kind: Kind, locked: Boolean): Boolean {
+        if (hasRecordPermissions(kind)) return beginRecording(kind, locked)
+        pendingStart = kind to locked
+        recordPermissions.launch(
+            if (kind == Kind.VIDEO) arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
+            else arrayOf(Manifest.permission.RECORD_AUDIO),
+        )
+        return false
+    }
+
+    /** Завершити запис: [keep] — зберегти й обрати час, інакше відкинути. */
+    fun finishRecording(keep: Boolean) {
+        val r = rec ?: return
+        if (r.kind == Kind.VIDEO) {
+            videoFinish = keep // результат прийде в onVideoResult
+            return
+        }
+        rec = null
+        if (!keep) {
+            recorder.cancel()
+            return
+        }
+        val voice = recorder.stop()
+        if (voice != null && voice.durationMs >= 700) {
+            replaceAttachment(voice)
+            showSchedule = true
+        } else {
+            voice?.file?.delete()
+            toast("Утримуйте кнопку довше, щоб записати")
+        }
+    }
+
+    fun onVideoResult(video: Attachment?) {
+        rec = null
+        videoFinish = null
+        if (video != null) {
+            replaceAttachment(video)
+            showSchedule = true
+        }
+    }
+
+    // Таймер голосового (для відео час приходить від камери).
+    LaunchedEffect(rec?.kind, rec?.startedAt) {
+        val r = rec ?: return@LaunchedEffect
+        if (r.kind != Kind.VOICE) return@LaunchedEffect
+        while (true) {
+            elapsed = System.currentTimeMillis() - r.startedAt
+            delay(100)
+        }
+    }
+
+    BackHandler(enabled = rec != null) { finishRecording(keep = false) }
 
     fun toggleMode() {
         recordMode = if (recordMode == Kind.VIDEO) Kind.VOICE else Kind.VIDEO
         Prefs.setRecordMode(context, recordMode)
-        toast(if (recordMode == Kind.VIDEO) "Режим: відео" else "Режим: голосове")
     }
 
-    // Підказка один раз: кнопку запису можна перемикати.
+    // Підказка один раз: як працює кнопка запису.
     LaunchedEffect(Unit) {
-        if (!Prefs.modeHintShown(context)) {
-            Prefs.setModeHintShown(context)
+        if (!Prefs.gestureHintShown(context)) {
+            Prefs.setGestureHintShown(context)
             delay(800)
-            snackbar.showSnackbar("Утримуйте кнопку запису, щоб перемкнути відео ↔ голосове", duration = SnackbarDuration.Long)
+            snackbar.showSnackbar(
+                "Тап — відео ↔ голосове. Утримуйте — запис, потягніть угору — 🔒",
+                duration = SnackbarDuration.Long,
+            )
         }
     }
 
-    // Ярлик на головному екрані: одразу запис або голосова команда.
+    // Ярлик на головному екрані: одразу запис (з замком) або голосова команда.
     LaunchedEffect(quick) {
         val q = quick ?: return@LaunchedEffect
         onQuickConsumed()
         when (q.action) {
-            QuickAction.VIDEO -> record(Kind.VIDEO)
-            QuickAction.VOICE -> record(Kind.VOICE)
+            QuickAction.VIDEO -> requestRecording(Kind.VIDEO, locked = true)
+            QuickAction.VOICE -> requestRecording(Kind.VOICE, locked = true)
             QuickAction.DICTATE -> dictate()
         }
     }
@@ -436,7 +495,7 @@ fun ChatScreen(
         snackbarHost = { SnackbarHost(snackbar) { GlassSnackbar(it) } },
         topBar = {
             // Окремі скляні капсули однакової висоти, як у Telegram: ☰ | чат | тема.
-            Column(
+            if (rec?.kind != Kind.VIDEO) Column(
                 Modifier
                     .fillMaxWidth()
                     .edgeFade(top = true)
@@ -503,51 +562,43 @@ fun ChatScreen(
                     .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                attachment?.let { a ->
-                    AttachmentPreview(a, player, hazeState, onRemove = {
-                        if (player.currentPath == a.file.absolutePath) player.stop()
-                        replaceAttachment(null)
-                    })
+                if (rec == null) {
+                    attachment?.let { a ->
+                        AttachmentPreview(a, player, hazeState, onRemove = {
+                            if (player.currentPath == a.file.absolutePath) player.stop()
+                            replaceAttachment(null)
+                        })
+                    }
                 }
-                if (recording) {
-                    RecordingBar(
-                        haze = hazeState,
-                        onCancel = {
-                            recorder.cancel()
-                            recording = false
-                        },
-                        onDone = {
-                            recording = false
-                            val voice = recorder.stop()
-                            if (voice != null && voice.durationMs >= 700) {
-                                replaceAttachment(voice)
-                                showSchedule = true
-                            } else {
-                                voice?.file?.delete()
-                                toast("Запис занадто короткий")
-                            }
-                        },
-                    )
-                } else {
-                    Composer(
-                        haze = hazeState,
-                        text = text,
-                        onTextChange = { text = it },
-                        canSend = text.isNotBlank() || attachment != null,
-                        recordMode = recordMode,
-                        onAttach = { kind ->
-                            when (kind) {
-                                Kind.PHOTO -> if (granted(Manifest.permission.CAMERA)) launchPhoto() else photoPermission.launch(Manifest.permission.CAMERA)
-                                Kind.VIDEO -> record(Kind.VIDEO)
-                                else -> pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
-                            }
-                        },
-                        onRecord = { record(recordMode) },
-                        onToggleMode = ::toggleMode,
-                        onDictate = ::dictate,
-                        onSend = { showSchedule = true },
-                    )
-                }
+                Composer(
+                    haze = hazeState,
+                    text = text,
+                    onTextChange = { text = it },
+                    canSend = rec == null && (text.isNotBlank() || attachment != null),
+                    recordMode = recordMode,
+                    rec = rec,
+                    elapsed = elapsed,
+                    dragX = dragX,
+                    dragY = dragY,
+                    onAttach = { kind ->
+                        when (kind) {
+                            Kind.PHOTO -> if (granted(Manifest.permission.CAMERA)) launchPhoto() else photoPermission.launch(Manifest.permission.CAMERA)
+                            Kind.VIDEO -> requestRecording(Kind.VIDEO, locked = true)
+                            else -> pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+                        }
+                    },
+                    onDictate = ::dictate,
+                    onSend = { showSchedule = true },
+                    onToggleMode = ::toggleMode,
+                    onHoldStart = { requestRecording(recordMode, locked = false) },
+                    onDrag = { x, y ->
+                        dragX = x
+                        dragY = y
+                    },
+                    onLock = { rec = rec?.copy(locked = true) },
+                    onRelease = { finishRecording(keep = true) },
+                    onCancel = { finishRecording(keep = false) },
+                )
             }
         },
     ) { padding ->
@@ -594,21 +645,24 @@ fun ChatScreen(
                     }
                 }
             }
+            rec?.takeIf { it.kind == Kind.VIDEO }?.let { r ->
+                VideoCircleRecorder(
+                    front = frontCamera,
+                    finish = videoFinish,
+                    locked = r.locked,
+                    onFlip = {
+                        frontCamera = !frontCamera
+                        Prefs.setFrontCamera(context, frontCamera)
+                    },
+                    onElapsed = { elapsed = it },
+                    onResult = ::onVideoResult,
+                    modifier = Modifier.padding(bottom = padding.calculateBottomPadding()),
+                )
+            }
         }
     }
 
     // ---- Діалоги ----
-
-    if (recordingVideo) {
-        VideoRecorderDialog(
-            onDone = { video ->
-                recordingVideo = false
-                replaceAttachment(video)
-                showSchedule = true
-            },
-            onCancel = { recordingVideo = false },
-        )
-    }
 
     if (showSchedule) {
         ScheduleSheet(
@@ -715,6 +769,12 @@ private fun EmptyState(tab: Int) {
 private val HeaderHeight = 56.dp
 private val BarHeight = 52.dp
 
+/** Поточний запис: що пишемо і чи «замкнено» (пишеться без утримання). */
+private data class Rec(val kind: Kind, val locked: Boolean, val startedAt: Long = System.currentTimeMillis())
+
+private val LockDistance = 90.dp
+private val CancelDistance = 120.dp
+
 @Composable
 private fun Composer(
     haze: HazeState,
@@ -722,69 +782,279 @@ private fun Composer(
     onTextChange: (String) -> Unit,
     canSend: Boolean,
     recordMode: Kind,
+    rec: Rec?,
+    elapsed: Long,
+    dragX: Float,
+    dragY: Float,
     onAttach: (Kind?) -> Unit,
-    onRecord: () -> Unit,
-    onToggleMode: () -> Unit,
     onDictate: () -> Unit,
     onSend: () -> Unit,
+    onToggleMode: () -> Unit,
+    onHoldStart: () -> Boolean,
+    onDrag: (Float, Float) -> Unit,
+    onLock: () -> Unit,
+    onRelease: () -> Unit,
+    onCancel: () -> Unit,
 ) {
-    var menu by remember { mutableStateOf(false) }
-    val haptics = LocalHapticFeedback.current
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-        // Іконки прив'язані до низу, як у Telegram: при багаторядковому тексті вони лишаються біля кнопки.
-        Row(
-            Modifier.weight(1f).heightIn(min = BarHeight).glassHaze(haze, RoundedCornerShape(BarHeight / 2)),
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            Box {
-                BarIcon(Icons.Default.AttachFile, "Додати", Glass.TextDim) { menu = true }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    MenuItem(Icons.Default.Videocam, "Записати відео") { menu = false; onAttach(Kind.VIDEO) }
-                    MenuItem(Icons.Default.CameraAlt, "Зняти фото") { menu = false; onAttach(Kind.PHOTO) }
-                    MenuItem(Icons.Default.PhotoLibrary, "З галереї") { menu = false; onAttach(null) }
-                }
+        Box(Modifier.weight(1f)) {
+            if (rec != null) {
+                RecordingPill(haze, rec, elapsed, dragX, onCancel)
+            } else {
+                InputPill(haze, text, onTextChange, onAttach, onDictate)
             }
-            val style = LocalTextStyle.current.copy(color = Glass.Text, fontSize = 16.sp, lineHeight = 22.sp)
-            BasicTextField(
-                value = text,
-                onValueChange = onTextChange,
-                textStyle = style,
-                cursorBrush = SolidColor(Glass.Lavender),
-                maxLines = 6,
-                modifier = Modifier.weight(1f).padding(vertical = 15.dp),
-                decorationBox = { inner ->
-                    Box {
-                        if (text.isEmpty()) {
-                            Text("Нагадування", style = style, color = Glass.TextFaint, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                        inner()
-                    }
-                },
-            )
-            BarIcon(Icons.Default.RecordVoiceOver, "Сказати нагадування", Glass.Lavender, onClick = onDictate)
         }
         Spacer(Modifier.width(8.dp))
-        if (canSend) {
-            PrimaryCircle(onClick = onSend, size = BarHeight) {
-                Icon(Icons.Default.AlarmAdd, "Запланувати")
+        // Одна й та сама кнопка весь час — щоб жест утримання не переривався.
+        RecordButton(
+            canSend = canSend,
+            recordMode = recordMode,
+            rec = rec,
+            dragY = dragY,
+            onSend = onSend,
+            onToggleMode = onToggleMode,
+            onHoldStart = onHoldStart,
+            onDrag = onDrag,
+            onLock = onLock,
+            onRelease = onRelease,
+            onCancel = onCancel,
+        )
+    }
+}
+
+@Composable
+private fun InputPill(
+    haze: HazeState,
+    text: String,
+    onTextChange: (String) -> Unit,
+    onAttach: (Kind?) -> Unit,
+    onDictate: () -> Unit,
+) {
+    var menu by remember { mutableStateOf(false) }
+    // Іконки прив'язані до низу, як у Telegram: при багаторядковому тексті вони лишаються біля кнопки.
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = BarHeight).glassHaze(haze, RoundedCornerShape(BarHeight / 2)),
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        Box {
+            BarIcon(Icons.Default.AttachFile, "Додати", Glass.TextDim) { menu = true }
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                MenuItem(Icons.Default.Videocam, "Записати відео") { menu = false; onAttach(Kind.VIDEO) }
+                MenuItem(Icons.Default.CameraAlt, "Зняти фото") { menu = false; onAttach(Kind.PHOTO) }
+                MenuItem(Icons.Default.PhotoLibrary, "З галереї") { menu = false; onAttach(null) }
             }
-        } else {
-            // Натиснути — записати; утримати — перемкнути відео ↔ голосове.
-            PrimaryCircle(
-                onClick = onRecord,
-                size = BarHeight,
-                onLongClick = {
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onToggleMode()
+        }
+        val style = LocalTextStyle.current.copy(color = Glass.Text, fontSize = 16.sp, lineHeight = 22.sp)
+        BasicTextField(
+            value = text,
+            onValueChange = onTextChange,
+            textStyle = style,
+            cursorBrush = SolidColor(Glass.Lavender),
+            maxLines = 6,
+            modifier = Modifier.weight(1f).padding(vertical = 15.dp),
+            decorationBox = { inner ->
+                Box {
+                    if (text.isEmpty()) {
+                        Text("Нагадування", style = style, color = Glass.TextFaint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    inner()
+                }
+            },
+        )
+        BarIcon(Icons.Default.RecordVoiceOver, "Сказати нагадування", Glass.Lavender, onClick = onDictate)
+    }
+}
+
+/** Смуга запису: ● таймер і «‹ посуньте, щоб скасувати» (або «Скасувати» в режимі 🔒). */
+@Composable
+private fun RecordingPill(haze: HazeState, rec: Rec, elapsed: Long, dragX: Float, onCancel: () -> Unit) {
+    val pulse by rememberInfiniteTransition(label = "rec").animateFloat(
+        initialValue = 1f,
+        targetValue = 0.25f,
+        animationSpec = infiniteRepeatable(tween(650), RepeatMode.Reverse),
+        label = "pulse",
+    )
+    val cancelPx = with(LocalDensity.current) { CancelDistance.toPx() }
+    Row(
+        Modifier.fillMaxWidth().height(BarHeight).glassHaze(haze, RoundedCornerShape(BarHeight / 2)).padding(start = 18.dp, end = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(10.dp).alpha(pulse).background(Glass.Danger, CircleShape))
+        Spacer(Modifier.width(10.dp))
+        Text(
+            formatDuration(elapsed),
+            style = LocalTextStyle.current.copy(fontFeatureSettings = "tnum"),
+            color = Glass.Text,
+            fontSize = 16.sp,
+        )
+        Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+            if (rec.locked) {
+                TextButton(onClick = onCancel) { Text("Скасувати", color = Glass.Danger, fontSize = 15.sp) }
+            } else {
+                val progress = (-dragX / cancelPx).coerceIn(0f, 1f)
+                Row(
+                    Modifier
+                        .offset { IntOffset((dragX * 0.6f).toInt(), 0) }
+                        .alpha(1f - progress * 0.8f),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = Glass.TextFaint, modifier = Modifier.size(20.dp))
+                    Text("Посуньте, щоб скасувати", color = Glass.TextDim, fontSize = 14.sp, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Кнопка запису, як у Telegram: тап — перемкнути 🎤 ↔ 📹; утримання — запис (відпустили — готово);
+ * утримуючи, потягнути вгору до 🔒 — запис без рук; потягнути вліво — скасувати.
+ * Коли є текст або вкладення — кнопка «запланувати»; у режимі 🔒 — «готово».
+ */
+@Composable
+private fun RecordButton(
+    canSend: Boolean,
+    recordMode: Kind,
+    rec: Rec?,
+    dragY: Float,
+    onSend: () -> Unit,
+    onToggleMode: () -> Unit,
+    onHoldStart: () -> Boolean,
+    onDrag: (Float, Float) -> Unit,
+    onLock: () -> Unit,
+    onRelease: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    val haptics = LocalHapticFeedback.current
+    val density = LocalDensity.current
+    val lockPx = with(density) { LockDistance.toPx() }
+    val cancelPx = with(density) { CancelDistance.toPx() }
+    val state by rememberUpdatedState(Triple(canSend, rec, recordMode))
+    val callbacks by rememberUpdatedState(
+        listOf(onSend, onToggleMode, onLock, onRelease, onCancel),
+    )
+    val holdStart by rememberUpdatedState(onHoldStart)
+    val drag by rememberUpdatedState(onDrag)
+
+    val holding = rec != null && !rec.locked
+    val scale by animateFloatAsState(if (holding) 1.2f else 1f, label = "scale")
+
+    Box(contentAlignment = Alignment.Center) {
+        if (holding) LockHint(progress = (-dragY / lockPx).coerceIn(0f, 1f))
+        Box(
+            Modifier
+                .size(BarHeight)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }
+                .clip(CircleShape)
+                .background(Glass.Primary)
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown()
+                        down.consume()
+                        val (send, current, _) = state
+                        val (sendCb, toggleCb, lockCb, releaseCb, cancelCb) = callbacks
+                        if (send || current?.locked == true) {
+                            // Звичайна кнопка: «запланувати» або «готово» в режимі 🔒.
+                            if (waitForUpOrCancellation() != null) {
+                                if (send) sendCb() else releaseCb()
+                            }
+                            return@awaitEachGesture
+                        }
+                        // Короткий тап чи утримання?
+                        val tap = withTimeoutOrNull(220L) {
+                            while (true) {
+                                val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: return@withTimeoutOrNull false
+                                if (!change.pressed) return@withTimeoutOrNull true
+                                if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) {
+                                    return@withTimeoutOrNull false
+                                }
+                            }
+                            @Suppress("UNREACHABLE_CODE")
+                            false
+                        } ?: false
+                        if (tap) {
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            toggleCb()
+                            return@awaitEachGesture
+                        }
+                        if (!holdStart()) return@awaitEachGesture
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        while (true) {
+                            val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
+                            if (change == null || !change.pressed) {
+                                releaseCb()
+                                break
+                            }
+                            change.consume()
+                            val d = change.position - down.position
+                            drag(d.x.coerceAtMost(0f), d.y.coerceAtMost(0f))
+                            if (-d.y > lockPx) {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                lockCb()
+                                // Палець ще на екрані — просто чекаємо, поки відпустять.
+                                do {
+                                    val e = awaitPointerEvent()
+                                    e.changes.forEach { it.consume() }
+                                } while (e.changes.any { it.pressed })
+                                break
+                            }
+                            if (-d.x > cancelPx) {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                cancelCb()
+                                do {
+                                    val e = awaitPointerEvent()
+                                    e.changes.forEach { it.consume() }
+                                } while (e.changes.any { it.pressed })
+                                break
+                            }
+                        }
+                    }
                 },
-                onLongClickLabel = "Перемкнути відео або голосове",
-            ) {
+            contentAlignment = Alignment.Center,
+        ) {
+            val icon = when {
+                canSend -> Icons.Default.AlarmAdd
+                rec?.locked == true -> Icons.Default.Check
+                (rec?.kind ?: recordMode) == Kind.VIDEO -> Icons.Default.Videocam
+                else -> Icons.Default.Mic
+            }
+            Crossfade(targetState = icon, label = "icon") { current ->
                 Icon(
-                    if (recordMode == Kind.VIDEO) Icons.Default.Videocam else Icons.Default.Mic,
-                    contentDescription = if (recordMode == Kind.VIDEO) "Записати відео" else "Записати голосове",
+                    current,
+                    contentDescription = when (current) {
+                        Icons.Default.AlarmAdd -> "Запланувати"
+                        Icons.Default.Check -> "Готово"
+                        Icons.Default.Videocam -> "Відео: тап — перемкнути, утримати — записати"
+                        else -> "Голосове: тап — перемкнути, утримати — записати"
+                    },
+                    tint = Glass.OnPrimary,
                 )
             }
         }
+    }
+}
+
+/** Скляна «капсула» з замочком над кнопкою: тягніть угору, щоб писати без утримання. */
+@Composable
+private fun LockHint(progress: Float) {
+    Column(
+        Modifier
+            .offset { IntOffset(0, (-(BarHeight.toPx() * 1.55f) - progress * 36.dp.toPx()).toInt()) }
+            .width(40.dp)
+            .glass(RoundedCornerShape(20.dp), Glass.Sheet)
+            .padding(vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(
+            if (progress > 0.85f) Icons.Default.Lock else Icons.Default.LockOpen,
+            contentDescription = "Потягніть угору, щоб зафіксувати",
+            tint = if (progress > 0.85f) Glass.Lavender else Glass.Text,
+            modifier = Modifier.size(20.dp),
+        )
+        Icon(Icons.Default.KeyboardArrowUp, null, tint = Glass.TextFaint, modifier = Modifier.size(18.dp).alpha(1f - progress))
     }
 }
 
@@ -802,38 +1072,6 @@ private fun BarIcon(icon: ImageVector, contentDescription: String, tint: Color, 
 @Composable
 private fun MenuItem(icon: ImageVector, label: String, onClick: () -> Unit) {
     DropdownMenuItem(text = { Text(label) }, leadingIcon = { Icon(icon, null) }, onClick = onClick)
-}
-
-@Composable
-private fun RecordingBar(haze: HazeState, onCancel: () -> Unit, onDone: () -> Unit) {
-    var elapsed by remember { mutableLongStateOf(0L) }
-    LaunchedEffect(Unit) {
-        val start = System.currentTimeMillis()
-        while (true) {
-            elapsed = System.currentTimeMillis() - start
-            delay(200)
-        }
-    }
-    val pulse by rememberInfiniteTransition(label = "rec").animateFloat(
-        initialValue = 1f,
-        targetValue = 0.2f,
-        animationSpec = infiniteRepeatable(tween(600), RepeatMode.Reverse),
-        label = "pulse",
-    )
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Row(
-            Modifier.weight(1f).height(BarHeight).glassHaze(haze, RoundedCornerShape(BarHeight / 2)).padding(start = 18.dp, end = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.size(12.dp).alpha(pulse).background(Glass.Danger, CircleShape))
-            Spacer(Modifier.width(10.dp))
-            Text(formatDuration(elapsed), color = Glass.Text, fontSize = 18.sp)
-            Spacer(Modifier.weight(1f))
-            TextButton(onClick = onCancel) { Text("Скасувати", color = Glass.TextDim) }
-        }
-        Spacer(Modifier.width(8.dp))
-        PrimaryCircle(onClick = onDone, size = BarHeight) { Icon(Icons.Default.Check, "Готово") }
-    }
 }
 
 @Composable

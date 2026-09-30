@@ -17,39 +17,18 @@ import androidx.camera.video.Recording
 import androidx.camera.video.VideoCapture
 import androidx.camera.video.VideoRecordEvent
 import androidx.camera.view.PreviewView
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cameraswitch
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -57,20 +36,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import ua.nahadaika.Prefs
-import ua.nahadaika.ui.theme.PrimaryCircle
+import ua.nahadaika.ui.theme.GlassIconButton
 import ua.nahadaika.ui.theme.Glass
-import ua.nahadaika.ui.theme.glass
 import ua.nahadaika.data.Kind
-import ua.nahadaika.formatDuration
 import ua.nahadaika.media.Attachment
 import ua.nahadaika.media.MediaFiles
 import java.io.File
@@ -83,23 +57,33 @@ private class Take(val file: File) {
 }
 
 /**
- * Повноекранний запис відео, як «кружечки» в Telegram: запис стартує одразу,
- * ✓ — зберегти, ✕ — скасувати, ⟲ — перемкнути камеру (почне запис наново).
+ * Відео-«кружечок», як у Telegram: камера відкривається й запис стартує одразу.
+ * [finish]: null — іде запис; true — зберегти; false — відкинути. Результат — у [onResult].
+ * [front] змінюється кнопкою ⟲ (лише в режимі 🔒) — запис починається наново з іншої камери.
  */
-@SuppressLint("MissingPermission") // дозвіл на камеру перевіряється перед відкриттям, на мікрофон — нижче
+@SuppressLint("MissingPermission") // дозволи перевіряються перед показом, на мікрофон — нижче
 @Composable
-fun VideoRecorderDialog(onDone: (Attachment) -> Unit, onCancel: () -> Unit) {
+fun VideoCircleRecorder(
+    front: Boolean,
+    finish: Boolean?,
+    locked: Boolean,
+    onFlip: () -> Unit,
+    onElapsed: (Long) -> Unit,
+    onResult: (Attachment?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val currentOnDone by rememberUpdatedState(onDone)
-    val currentOnCancel by rememberUpdatedState(onCancel)
-
-    var front by remember { mutableStateOf(Prefs.frontCamera(context)) }
-    var elapsed by remember { mutableLongStateOf(0L) }
+    val currentOnResult by rememberUpdatedState(onResult)
+    val currentOnElapsed by rememberUpdatedState(onElapsed)
     var take by remember { mutableStateOf<Take?>(null) }
 
     val previewView = remember {
-        PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
+        PreviewView(context).apply {
+            scaleType = PreviewView.ScaleType.FILL_CENTER
+            // TextureView — щоб Compose міг обрізати превʼю по колу.
+            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+        }
     }
     val videoCapture = remember {
         val recorder = Recorder.Builder()
@@ -113,25 +97,25 @@ fun VideoRecorderDialog(onDone: (Attachment) -> Unit, onCancel: () -> Unit) {
         val pending = videoCapture.output.prepareRecording(context, FileOutputOptions.Builder(t.file).build())
         val audioGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
             PackageManager.PERMISSION_GRANTED
-        elapsed = 0
+        currentOnElapsed(0)
         t.recording = try {
             (if (audioGranted) pending.withAudioEnabled() else pending).start(ContextCompat.getMainExecutor(context)) { event ->
                 when (event) {
                     is VideoRecordEvent.Status -> {
                         t.durationMs = event.recordingStats.recordedDurationNanos / 1_000_000
-                        if (take === t) elapsed = t.durationMs
+                        if (take === t) currentOnElapsed(t.durationMs)
                     }
                     is VideoRecordEvent.Finalize -> {
                         val ok = t.keep && t.file.length() > 0 && t.durationMs >= 700 &&
                             (event.error == VideoRecordEvent.Finalize.ERROR_NONE ||
                                 event.error == VideoRecordEvent.Finalize.ERROR_SOURCE_INACTIVE)
                         if (ok) {
-                            currentOnDone(Attachment(Kind.VIDEO, t.file, t.durationMs))
+                            currentOnResult(Attachment(Kind.VIDEO, t.file, t.durationMs))
                         } else {
                             t.file.delete()
                             if (t.keep) {
                                 Toast.makeText(context, "Відео занадто коротке", Toast.LENGTH_SHORT).show()
-                                currentOnCancel()
+                                currentOnResult(null)
                             }
                         }
                     }
@@ -140,7 +124,7 @@ fun VideoRecorderDialog(onDone: (Attachment) -> Unit, onCancel: () -> Unit) {
         } catch (_: IllegalStateException) {
             // Попередній запис (після зміни камери) ще завершується — пробуємо трохи пізніше.
             t.file.delete()
-            if (attempt < 10) previewView.postDelayed({ startTake(attempt + 1) }, 200) else currentOnCancel()
+            if (attempt < 10) previewView.postDelayed({ startTake(attempt + 1) }, 200) else currentOnResult(null)
             return
         }
         take = t
@@ -163,90 +147,47 @@ fun VideoRecorderDialog(onDone: (Attachment) -> Unit, onCancel: () -> Unit) {
                 startTake()
             } catch (_: Exception) {
                 Toast.makeText(context, "Не вдалося увімкнути камеру", Toast.LENGTH_SHORT).show()
-                currentOnCancel()
+                currentOnResult(null)
             }
         }, ContextCompat.getMainExecutor(context))
         onDispose {
             disposed = true
-            take?.let { t ->
-                if (!t.keep) t.recording?.stop()
-            }
+            take?.let { t -> if (!t.keep) t.recording?.stop() }
             provider?.unbindAll()
         }
     }
 
-    fun finish(keep: Boolean) {
-        val t = take ?: return currentOnCancel()
+    LaunchedEffect(finish) {
+        val keep = finish ?: return@LaunchedEffect
+        val t = take
+        if (t == null) {
+            if (keep) Toast.makeText(context, "Утримуйте кнопку довше, щоб записати", Toast.LENGTH_SHORT).show()
+            currentOnResult(null)
+            return@LaunchedEffect
+        }
         t.keep = keep
         t.recording?.stop()
-        if (!keep) currentOnCancel()
+        if (!keep) currentOnResult(null)
     }
 
-    Dialog(
-        onDismissRequest = { finish(keep = false) },
-        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false, decorFitsSystemWindows = false),
-    ) {
-        Box(Modifier.fillMaxSize().background(Color.Black)) {
-            AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
-
-            val pulse by rememberInfiniteTransition(label = "rec").animateFloat(
-                initialValue = 1f,
-                targetValue = 0.2f,
-                animationSpec = infiniteRepeatable(tween(600), RepeatMode.Reverse),
-                label = "pulse",
+    Box(modifier.fillMaxSize().background(Glass.Base.copy(alpha = 0.82f)), contentAlignment = Alignment.Center) {
+        Box(contentAlignment = Alignment.Center) {
+            AndroidView(
+                factory = { previewView },
+                modifier = Modifier
+                    .size(300.dp)
+                    .clip(CircleShape)
+                    .border(2.dp, Glass.Stroke, CircleShape),
             )
-            Row(
-                Modifier
-                    .align(Alignment.TopCenter)
-                    .statusBarsPadding()
-                    .padding(top = 16.dp)
-                    .glass(Glass.Pill, Color.Black.copy(alpha = 0.35f))
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(Modifier.size(10.dp).alpha(pulse).background(Color.Red, CircleShape))
-                Spacer(Modifier.width(8.dp))
-                Text(formatDuration(elapsed), color = Color.White, style = MaterialTheme.typography.titleMedium)
-            }
-
-            Row(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(bottom = 32.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                RoundButton(onClick = { finish(keep = false) }) {
-                    Icon(Icons.Default.Close, "Скасувати", tint = Color.White, modifier = Modifier.size(28.dp))
-                }
-                Box(
-                    Modifier
-                        .size(88.dp)
-                        .glass(CircleShape, Color.White.copy(alpha = 0.12f))
-                        .padding(8.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    PrimaryCircle(onClick = { finish(keep = true) }, size = 72.dp) {
-                        Icon(Icons.Default.Check, "Готово", modifier = Modifier.size(34.dp))
-                    }
-                }
-                RoundButton(onClick = {
-                    front = !front
-                    Prefs.setFrontCamera(context, front)
-                }) {
-                    Icon(Icons.Default.Cameraswitch, "Змінити камеру", tint = Color.White, modifier = Modifier.size(28.dp))
-                }
+            if (locked) {
+                GlassIconButton(
+                    Icons.Default.Cameraswitch,
+                    "Змінити камеру",
+                    onClick = onFlip,
+                    size = 48.dp,
+                    modifier = Modifier.align(Alignment.BottomEnd),
+                )
             }
         }
     }
-}
-
-@Composable
-private fun RoundButton(onClick: () -> Unit, content: @Composable () -> Unit) {
-    Box(
-        Modifier.size(58.dp).glass(CircleShape, Color.Black.copy(alpha = 0.30f)).clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) { content() }
 }
