@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,7 +23,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import ua.nahadaika.ui.theme.Glass
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
@@ -116,15 +121,15 @@ fun WheelPicker(
                 Text(
                     label(index % count),
                     fontSize = fontSize,
-                    fontWeight = if (distance == 0) FontWeight.SemiBold else FontWeight.Normal,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = if (distance == 0) FontWeight.Normal else FontWeight.Light,
+                    color = Glass.Text,
                     maxLines = 1,
                     overflow = TextOverflow.Clip,
                     modifier = Modifier.alpha(
                         when (distance) {
                             0 -> 1f
-                            1 -> 0.45f
-                            else -> 0.15f
+                            1 -> 0.38f
+                            else -> 0.12f
                         },
                     ),
                 )
@@ -133,17 +138,17 @@ fun WheelPicker(
     }
 }
 
-/** Смуга вибору по центру барабанів (дві лінії, як у Telegram). */
-@Composable
-fun Modifier.wheelSelectionBand(): Modifier {
-    val color = MaterialTheme.colorScheme.primary
-    val fill = MaterialTheme.colorScheme.primary.copy(alpha = 0.06f)
-    return drawBehind {
-        val h = WheelItemHeight.toPx()
-        val top = (size.height - h) / 2
-        val stroke = 1.5.dp.toPx()
-        drawRect(fill, topLeft = Offset(0f, top), size = androidx.compose.ui.geometry.Size(size.width, h))
-        drawLine(color, Offset(0f, top), Offset(size.width, top), stroke)
-        drawLine(color, Offset(0f, top + h), Offset(size.width, top + h), stroke)
-    }
+/** Скляна смуга вибору по центру барабанів. */
+fun Modifier.wheelSelectionBand(): Modifier = drawBehind {
+    val h = WheelItemHeight.toPx()
+    val top = (size.height - h) / 2
+    val radius = CornerRadius(h / 2.6f)
+    drawRoundRect(Color.White.copy(alpha = 0.06f), Offset(0f, top), Size(size.width, h), radius)
+    drawRoundRect(
+        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.16f), Color.White.copy(alpha = 0.04f)), startY = top, endY = top + h),
+        Offset(0f, top),
+        Size(size.width, h),
+        radius,
+        style = Stroke(0.8.dp.toPx()),
+    )
 }

@@ -66,6 +66,9 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import ua.nahadaika.Prefs
+import ua.nahadaika.ui.theme.PrimaryCircle
+import ua.nahadaika.ui.theme.Glass
+import ua.nahadaika.ui.theme.glass
 import ua.nahadaika.data.Kind
 import ua.nahadaika.formatDuration
 import ua.nahadaika.media.Attachment
@@ -197,8 +200,8 @@ fun VideoRecorderDialog(onDone: (Attachment) -> Unit, onCancel: () -> Unit) {
                     .align(Alignment.TopCenter)
                     .statusBarsPadding()
                     .padding(top = 16.dp)
-                    .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                    .glass(Glass.Pill, Color.Black.copy(alpha = 0.35f))
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(Modifier.size(10.dp).alpha(pulse).background(Color.Red, CircleShape))
@@ -220,14 +223,14 @@ fun VideoRecorderDialog(onDone: (Attachment) -> Unit, onCancel: () -> Unit) {
                 }
                 Box(
                     Modifier
-                        .size(84.dp)
-                        .border(4.dp, Color.White, CircleShape)
-                        .padding(8.dp)
-                        .background(Color(0xFFE53935), CircleShape)
-                        .clickable { finish(keep = true) },
+                        .size(88.dp)
+                        .glass(CircleShape, Color.White.copy(alpha = 0.12f))
+                        .padding(8.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Default.Check, "Готово", tint = Color.White, modifier = Modifier.size(36.dp))
+                    PrimaryCircle(onClick = { finish(keep = true) }, size = 72.dp) {
+                        Icon(Icons.Default.Check, "Готово", modifier = Modifier.size(34.dp))
+                    }
                 }
                 RoundButton(onClick = {
                     front = !front
@@ -242,8 +245,8 @@ fun VideoRecorderDialog(onDone: (Attachment) -> Unit, onCancel: () -> Unit) {
 
 @Composable
 private fun RoundButton(onClick: () -> Unit, content: @Composable () -> Unit) {
-    IconButton(
-        onClick = onClick,
-        modifier = Modifier.size(56.dp).background(Color.Black.copy(alpha = 0.45f), CircleShape),
+    Box(
+        Modifier.size(58.dp).glass(CircleShape, Color.Black.copy(alpha = 0.30f)).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
     ) { content() }
 }

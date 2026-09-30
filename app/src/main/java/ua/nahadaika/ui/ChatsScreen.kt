@@ -1,6 +1,18 @@
 package ua.nahadaika.ui
 
 import android.Manifest
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.lerp
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import ua.nahadaika.ui.theme.PrimaryCircle
+import ua.nahadaika.ui.theme.AppBackground
+import ua.nahadaika.ui.theme.Glass
+import ua.nahadaika.ui.theme.GlassIconButton
+import ua.nahadaika.ui.theme.glass
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
@@ -31,6 +43,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.BatteryAlert
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Repeat
@@ -62,6 +75,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -96,40 +110,52 @@ fun ChatsScreen(onOpenChat: (Long) -> Unit, onBack: () -> Unit) {
 
     BackHandler(onBack = onBack)
 
+    val hazeState = remember { HazeState() }
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
-            TopAppBar(
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад") }
-                },
-                title = { Text("Чати", fontWeight = FontWeight.SemiBold) },
-            )
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .hazeEffect(hazeState, Glass.Haze)
+                    .statusBarsPadding()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                GlassIconButton(Icons.AutoMirrored.Filled.ArrowBack, "Назад", onClick = onBack)
+                Spacer(Modifier.width(14.dp))
+                Text("Чати", color = Glass.Text, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+            }
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { creating = true },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-            ) {
+            PrimaryCircle(onClick = { creating = true }, size = 58.dp) {
                 Icon(Icons.Default.Add, contentDescription = "Новий чат")
             }
         },
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(bottom = 88.dp),
-        ) {
-            items(chats, key = { it.id }) { chat ->
-                val pending = reminders.filter { it.chatId == chat.id && !it.fired }.sortedBy { it.alarmAt() }
-                ChatRow(
-                    chat = chat,
-                    next = pending.firstOrNull(),
-                    count = pending.size,
-                    onClick = { onOpenChat(chat.id) },
-                    onRename = { renaming = chat },
-                    onDelete = { deleting = chat },
-                )
-                HorizontalDivider(modifier = Modifier.padding(start = 80.dp))
+        Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
+            AppBackground()
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    start = 14.dp,
+                    end = 14.dp,
+                    top = padding.calculateTopPadding() + 6.dp,
+                    bottom = padding.calculateBottomPadding() + 96.dp,
+                ),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                items(chats, key = { it.id }) { chat ->
+                    val pending = reminders.filter { it.chatId == chat.id && !it.fired }.sortedBy { it.alarmAt() }
+                    ChatRow(
+                        chat = chat,
+                        next = pending.firstOrNull(),
+                        count = pending.size,
+                        onClick = { onOpenChat(chat.id) },
+                        onRename = { renaming = chat },
+                        onDelete = { deleting = chat },
+                    )
+                }
             }
         }
     }
@@ -155,7 +181,7 @@ fun ChatsScreen(onOpenChat: (Long) -> Unit, onBack: () -> Unit) {
                 TextButton(onClick = {
                     deleting = null
                     scope.launch { Repo.deleteChat(chat) }
-                }) { Text("Видалити", color = MaterialTheme.colorScheme.error) }
+                }) { Text("Видалити", color = Glass.Danger) }
             },
             dismissButton = { TextButton(onClick = { deleting = null }) { Text("Скасувати") } },
         )
@@ -177,17 +203,19 @@ private fun ChatRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .glass(RoundedCornerShape(24.dp))
                 .combinedClickable(onClick = onClick, onLongClick = { menu = true })
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 12.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Avatar(chat, size = 56)
-            Spacer(Modifier.width(12.dp))
+            Avatar(chat, size = 54)
+            Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         chat.name,
-                        style = MaterialTheme.typography.titleMedium,
+                        color = Glass.Text,
+                        fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -195,29 +223,27 @@ private fun ChatRow(
                     )
                     if (next != null) {
                         if (next.repeat != Repeat.NONE) {
-                            Icon(Icons.Default.Repeat, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.outline)
+                            Icon(Icons.Default.Repeat, null, Modifier.size(14.dp), tint = Glass.TextDim)
                             Spacer(Modifier.width(2.dp))
                         }
-                        Text(
-                            shortWhen(next.alarmAt()),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline,
-                        )
+                        Text(shortWhen(next.alarmAt()), fontSize = 13.sp, color = Glass.TextDim)
                     }
                 }
+                Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = next?.let { previewText(it).ifBlank { "Нагадування" } } ?: "Немає запланованих",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 14.sp,
+                        color = Glass.TextDim,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
                     if (count > 0) {
-                        Badge(containerColor = MaterialTheme.colorScheme.primary) {
-                            Text("$count", modifier = Modifier.padding(horizontal = 2.dp))
-                        }
+                        Box(
+                            Modifier.padding(start = 8.dp).clip(Glass.Pill).background(Glass.FillStrong).padding(horizontal = 9.dp, vertical = 2.dp),
+                            contentAlignment = Alignment.Center,
+                        ) { Text("$count", color = Glass.Text, fontSize = 12.sp, fontWeight = FontWeight.Medium) }
                     }
                 }
             }
@@ -231,15 +257,18 @@ private fun ChatRow(
 
 @Composable
 fun Avatar(chat: Chat, size: Int) {
+    val tone = Color(chat.color)
     Box(
-        modifier = Modifier.size(size.dp).background(Color(chat.color), CircleShape),
+        modifier = Modifier
+            .size(size.dp)
+            .glass(CircleShape, tone.copy(alpha = 0.20f)),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             chat.name.trim().take(1).uppercase().ifEmpty { "?" },
-            color = Color.White,
-            fontSize = (size * 0.42).sp,
-            fontWeight = FontWeight.SemiBold,
+            color = lerp(tone, Color.White, 0.45f),
+            fontSize = (size * 0.40).sp,
+            fontWeight = FontWeight.Medium,
         )
     }
 }
@@ -302,7 +331,7 @@ fun PermissionBanners() {
         if (!canNotify) {
             Banner(
                 icon = Icons.Default.NotificationsOff,
-                text = "Сповіщення вимкнені — нагадування не з'являтимуться.",
+                text = "Сповіщення вимкнені",
                 action = "Увімкнути",
                 onAction = {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -316,7 +345,7 @@ fun PermissionBanners() {
         if (!canExact && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             Banner(
                 icon = Icons.Default.Timer,
-                text = "Дозвольте точні будильники, щоб нагадування приходили хвилина в хвилину.",
+                text = "Точні будильники вимкнені",
                 action = "Дозволити",
                 onAction = {
                     context.startActivitySafe(
@@ -328,7 +357,7 @@ fun PermissionBanners() {
         if (!batteryOk) {
             Banner(
                 icon = Icons.Default.BatteryAlert,
-                text = "Деякі телефони (Xiaomi, Samsung, Huawei) «присипляють» застосунки. Дозвольте роботу у фоні.",
+                text = "Дозвольте роботу у фоні, щоб не запізнювались",
                 action = "Дозволити",
                 onAction = {
                     context.startActivitySafe(
@@ -346,18 +375,18 @@ fun PermissionBanners() {
 
 @Composable
 private fun Banner(icon: ImageVector, text: String, action: String, onAction: () -> Unit, onDismiss: (() -> Unit)? = null) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+    Row(
+        Modifier.fillMaxWidth().padding(top = 4.dp).glass(RoundedCornerShape(20.dp)).padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(Modifier.padding(start = 12.dp, top = 12.dp, end = 12.dp), verticalAlignment = Alignment.Top) {
-            Icon(icon, null, tint = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.width(12.dp))
-            Text(text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-        }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.End) {
-            if (onDismiss != null) TextButton(onClick = onDismiss) { Text("Пізніше") }
-            TextButton(onClick = onAction) { Text(action) }
+        Icon(icon, null, tint = Glass.Lavender, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(12.dp))
+        Text(text, color = Glass.TextDim, fontSize = 13.sp, lineHeight = 18.sp, modifier = Modifier.weight(1f))
+        TextButton(onClick = onAction) { Text(action, color = Glass.Text, fontWeight = FontWeight.Medium, fontSize = 13.sp) }
+        if (onDismiss != null) {
+            IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Default.Close, "Пізніше", tint = Glass.TextFaint, modifier = Modifier.size(16.dp))
+            }
         }
     }
 }

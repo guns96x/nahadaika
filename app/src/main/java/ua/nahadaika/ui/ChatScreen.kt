@@ -1,6 +1,20 @@
 package ua.nahadaika.ui
 
 import android.Manifest
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.ui.unit.sp
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import ua.nahadaika.ui.theme.PrimaryCircle
+import ua.nahadaika.ui.theme.AppBackground
+import ua.nahadaika.ui.theme.Glass
+import ua.nahadaika.ui.theme.GlassIconButton
+import ua.nahadaika.ui.theme.GlassSegmented
+import ua.nahadaika.ui.theme.GlassSnackbar
+import ua.nahadaika.ui.theme.sheetGlow
+import ua.nahadaika.ui.theme.glass
 import android.app.Activity
 import android.content.Intent
 import android.speech.RecognizerIntent
@@ -214,10 +228,12 @@ fun ChatScreen(
     }
 
     val listState = rememberLazyListState()
+    // Перед повідомленнями в списку йдуть банери та (у «Запланованих») картка найближчого.
+    val lead = if (tab == 0 && scheduled.isNotEmpty()) 2 else 1
     LaunchedEffect(tab, highlightId, rows.size) {
         val target = highlightId?.let { id -> rows.indexOfFirst { it is ListRow.Msg && it.reminder.id == id } }?.takeIf { it >= 0 }
             ?: if (tab == 1 && rows.isNotEmpty()) rows.lastIndex else null
-        target?.let { listState.animateScrollToItem(it) }
+        target?.let { listState.animateScrollToItem(it + lead) }
     }
     LaunchedEffect(highlightId) {
         if (highlightId != null) {
@@ -398,36 +414,69 @@ fun ChatScreen(
         }
     }
 
+    val hazeState = remember { HazeState() }
+    var nowTick by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000)
+            nowTick = System.currentTimeMillis()
+        }
+    }
+
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbar) },
+        containerColor = Color.Transparent,
+        snackbarHost = { SnackbarHost(snackbar) { GlassSnackbar(it) } },
         topBar = {
-            TopAppBar(
-                navigationIcon = {
-                    IconButton(onClick = onOpenChats) { Icon(Icons.Default.Menu, "Усі чати") }
-                },
-                title = {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .hazeEffect(hazeState, Glass.Haze)
+                    .statusBarsPadding()
+                    .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    GlassIconButton(Icons.Default.Menu, "Усі чати", onClick = onOpenChats)
+                    Spacer(Modifier.width(12.dp))
                     chat?.let { c ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onOpenChats),
+                            modifier = Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).clickable(onClick = onOpenChats),
                         ) {
-                            Avatar(c, size = 40)
+                            Avatar(c, size = 44)
                             Spacer(Modifier.width(12.dp))
                             Column {
-                                Text(c.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                Text(c.name, color = Glass.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                                 Text(
                                     if (scheduled.isEmpty()) "немає запланованих" else "заплановано: ${scheduled.size}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = Glass.TextDim,
+                                    fontSize = 13.sp,
                                 )
                             }
                         }
                     }
-                },
-            )
+                }
+                Spacer(Modifier.height(10.dp))
+                GlassSegmented(
+                    options = listOf(
+                        Icons.Default.Schedule to "Заплановані · ${scheduled.size}",
+                        Icons.Default.DoneAll to "Історія · ${history.size}",
+                    ),
+                    selected = tab,
+                    onSelect = { tab = it },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         },
         bottomBar = {
-            Column(Modifier.background(MaterialTheme.colorScheme.surface).navigationBarsPadding().imePadding()) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .hazeEffect(hazeState, Glass.Haze)
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 attachment?.let { a ->
                     AttachmentPreview(a, player, onRemove = {
                         if (player.currentPath == a.file.absolutePath) player.stop()
@@ -474,36 +523,42 @@ fun ChatScreen(
             }
         },
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.surfaceContainerLow)) {
-            PermissionBanners()
-            PrimaryTabRow(selectedTabIndex = tab) {
-                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Заплановані (${scheduled.size})") })
-                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Історія (${history.size})") })
-            }
-            if (rows.isEmpty()) {
-                EmptyState(tab)
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(vertical = 8.dp),
-                ) {
-                    items(rows, key = { row ->
-                        when (row) {
-                            is ListRow.Header -> "h-${row.label}"
-                            is ListRow.Msg -> row.reminder.id
-                        }
-                    }) { row ->
-                        when (row) {
-                            is ListRow.Header -> DateHeader(row.label)
-                            is ListRow.Msg -> ReminderBubble(
-                                reminder = row.reminder,
-                                highlighted = row.reminder.id == highlightId,
-                                player = player,
-                                onClick = { actionsFor = row.reminder },
-                                onOpenMedia = { viewing = row.reminder },
-                            )
-                        }
+        Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
+            AppBackground()
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    top = padding.calculateTopPadding() + 6.dp,
+                    bottom = padding.calculateBottomPadding() + 10.dp,
+                ),
+            ) {
+                item(key = "banners") { PermissionBanners() }
+                if (tab == 0 && scheduled.isNotEmpty()) {
+                    item(key = "next") {
+                        val next = scheduled.first()
+                        NextUpCard(next, onClick = { actionsFor = next })
+                    }
+                }
+                if (rows.isEmpty()) {
+                    item(key = "empty") { EmptyState(tab) }
+                }
+                items(rows, key = { row ->
+                    when (row) {
+                        is ListRow.Header -> "h-${row.label}"
+                        is ListRow.Msg -> row.reminder.id
+                    }
+                }) { row ->
+                    when (row) {
+                        is ListRow.Header -> DateHeader(row.label)
+                        is ListRow.Msg -> ReminderBubble(
+                            reminder = row.reminder,
+                            highlighted = row.reminder.id == highlightId,
+                            player = player,
+                            now = nowTick,
+                            onClick = { actionsFor = row.reminder },
+                            onOpenMedia = { viewing = row.reminder },
+                        )
                     }
                 }
             }
@@ -592,29 +647,36 @@ fun ChatScreen(
 
 @Composable
 private fun EmptyState(tab: Int) {
-    Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 40.dp)
+            .glass(RoundedCornerShape(28.dp))
+            .padding(28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(Modifier.size(72.dp).glass(CircleShape), contentAlignment = Alignment.Center) {
             Icon(
                 if (tab == 0) Icons.Default.Schedule else Icons.Default.NotificationsActive,
                 contentDescription = null,
-                modifier = Modifier.size(56.dp),
-                tint = MaterialTheme.colorScheme.outline,
-            )
-            Spacer(Modifier.height(12.dp))
-            Text(
-                if (tab == 0) {
-                    "Напишіть текст, додайте фото чи відео або запишіть голосове — і оберіть, коли нагадати."
-                } else {
-                    "Тут з'являться нагадування, які вже надійшли."
-                },
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(34.dp),
+                tint = Glass.TextDim,
             )
         }
+        Spacer(Modifier.height(16.dp))
+        Text(
+            if (tab == 0) {
+                "Напишіть, скажіть 🗣 або запишіть відео — і оберіть, коли нагадати."
+            } else {
+                "Тут з'являться нагадування, які вже надійшли."
+            },
+            textAlign = TextAlign.Center,
+            color = Glass.TextDim,
+            fontSize = 15.sp,
+        )
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun Composer(
     text: String,
@@ -629,65 +691,67 @@ private fun Composer(
 ) {
     var menu by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
-    Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.Bottom) {
-        Box {
-            IconButton(onClick = { menu = true }) { Icon(Icons.Default.AttachFile, "Додати") }
-            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                MenuItem(Icons.Default.Videocam, "Записати відео") { menu = false; onAttach(Kind.VIDEO) }
-                MenuItem(Icons.Default.CameraAlt, "Зняти фото") { menu = false; onAttach(Kind.PHOTO) }
-                MenuItem(Icons.Default.PhotoLibrary, "З галереї") { menu = false; onAttach(null) }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+        Row(
+            Modifier.weight(1f).glass(RoundedCornerShape(26.dp)).padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            Box {
+                IconButton(onClick = { menu = true }) { Icon(Icons.Default.AttachFile, "Додати", tint = Glass.TextDim) }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    MenuItem(Icons.Default.Videocam, "Записати відео") { menu = false; onAttach(Kind.VIDEO) }
+                    MenuItem(Icons.Default.CameraAlt, "Зняти фото") { menu = false; onAttach(Kind.PHOTO) }
+                    MenuItem(Icons.Default.PhotoLibrary, "З галереї") { menu = false; onAttach(null) }
+                }
+            }
+            TextField(
+                value = text,
+                onValueChange = onTextChange,
+                placeholder = { Text("Напишіть або скажіть", color = Glass.TextFaint) },
+                maxLines = 6,
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    focusedTextColor = Glass.Text,
+                    unfocusedTextColor = Glass.Text,
+                    cursorColor = Glass.Lavender,
+                ),
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = onDictate) {
+                Icon(Icons.Default.RecordVoiceOver, "Сказати нагадування", tint = Glass.Lavender)
             }
         }
-        TextField(
-            value = text,
-            onValueChange = onTextChange,
-            placeholder = { Text("Напишіть або скажіть") },
-            maxLines = 6,
-            shape = RoundedCornerShape(24.dp),
-            colors = TextFieldDefaults.colors(
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
-            ),
-            trailingIcon = {
-                IconButton(onClick = onDictate) {
-                    Icon(Icons.Default.RecordVoiceOver, "Сказати нагадування", tint = MaterialTheme.colorScheme.primary)
-                }
-            },
-            modifier = Modifier.weight(1f),
-        )
-        Spacer(Modifier.width(6.dp))
+        Spacer(Modifier.width(8.dp))
         if (canSend) {
-            FilledIconButton(onClick = onSend, modifier = Modifier.size(52.dp)) {
+            PrimaryCircle(onClick = onSend, size = 54.dp) {
                 Icon(Icons.Default.AlarmAdd, "Запланувати")
             }
         } else {
             // Натиснути — записати; утримати — перемкнути відео ↔ голосове.
-            Box(
-                Modifier
-                    .size(52.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary)
-                    .combinedClickable(
-                        onClick = onRecord,
-                        onLongClick = {
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onToggleMode()
-                        },
-                        onLongClickLabel = "Перемкнути відео або голосове",
-                    ),
-                contentAlignment = Alignment.Center,
+            PrimaryCircle(
+                onClick = onRecord,
+                size = 54.dp,
+                onLongClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onToggleMode()
+                },
+                onLongClickLabel = "Перемкнути відео або голосове",
             ) {
-                Icon(
-                    if (recordMode == Kind.VIDEO) Icons.Default.Videocam else Icons.Default.Mic,
-                    contentDescription = if (recordMode == Kind.VIDEO) "Записати відео" else "Записати голосове",
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                )
-                Icon(
-                    Icons.Default.SwapHoriz,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f),
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 7.dp, bottom = 5.dp).size(12.dp),
-                )
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(
+                        if (recordMode == Kind.VIDEO) Icons.Default.Videocam else Icons.Default.Mic,
+                        contentDescription = if (recordMode == Kind.VIDEO) "Записати відео" else "Записати голосове",
+                    )
+                    Icon(
+                        Icons.Default.SwapHoriz,
+                        contentDescription = null,
+                        tint = Glass.OnPrimary.copy(alpha = 0.55f),
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = 6.dp).size(12.dp),
+                    )
+                }
             }
         }
     }
@@ -714,54 +778,62 @@ private fun RecordingBar(onCancel: () -> Unit, onDone: () -> Unit) {
         animationSpec = infiniteRepeatable(tween(600), RepeatMode.Reverse),
         label = "pulse",
     )
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).height(48.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(12.dp).alpha(pulse).background(Color.Red, CircleShape))
-        Spacer(Modifier.width(10.dp))
-        Text(formatDuration(elapsed), style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.weight(1f))
-        TextButton(onClick = onCancel) { Text("Скасувати") }
-        Spacer(Modifier.width(6.dp))
-        FilledIconButton(onClick = onDone, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.Check, "Готово") }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.weight(1f).height(54.dp).glass(RoundedCornerShape(26.dp)).padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(12.dp).alpha(pulse).background(Glass.Danger, CircleShape))
+            Spacer(Modifier.width(10.dp))
+            Text(formatDuration(elapsed), color = Glass.Text, fontSize = 18.sp)
+            Spacer(Modifier.weight(1f))
+            TextButton(onClick = onCancel) { Text("Скасувати", color = Glass.TextDim) }
+        }
+        Spacer(Modifier.width(8.dp))
+        PrimaryCircle(onClick = onDone, size = 54.dp) { Icon(Icons.Default.Check, "Готово") }
     }
 }
 
 @Composable
 private fun AttachmentPreview(attachment: Attachment, player: AudioPlayer, onRemove: () -> Unit) {
-    Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            when (attachment.kind) {
-                Kind.PHOTO, Kind.VIDEO -> AsyncImage(
-                    model = attachment.file,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(52.dp).clip(RoundedCornerShape(8.dp)),
-                )
-                Kind.VOICE -> {
-                    val path = attachment.file.absolutePath
-                    FilledIconButton(onClick = { player.toggle(path) }, modifier = Modifier.size(44.dp)) {
-                        Icon(
-                            if (player.currentPath == path && player.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = "Прослухати",
-                        )
-                    }
-                }
-                Kind.TEXT -> Unit
-            }
-            Spacer(Modifier.width(12.dp))
-            Text(
-                when (attachment.kind) {
-                    Kind.PHOTO -> "Фото"
-                    Kind.VIDEO -> "Відео · ${formatDuration(attachment.durationMs)}"
-                    Kind.VOICE -> "Голосове · ${formatDuration(attachment.durationMs)}"
-                    Kind.TEXT -> ""
-                },
-                modifier = Modifier.weight(1f),
+    Row(
+        Modifier.fillMaxWidth().glass(RoundedCornerShape(20.dp)).padding(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        when (attachment.kind) {
+            Kind.PHOTO, Kind.VIDEO -> AsyncImage(
+                model = attachment.file,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.size(52.dp).clip(RoundedCornerShape(14.dp)),
             )
-            IconButton(onClick = onRemove) { Icon(Icons.Default.Close, "Прибрати") }
+            Kind.VOICE -> {
+                val path = attachment.file.absolutePath
+                Box(
+                    Modifier.size(44.dp).clip(CircleShape).background(Glass.Primary).clickable { player.toggle(path) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        if (player.currentPath == path && player.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = "Прослухати",
+                        tint = Glass.OnPrimary,
+                    )
+                }
+            }
+            Kind.TEXT -> Unit
         }
+        Spacer(Modifier.width(12.dp))
+        Text(
+            when (attachment.kind) {
+                Kind.PHOTO -> "Фото"
+                Kind.VIDEO -> "Відео · ${formatDuration(attachment.durationMs)}"
+                Kind.VOICE -> "Голосове · ${formatDuration(attachment.durationMs)}"
+                Kind.TEXT -> ""
+            },
+            color = Glass.Text,
+            modifier = Modifier.weight(1f),
+        )
+        IconButton(onClick = onRemove) { Icon(Icons.Default.Close, "Прибрати", tint = Glass.TextDim) }
     }
 }
 
@@ -776,13 +848,18 @@ private fun ReminderActions(
     onDelete: () -> Unit,
 ) {
     var confirmDelete by remember { mutableStateOf(false) }
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.navigationBarsPadding().padding(bottom = 12.dp)) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Glass.Sheet, scrimColor = Color.Black.copy(alpha = 0.55f)) {
+        Column(
+            Modifier.sheetGlow().navigationBarsPadding().padding(horizontal = 16.dp).padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             Text(
                 if (reminder.fired) "Надіслано ${whenLabel(reminder.lastFiredAt ?: reminder.triggerAt)}"
                 else "Нагадаю ${whenLabel(reminder.alarmAt())}",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                color = Glass.Text,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
             )
             ActionItem(Icons.Default.Schedule, if (reminder.fired) "Нагадати ще раз" else "Змінити час", onClick = onReschedule)
             ActionItem(Icons.Default.Edit, if (reminder.kind == Kind.TEXT) "Редагувати текст" else "Змінити підпис", onClick = onEditText)
@@ -796,7 +873,7 @@ private fun ReminderActions(
             title = { Text("Видалити нагадування?") },
             confirmButton = {
                 TextButton(onClick = { confirmDelete = false; onDelete() }) {
-                    Text("Видалити", color = MaterialTheme.colorScheme.error)
+                    Text("Видалити", color = Glass.Danger)
                 }
             },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Скасувати") } },
@@ -806,10 +883,13 @@ private fun ReminderActions(
 
 @Composable
 private fun ActionItem(icon: ImageVector, label: String, danger: Boolean = false, onClick: () -> Unit) {
-    val tint = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
-    ListItem(
-        headlineContent = { Text(label, color = tint) },
-        leadingContent = { Icon(icon, null, tint = tint) },
-        modifier = Modifier.clickable(onClick = onClick).padding(horizontal = 8.dp),
-    )
+    val tint = if (danger) Glass.Danger else Glass.Text
+    Row(
+        Modifier.fillMaxWidth().glass(RoundedCornerShape(18.dp)).clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, tint = tint)
+        Spacer(Modifier.width(14.dp))
+        Text(label, color = tint, fontSize = 16.sp)
+    }
 }

@@ -57,7 +57,7 @@ object Notifier {
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
-            .setColor(0xFF2AABEE.toInt())
+            .setColor(0xFFB4A8FF.toInt())
             .setContentTitle(chatName)
             .setContentText(body)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)

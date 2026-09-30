@@ -1,56 +1,71 @@
 package ua.nahadaika.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import ua.nahadaika.R
 
-private val Blue = Color(0xFF2AABEE)
-
-private val Light = lightColorScheme(
-    primary = Color(0xFF1C8ADB),
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFEFFDDE),
-    onPrimaryContainer = Color(0xFF1B2A12),
-    secondaryContainer = Color(0xFFD7ECFB),
-    tertiaryContainer = Color(0xFFFFF1B8),
-    background = Color.White,
-    surface = Color.White,
-    surfaceVariant = Color(0xFFE6EAEE),
-    onSurfaceVariant = Color(0xFF5F6B76),
-    outline = Color(0xFF8A96A0),
-    outlineVariant = Color(0xFFD5DBE0),
-    surfaceContainerLowest = Color.White,
-    surfaceContainerLow = Color(0xFFEDF3F7),
-    surfaceContainer = Color(0xFFF1F4F7),
-    surfaceContainerHigh = Color(0xFFECEFF3),
-    surfaceContainerHighest = Color(0xFFE6EAEE),
+/** Inter — чистий сучасний шрифт з кирилицею та табличними цифрами (для відліку). */
+val Inter = FontFamily(
+    Font(R.font.inter_extralight, FontWeight.ExtraLight),
+    Font(R.font.inter_light, FontWeight.Light),
+    Font(R.font.inter_regular, FontWeight.Normal),
+    Font(R.font.inter_medium, FontWeight.Medium),
+    Font(R.font.inter_semibold, FontWeight.SemiBold),
 )
 
-private val Dark = darkColorScheme(
-    primary = Blue,
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFF2B5278),
-    onPrimaryContainer = Color.White,
-    secondaryContainer = Color(0xFF1F3A52),
-    tertiaryContainer = Color(0xFF5A4A1A),
-    background = Color(0xFF17212B),
-    surface = Color(0xFF17212B),
-    surfaceVariant = Color(0xFF2B3746),
-    onSurfaceVariant = Color(0xFF8B9BAA),
-    outline = Color(0xFF6D7F8F),
-    outlineVariant = Color(0xFF2B3746),
-    surfaceContainerLowest = Color(0xFF0E1621),
-    surfaceContainerLow = Color(0xFF0E1621),
-    surfaceContainer = Color(0xFF1C2733),
-    surfaceContainerHigh = Color(0xFF232E3C),
-    surfaceContainerHighest = Color(0xFF2B3746),
+private fun Typography.withInter(): Typography {
+    fun TextStyle.i() = copy(fontFamily = Inter)
+    return copy(
+        displayLarge = displayLarge.i(), displayMedium = displayMedium.i(), displaySmall = displaySmall.i(),
+        headlineLarge = headlineLarge.i(), headlineMedium = headlineMedium.i(), headlineSmall = headlineSmall.i(),
+        titleLarge = titleLarge.i(), titleMedium = titleMedium.i(), titleSmall = titleSmall.i(),
+        bodyLarge = bodyLarge.i(), bodyMedium = bodyMedium.i(), bodySmall = bodySmall.i(),
+        labelLarge = labelLarge.i(), labelMedium = labelMedium.i(), labelSmall = labelSmall.i(),
+    )
+}
+
+// Завжди темна тема: стримане скло на майже чорному фоні.
+private val GlassScheme = darkColorScheme(
+    primary = Glass.Lavender,
+    onPrimary = Glass.OnPrimary,
+    primaryContainer = Glass.FillStrong,
+    onPrimaryContainer = Glass.Text,
+    secondary = Glass.Lavender,
+    onSecondary = Glass.OnPrimary,
+    secondaryContainer = Glass.FillStrong,
+    onSecondaryContainer = Glass.Text,
+    tertiaryContainer = Glass.FillStrong,
+    onTertiaryContainer = Glass.Text,
+    background = Glass.Base,
+    onBackground = Glass.Text,
+    surface = Glass.Base,
+    onSurface = Glass.Text,
+    surfaceVariant = Glass.Fill,
+    onSurfaceVariant = Glass.TextDim,
+    surfaceTint = Color.Transparent,
+    surfaceContainerLowest = Color(0xFF09090D),
+    surfaceContainerLow = Color(0xFF0E0E13),
+    surfaceContainer = Color(0xFF141419),
+    surfaceContainerHigh = Color(0xFF1A1A20),
+    surfaceContainerHighest = Color(0xFF212128),
+    outline = Color(0x33FFFFFF),
+    outlineVariant = Color(0x17FFFFFF),
+    inverseSurface = Color(0xFF1C1C22),
+    inverseOnSurface = Glass.Text,
+    inversePrimary = Glass.Lavender,
+    error = Glass.Danger,
+    onError = Color.White,
+    scrim = Color.Black,
 )
 
 @Composable
 fun NahadaikaTheme(content: @Composable () -> Unit) {
-    // Власна палітра у стилі Telegram замість системних Material You кольорів — однаково на всіх телефонах.
-    MaterialTheme(colorScheme = if (isSystemInDarkTheme()) Dark else Light, content = content)
+    MaterialTheme(colorScheme = GlassScheme, typography = Typography().withInter(), content = content)
 }

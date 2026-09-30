@@ -20,19 +20,11 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.HourglassBottom
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Repeat as RepeatIcon
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -52,7 +44,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.delay
+import ua.nahadaika.ui.theme.PrimaryButton
+import ua.nahadaika.ui.theme.Glass
+import ua.nahadaika.ui.theme.GlassChip
+import ua.nahadaika.ui.theme.GlassSegmented
+import ua.nahadaika.ui.theme.sheetGlow
 import ua.nahadaika.Prefs
 import ua.nahadaika.data.Repeat
 import ua.nahadaika.inLabel
@@ -159,10 +157,16 @@ fun ScheduleSheet(
         Prefs.setScheduleMode(context, target)
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = Glass.Sheet,
+        scrimColor = Color.Black.copy(alpha = 0.55f),
+    ) {
         Column(
             Modifier
                 .fillMaxWidth()
+                .sheetGlow()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
                 .navigationBarsPadding()
@@ -171,48 +175,37 @@ fun ScheduleSheet(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "Коли нагадати?",
-                    style = MaterialTheme.typography.titleLarge,
+                    color = Glass.Text,
+                    fontSize = 22.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f),
                 )
                 if (onDictate != null) {
-                    FilledTonalButton(onClick = onDictate) {
-                        Icon(Icons.Default.RecordVoiceOver, null, Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Сказати")
-                    }
+                    GlassChip("Сказати", onClick = onDictate, leading = Icons.Default.RecordVoiceOver)
                 }
             }
             Spacer(Modifier.height(12.dp))
 
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                SegmentedButton(
-                    selected = mode == MODE_IN,
-                    onClick = { switchMode(MODE_IN) },
-                    shape = SegmentedButtonDefaults.itemShape(0, 2),
-                    icon = { Icon(Icons.Default.HourglassBottom, null, Modifier.size(18.dp)) },
-                ) { Text("Через") }
-                SegmentedButton(
-                    selected = mode == MODE_AT,
-                    onClick = { switchMode(MODE_AT) },
-                    shape = SegmentedButtonDefaults.itemShape(1, 2),
-                    icon = { Icon(Icons.Default.CalendarMonth, null, Modifier.size(18.dp)) },
-                ) { Text("Коли") }
-            }
+            GlassSegmented(
+                options = listOf(Icons.Default.HourglassBottom to "Через", Icons.Default.CalendarMonth to "Коли"),
+                selected = mode,
+                onSelect = { switchMode(it) },
+                modifier = Modifier.fillMaxWidth(),
+            )
             Spacer(Modifier.height(12.dp))
 
             if (mode == MODE_IN) {
                 TimerWheels(timer, onChange = { timer = it })
                 ChipsRow {
                     timerPresets.forEach { (label, seconds) ->
-                        SuggestionChip(onClick = { timer = seconds }, label = { Text(label) })
+                        GlassChip(label, onClick = { timer = seconds })
                     }
                 }
             } else {
                 DateTimeWheels(at, onChange = { at = it })
                 ChipsRow {
                     atPresets().forEach { preset ->
-                        SuggestionChip(onClick = { at = preset.at() }, label = { Text(preset.label) })
+                        GlassChip(preset.label, onClick = { at = preset.at() })
                     }
                 }
             }
@@ -228,13 +221,17 @@ fun ScheduleSheet(
                     mode == MODE_IN -> "Нагадаю ${whenLabel(effectiveAt)}"
                     else -> inLabel(effectiveAt - now).replaceFirstChar { it.uppercase() }
                 },
-                color = if (invalid) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodyMedium,
+                color = if (invalid) Glass.Danger else Glass.TextDim,
+                fontSize = 14.sp,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(),
             )
-            Spacer(Modifier.height(8.dp))
-            Button(
+            Spacer(Modifier.height(10.dp))
+            PrimaryButton(
+                text = if (invalid) confirmLabel
+                else if (mode == MODE_IN) "$confirmLabel ${inLabel(timer * 1000L)}"
+                else "$confirmLabel · ${whenLabel(at)}",
+                enabled = !invalid,
                 onClick = {
                     if (mode == MODE_IN) {
                         Prefs.setTimerSeconds(context, timer)
@@ -243,16 +240,8 @@ fun ScheduleSheet(
                         onConfirm(at, repeat)
                     }
                 },
-                enabled = !invalid,
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-            ) {
-                Text(
-                    if (invalid) confirmLabel
-                    else if (mode == MODE_IN) "$confirmLabel ${inLabel(timer * 1000L)}"
-                    else "$confirmLabel · ${whenLabel(at)}",
-                    maxLines = 1,
-                )
-            }
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }
@@ -267,8 +256,8 @@ private fun TimerWheels(seconds: Int, onChange: (Int) -> Unit) {
             listOf("Години", "Хвилини", "Секунди").forEach {
                 Text(
                     it,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp,
+                    color = Glass.TextDim,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.weight(1f),
                 )
@@ -288,7 +277,7 @@ private fun TimerWheels(seconds: Int, onChange: (Int) -> Unit) {
 
 @Composable
 private fun Colon() {
-    Text(":", fontSize = 30.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+    Text(":", fontSize = 28.sp, fontWeight = FontWeight.ExtraLight, color = Glass.TextDim)
 }
 
 @Composable
@@ -334,11 +323,11 @@ private fun ChipsRow(content: @Composable () -> Unit) {
 private fun RepeatChip(repeat: Repeat, onChange: (Repeat) -> Unit, modifier: Modifier = Modifier) {
     var open by remember { mutableStateOf(false) }
     Box(modifier) {
-        AssistChip(
+        GlassChip(
+            "Повторювати: " + if (repeat == Repeat.NONE) "ніколи" else repeatLabel(repeat).lowercase(),
             onClick = { open = true },
-            leadingIcon = { Icon(Icons.Default.RepeatIcon, null, Modifier.size(18.dp)) },
-            trailingIcon = { Icon(Icons.Default.ArrowDropDown, null) },
-            label = { Text("Повторювати: " + if (repeat == Repeat.NONE) "ніколи" else repeatLabel(repeat).lowercase()) },
+            leading = Icons.Default.RepeatIcon,
+            trailing = Icons.Default.ArrowDropDown,
         )
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             Repeat.entries.forEach { r ->
