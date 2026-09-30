@@ -63,7 +63,7 @@ object Transcriber {
         val pcm = withContext(Dispatchers.IO) { runCatching { decodeToMono16k(file) }.getOrNull() }
         if (pcm == null || pcm.isEmpty()) return Hearing.Nothing
         if (OfflineSpeech.isReady) {
-            return OfflineSpeech.recognize(pcm, Prefs.speechPrimary(context), good)?.let(Hearing::Heard) ?: Hearing.Nothing
+            return OfflineSpeech.recognize(pcm, good)?.let(Hearing::Heard) ?: Hearing.Nothing
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !Prefs.systemFileSpeechFailed(context)) {
             // Спершу розпізнавач на пристрої, потім стандартний.

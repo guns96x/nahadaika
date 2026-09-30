@@ -106,7 +106,6 @@ fun SettingsScreen(onBack: () -> Unit) {
     // Налаштування живуть у Prefs; тут — їхні копії для миттєвого перемальовування.
     var autoSchedule by remember { mutableStateOf(Prefs.autoSchedule(context)) }
     var voiceCaption by remember { mutableStateOf(Prefs.voiceCaption(context)) }
-    var primary by remember { mutableStateOf(Prefs.speechPrimary(context)) }
     var snooze by remember { mutableIntStateOf(Prefs.snoozeMinutes(context)) }
     var defaultHour by remember { mutableIntStateOf(Prefs.defaultHour(context)) }
     var recordMode by remember { mutableStateOf(Prefs.recordMode(context)) }
@@ -185,26 +184,13 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }
                 item {
                     Section(
-                        "Мовні пакети",
-                        footer = "Працюють без інтернету. Потрібні, якщо телефон сам не розпізнає записані голосові.",
+                        "Мовний пакет",
+                        footer = "Працює без інтернету. Потрібен, якщо телефон сам не розпізнає записані голосові. " +
+                            "Розуміє й суржик та російські фрази на кшталт «напомни завтра в девять».",
                     ) {
                         SpeechPack.entries.forEachIndexed { i, pack ->
                             if (i > 0) Divider()
                             PackRow(pack, onDelete = { deleting = pack })
-                        }
-                        if (OfflineSpeech.readyPacks.size > 1) {
-                            Divider()
-                            ChoiceRow(Icons.Default.Translate, "Розпізнавати спершу") {
-                                GlassSegmented(
-                                    options = SpeechPack.entries.map { null to it.title },
-                                    selected = SpeechPack.entries.indexOf(primary),
-                                    onSelect = {
-                                        primary = SpeechPack.entries[it]
-                                        Prefs.setSpeechPrimary(context, primary)
-                                    },
-                                    modifier = Modifier.fillMaxWidth().height(40.dp),
-                                )
-                            }
                         }
                     }
                 }

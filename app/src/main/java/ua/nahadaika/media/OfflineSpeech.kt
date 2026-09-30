@@ -27,7 +27,6 @@ import kotlin.math.min
 /** Мовний пакет для офлайн-розпізнавання. */
 enum class SpeechPack(val title: String, val url: String, val downloadMb: Int, val diskMb: Int, val dirName: String) {
     UK("Українська", "https://alphacephei.com/vosk/models/vosk-model-small-uk-v3-small.zip", 140, 420, "vosk-uk"),
-    RU("Русский", "https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip", 45, 90, "vosk-ru"),
 }
 
 /**
@@ -61,6 +60,8 @@ object OfflineSpeech {
     fun init(context: Context) {
         appContext = context.applicationContext
         SpeechPack.entries.forEach { states[it] = if (File(dir(it), ".ready").exists()) State.Ready else State.Missing }
+        // Окремого російського пакета більше немає — звільняємо місце, якщо його колись завантажили.
+        File(filesDir, "vosk-ru").takeIf { it.exists() }?.let { old -> Thread { old.deleteRecursively() }.start() }
     }
 
     fun isReady(pack: SpeechPack) = state(pack) == State.Ready
@@ -159,12 +160,12 @@ object OfflineSpeech {
     }
 
     /**
-     * Розпізнати моно PCM 16 біт, 16 кГц усіма встановленими пакетами, починаючи з [first].
+     * Розпізнати моно PCM 16 біт, 16 кГц встановленими пакетами.
      * Повертає перший результат, який підходить під [good] (наприклад, містить час), інакше — перший непорожній.
      */
-    suspend fun recognize(pcm: ByteArray, first: SpeechPack, good: (String) -> Boolean): String? {
+    suspend fun recognize(pcm: ByteArray, good: (String) -> Boolean): String? {
         var fallback: String? = null
-        for (pack in readyPacks.sortedBy { if (it == first) 0 else 1 }) {
+        for (pack in readyPacks) {
             val text = recognizeWith(pack, pcm) ?: continue
             if (good(text)) return text
             if (fallback == null) fallback = text

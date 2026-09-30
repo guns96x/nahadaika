@@ -2,7 +2,6 @@ package ua.nahadaika
 
 import android.content.Context
 import ua.nahadaika.data.Kind
-import ua.nahadaika.media.SpeechPack
 import java.time.LocalTime
 
 /** Дрібні налаштування, які застосунок запам'ятовує між запусками. */
@@ -57,10 +56,6 @@ object Prefs {
     fun voiceCaption(context: Context): Boolean = prefs(context).getBoolean("voice_caption", true)
     fun setVoiceCaption(context: Context, on: Boolean) = prefs(context).edit().putBoolean("voice_caption", on).apply()
 
-    /** Мовний пакет, яким розпізнавати спершу. */
-    fun speechPrimary(context: Context): SpeechPack =
-        runCatching { SpeechPack.valueOf(prefs(context).getString("speech_primary", null)!!) }.getOrDefault(SpeechPack.UK)
-    fun setSpeechPrimary(context: Context, pack: SpeechPack) = prefs(context).edit().putString("speech_primary", pack.name).apply()
 
     /** Перша кнопка «відкласти» у сповіщенні, хвилин. */
     fun snoozeMinutes(context: Context): Int = prefs(context).getInt("snooze_minutes", 10)
