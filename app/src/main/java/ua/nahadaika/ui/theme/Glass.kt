@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -42,7 +43,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.HazeTint
 
 /** Кольори «скла» для однієї теми. */
@@ -66,6 +69,9 @@ data class GlassPalette(
     val stroke: Brush,
     val hazeTint: Color,
     val hazeFallback: Color,
+    /** Тонування окремих скляних капсул (шапка, поле вводу). */
+    val capsuleTint: Color,
+    val capsuleFallback: Color,
 )
 
 /** Темна: майже чорний фон з глибоким сяйвом, тонке скло, світлі кнопки. */
@@ -88,6 +94,8 @@ val DarkGlass = GlassPalette(
     stroke = Brush.verticalGradient(listOf(Color(0x2EFFFFFF), Color(0x0AFFFFFF))),
     hazeTint = Color(0xB3050507),
     hazeFallback = Color(0xF0070709),
+    capsuleTint = Color(0x9E16161C),
+    capsuleFallback = Color(0xF016161C),
 )
 
 /** Світла: світлий фон з пастельним сяйвом, біле матове скло, темні кнопки. */
@@ -110,6 +118,8 @@ val LightGlass = GlassPalette(
     stroke = Brush.verticalGradient(listOf(Color(0xF2FFFFFF), Color(0x0F000000))),
     hazeTint = Color(0x9EEFF0F5),
     hazeFallback = Color(0xEBEFF0F5),
+    capsuleTint = Color(0xB8FFFFFF),
+    capsuleFallback = Color(0xF5FFFFFF),
 )
 
 val LocalGlass = staticCompositionLocalOf { DarkGlass }
@@ -156,6 +166,36 @@ fun Modifier.glass(
 
 @Composable
 fun Modifier.glass(shape: Shape, fill: Color): Modifier = glass(shape, SolidColor(fill))
+
+/**
+ * Скляна капсула, як у Telegram: розмиває лише те, що під нею (Android 12+),
+ * з тонкою світлою кромкою. Без [state] — звичайне напівпрозоре скло.
+ */
+@Composable
+fun Modifier.glassHaze(state: HazeState?, shape: Shape = Glass.Pill): Modifier {
+    if (state == null) return glass(shape)
+    val p = Glass.palette
+    return clip(shape)
+        .hazeEffect(
+            state,
+            HazeStyle(
+                backgroundColor = p.base,
+                tint = HazeTint(p.capsuleTint),
+                blurRadius = 24.dp,
+                noiseFactor = 0f,
+                fallbackTint = HazeTint(p.capsuleFallback),
+            ),
+        )
+        .border(0.8.dp, p.stroke, shape)
+}
+
+/** М'яке затемнення від краю екрана — замість суцільних смуг під шапкою та полем вводу. */
+@Composable
+fun Modifier.edgeFade(top: Boolean): Modifier {
+    val base = Glass.Base
+    val colors = listOf(base.copy(alpha = 0.92f), base.copy(alpha = 0.6f), base.copy(alpha = 0f))
+    return background(Brush.verticalGradient(if (top) colors else colors.reversed()))
+}
 
 /** Фон з м'яким сяйвом — під ним видно, що панелі скляні. */
 @Composable
@@ -209,8 +249,10 @@ fun GlassSegmented(
     selected: Int,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    haze: HazeState? = null,
 ) {
-    Row(modifier.clip(Glass.Pill).background(Glass.Fill).padding(3.dp)) {
+    val track = if (haze != null) Modifier.glassHaze(haze) else Modifier.clip(Glass.Pill).background(Glass.Fill)
+    Row(modifier.then(track).padding(3.dp), verticalAlignment = Alignment.CenterVertically) {
         options.forEachIndexed { i, (icon, label) ->
             val active = i == selected
             Row(
@@ -219,7 +261,7 @@ fun GlassSegmented(
                     .clip(Glass.Pill)
                     .then(if (active) Modifier.background(Glass.FillStrong).border(0.8.dp, Glass.Stroke, Glass.Pill) else Modifier)
                     .clickable { onSelect(i) }
-                    .padding(vertical = 9.dp),
+                    .fillMaxHeight(),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -302,9 +344,10 @@ fun GlassIconButton(
     modifier: Modifier = Modifier,
     size: Dp = 42.dp,
     tint: Color = Glass.Text,
+    haze: HazeState? = null,
 ) {
     Box(
-        modifier.size(size).glass(CircleShape).clickable(onClick = onClick),
+        modifier.size(size).glassHaze(haze, CircleShape).clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription, tint = tint, modifier = Modifier.size(size * 0.48f))

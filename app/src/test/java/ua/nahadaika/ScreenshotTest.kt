@@ -19,6 +19,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import ua.nahadaika.data.Kind
@@ -136,5 +137,15 @@ class ScreenshotTest {
         compose.setContent { NahadaikaTheme { ChatsScreen(onOpenChat = {}, onBack = {}) } }
         compose.waitForIdle()
         compose.onRoot().captureRoboImage("build/screenshots/7_chats_light.png")
+    }
+
+    /** Порожній чат зі збільшеним шрифтом системи — як на реальному телефоні. */
+    @Test
+    fun emptyLargeFont() {
+        RuntimeEnvironment.setFontScale(1.15f)
+        val chatId = runBlocking { Repo.init(app); Repo.createChat("Нагадування") }
+        compose.setContent { NahadaikaTheme { ChatScreen(chatId = chatId, focus = null, onFocusConsumed = {}, quick = null, onQuickConsumed = {}, onOpenChats = {}) } }
+        compose.waitForIdle()
+        compose.onRoot().captureRoboImage("build/screenshots/8_empty_large_font.png")
     }
 }

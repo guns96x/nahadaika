@@ -13,7 +13,9 @@ import ua.nahadaika.ui.theme.ThemeModeButton
 import ua.nahadaika.ui.theme.AppBackground
 import ua.nahadaika.ui.theme.Glass
 import ua.nahadaika.ui.theme.GlassIconButton
+import ua.nahadaika.ui.theme.edgeFade
 import ua.nahadaika.ui.theme.glass
+import ua.nahadaika.ui.theme.glassHaze
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
@@ -118,15 +120,21 @@ fun ChatsScreen(onOpenChat: (Long) -> Unit, onBack: () -> Unit) {
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .hazeEffect(hazeState, Glass.Haze)
+                    .edgeFade(top = true)
                     .statusBarsPadding()
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                    .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                GlassIconButton(Icons.AutoMirrored.Filled.ArrowBack, "Назад", onClick = onBack)
-                Spacer(Modifier.width(14.dp))
-                Text("Чати", color = Glass.Text, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                ThemeModeButton()
+                GlassIconButton(Icons.AutoMirrored.Filled.ArrowBack, "Назад", onClick = onBack, size = 56.dp, haze = hazeState)
+                Spacer(Modifier.width(8.dp))
+                Box(
+                    Modifier.weight(1f).height(56.dp).glassHaze(hazeState).padding(horizontal = 20.dp),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    Text("Чати", color = Glass.Text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                }
+                Spacer(Modifier.width(8.dp))
+                ThemeModeButton(size = 56.dp, haze = hazeState)
             }
         },
         floatingActionButton = {
@@ -140,8 +148,8 @@ fun ChatsScreen(onOpenChat: (Long) -> Unit, onBack: () -> Unit) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
-                    start = 14.dp,
-                    end = 14.dp,
+                    start = 12.dp,
+                    end = 12.dp,
                     top = padding.calculateTopPadding() + 6.dp,
                     bottom = padding.calculateBottomPadding() + 96.dp,
                 ),
@@ -359,7 +367,7 @@ fun PermissionBanners() {
         if (!batteryOk) {
             Banner(
                 icon = Icons.Default.BatteryAlert,
-                text = "Дозвольте роботу у фоні, щоб не запізнювались",
+                text = "Робота у фоні вимкнена",
                 action = "Дозволити",
                 onAction = {
                     context.startActivitySafe(
@@ -383,8 +391,10 @@ private fun Banner(icon: ImageVector, text: String, action: String, onAction: ()
     ) {
         Icon(icon, null, tint = Glass.Lavender, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(12.dp))
-        Text(text, color = Glass.TextDim, fontSize = 13.sp, lineHeight = 18.sp, modifier = Modifier.weight(1f))
-        TextButton(onClick = onAction) { Text(action, color = Glass.Text, fontWeight = FontWeight.Medium, fontSize = 13.sp) }
+        Text(text, color = Glass.TextDim, fontSize = 13.sp, lineHeight = 18.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        TextButton(onClick = onAction, contentPadding = PaddingValues(horizontal = 10.dp)) {
+            Text(action, color = Glass.Text, fontWeight = FontWeight.Medium, fontSize = 13.sp, maxLines = 1)
+        }
         if (onDismiss != null) {
             IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
                 Icon(Icons.Default.Close, "Пізніше", tint = Glass.TextFaint, modifier = Modifier.size(16.dp))

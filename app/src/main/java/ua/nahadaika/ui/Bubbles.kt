@@ -107,7 +107,7 @@ fun NextUpCard(reminder: Reminder, onClick: () -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
             .glass(RoundedCornerShape(30.dp))
             .drawBehind {
                 drawCircle(
@@ -166,7 +166,7 @@ fun ReminderBubble(
     )
     val fill: Brush = SolidColor(if (reminder.fired) Glass.FillSubtle else Glass.Fill)
     Row(
-        Modifier.fillMaxWidth().padding(start = 56.dp, end = 10.dp, top = 3.dp, bottom = 3.dp),
+        Modifier.fillMaxWidth().padding(start = 56.dp, end = 12.dp, top = 3.dp, bottom = 3.dp),
         horizontalArrangement = Arrangement.End,
     ) {
         Column(
