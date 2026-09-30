@@ -48,6 +48,10 @@ class ScreenshotTest {
 
     private val app: Application = ApplicationProvider.getApplicationContext()
 
+    // Темна тема — окремо від типової світлої, щоб знімки покривали обидві.
+    @org.junit.Before
+    fun darkByDefault() = ThemeSettings.set(app, ThemeMode.DARK)
+
     private fun at(daysFromToday: Long, hour: Int, minute: Int = 0) =
         LocalDate.now().plusDays(daysFromToday).atTime(hour, minute).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
 

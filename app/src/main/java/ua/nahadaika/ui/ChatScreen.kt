@@ -56,6 +56,7 @@ import ua.nahadaika.media.LiveDictation
 import ua.nahadaika.media.Transcriber
 import ua.nahadaika.media.Hearing
 import ua.nahadaika.media.OfflineSpeech
+import ua.nahadaika.media.SpeechPack
 import kotlinx.coroutines.Job
 import androidx.compose.material3.CircularProgressIndicator
 import ua.nahadaika.previewText
@@ -325,7 +326,7 @@ fun ChatScreen(
 
     /** Розібрати сказане: є час — одразу планувати, немає — лишити текст і відкрити вибір часу. */
     fun applySpoken(spoken: String) {
-        val cmd = VoiceParser.parse(spoken)
+        val cmd = VoiceParser.parse(spoken, defaultTime = Prefs.defaultTime(context))
         val combined = listOf(text.trim(), cmd.text).filter { it.isNotBlank() }.joinToString(" ")
         if (cmd.at != null) {
             scheduleComposed(cmd.at, cmd.repeat, combined)
@@ -385,13 +386,20 @@ fun ChatScreen(
     fun attachRecording(a: Attachment) {
         cancelTranscription()
         replaceAttachment(a)
+        // Автоматичне розпізнавання вимкнене в налаштуваннях — одразу вибір часу.
+        if (!Prefs.autoSchedule(context)) {
+            showSchedule = true
+            return
+        }
         transcription = scope.launch {
-            val hearing = Transcriber.transcribe(context, a.file)
+            val defaultTime = Prefs.defaultTime(context)
+            val hearing = Transcriber.transcribe(context, a.file) { VoiceParser.parse(it, defaultTime = defaultTime).at != null }
             transcription = null
             if (attachment !== a) return@launch
-            val cmd = (hearing as? Hearing.Heard)?.let { VoiceParser.parse(it.text) }
+            val cmd = (hearing as? Hearing.Heard)?.let { VoiceParser.parse(it.text, defaultTime = defaultTime) }
             if (cmd?.at != null) {
-                scheduleComposed(cmd.at, cmd.repeat, listOf(text.trim(), cmd.text).filter { it.isNotBlank() }.joinToString(" "))
+                val caption = if (Prefs.voiceCaption(context)) cmd.text else ""
+                scheduleComposed(cmd.at, cmd.repeat, listOf(text.trim(), caption).filter { it.isNotBlank() }.joinToString(" "))
                 return@launch
             }
             when {
@@ -760,7 +768,7 @@ fun ChatScreen(
                 Text(
                     "Цей телефон не вміє сам розпізнавати записані голосові й відео. " +
                         "Можна один раз завантажити офлайн-розпізнавання української — " +
-                        "≈${OfflineSpeech.DOWNLOAD_MB} МБ (на телефоні ≈${OfflineSpeech.DISK_MB} МБ), краще через Wi-Fi.\n\n" +
+                        "≈${SpeechPack.UK.downloadMb} МБ (на телефоні ≈${SpeechPack.UK.diskMb} МБ), краще через Wi-Fi.\n\n" +
                         "Після цього «завтра о 9…» в записі ставитиметься саме, навіть без інтернету. " +
                         "А поки що — оберіть час вручну.",
                 )
@@ -778,7 +786,7 @@ fun ChatScreen(
     if (showSchedule) {
         ScheduleSheet(
             // Обрано інший день на смужці — пропонуємо саме його (о 9:00).
-            initialAt = if (selectedDate != today) selectedDate.atTime(9, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli() else null,
+            initialAt = if (selectedDate != today) selectedDate.atTime(Prefs.defaultTime(context)).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli() else null,
             initialRepeat = Repeat.NONE,
             confirmLabel = "Запланувати",
             onDismiss = { showSchedule = false },

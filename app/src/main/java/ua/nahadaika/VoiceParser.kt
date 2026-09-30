@@ -138,7 +138,8 @@ object VoiceParser {
         }
     }
 
-    fun parse(input: String, now: LocalDateTime = LocalDateTime.now()): VoiceCommand {
+    /** [defaultTime] — коли нагадувати, якщо названо лише день. */
+    fun parse(input: String, now: LocalDateTime = LocalDateTime.now(), defaultTime: LocalTime = LocalTime.of(9, 0)): VoiceCommand {
         val base = now.truncatedTo(ChronoUnit.MINUTES)
         val c = Cursor(
             " " + normalizeNumbers(
@@ -315,7 +316,7 @@ object VoiceParser {
             date == null && time == null -> null
             else -> {
                 val d = date ?: today
-                val t = time ?: if (dayOffset != null || monthOffset != null) base.toLocalTime() else LocalTime.of(9, 0)
+                val t = time ?: if (dayOffset != null || monthOffset != null) base.toLocalTime() else defaultTime
                 var result = d.atTime(t)
                 if (!result.isAfter(base)) {
                     result = when {

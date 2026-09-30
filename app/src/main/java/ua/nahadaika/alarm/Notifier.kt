@@ -1,5 +1,7 @@
 package ua.nahadaika.alarm
 
+import ua.nahadaika.Prefs
+
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -23,7 +25,7 @@ import ua.nahadaika.previewText
 import ua.nahadaika.ui.MainActivity
 
 object Notifier {
-    private const val CHANNEL_ID = "reminders"
+    const val CHANNEL_ID = "reminders"
 
     fun createChannel(context: Context) {
         val channel = NotificationChannel(CHANNEL_ID, "Нагадування", NotificationManager.IMPORTANCE_HIGH).apply {
@@ -55,6 +57,7 @@ object Notifier {
             else -> previewText(reminder)
         }
 
+        val snooze = Prefs.snoozeMinutes(context)
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setColor(0xFFB4A8FF.toInt())
@@ -65,7 +68,7 @@ object Notifier {
             .setAutoCancel(true)
             .setWhen(System.currentTimeMillis())
             .setContentIntent(openIntent(context, reminder, autoplay = false, requestCode = id * 4))
-            .addAction(0, "+10 хв", snoozeIntent(context, reminder.id, 10, id * 4 + 1))
+            .addAction(0, "+$snooze хв", snoozeIntent(context, reminder.id, snooze.toLong(), id * 4 + 1))
             .addAction(0, "+1 год", snoozeIntent(context, reminder.id, 60, id * 4 + 2))
 
         if (reminder.kind == Kind.VOICE) {

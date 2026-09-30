@@ -2,9 +2,7 @@ package ua.nahadaika.media
 
 import android.content.Context
 import android.os.storage.StorageManager
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateMapOf
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,15 +24,17 @@ import java.net.URL
 import java.util.zip.ZipInputStream
 import kotlin.math.min
 
+/** Мовний пакет для офлайн-розпізнавання. */
+enum class SpeechPack(val title: String, val url: String, val downloadMb: Int, val diskMb: Int, val dirName: String) {
+    UK("Українська", "https://alphacephei.com/vosk/models/vosk-model-small-uk-v3-small.zip", 140, 420, "vosk-uk"),
+    RU("Русский", "https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip", 45, 90, "vosk-ru"),
+}
+
 /**
- * Офлайн-розпізнавання української (Vosk). Модель завантажується один раз на вимогу
- * і далі працює без інтернету — для телефонів, чий системний розпізнавач не вміє читати записи.
+ * Офлайн-розпізнавання мовлення (Vosk). Мовні пакети завантажуються на вимогу
+ * і далі працюють без інтернету — для телефонів, чий системний розпізнавач не вміє читати записи.
  */
 object OfflineSpeech {
-    private const val MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-small-uk-v3-small.zip"
-    const val DOWNLOAD_MB = 140
-    const val DISK_MB = 420
-
     sealed interface State {
         data object Missing : State
         data class Downloading(val progress: Float) : State
@@ -42,49 +42,61 @@ object OfflineSpeech {
         data class Failed(val message: String) : State
     }
 
-    var state by mutableStateOf<State>(State.Missing)
-        private set
+    private val states = mutableStateMapOf<SpeechPack, State>()
+
+    fun state(pack: SpeechPack): State = states[pack] ?: State.Missing
+
+    /** Основний пакет — українська (для пропозицій і банерів). */
+    val state: State get() = state(SpeechPack.UK)
 
     private lateinit var appContext: Context
     private val filesDir get() = appContext.filesDir
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var job: Job? = null
+    private val jobs = mutableMapOf<SpeechPack, Job>()
     private val lock = Mutex()
-    private var model: Model? = null
+    private val models = mutableMapOf<SpeechPack, Model>()
 
-    private val modelDir get() = File(filesDir, "vosk-uk")
-    private val readyMark get() = File(modelDir, ".ready")
+    private fun dir(pack: SpeechPack) = File(filesDir, pack.dirName)
 
     fun init(context: Context) {
         appContext = context.applicationContext
-        state = if (readyMark.exists()) State.Ready else State.Missing
+        SpeechPack.entries.forEach { states[it] = if (File(dir(it), ".ready").exists()) State.Ready else State.Missing }
     }
 
-    val isReady get() = state == State.Ready
+    fun isReady(pack: SpeechPack) = state(pack) == State.Ready
 
-    fun download() {
-        if (job?.isActive == true || isReady) return
-        job = scope.launch {
-            state = State.Downloading(0f)
-            val part = File(filesDir, "vosk-uk.part")
+    /** Є хоч один встановлений пакет. */
+    val isReady get() = SpeechPack.entries.any(::isReady)
+
+    val readyPacks get() = SpeechPack.entries.filter(::isReady)
+
+    /** Скільки місця займає встановлений пакет, МБ. */
+    fun sizeMb(pack: SpeechPack): Long =
+        dir(pack).walkBottomUp().filter { it.isFile }.sumOf { it.length() } / (1024 * 1024)
+
+    fun download(pack: SpeechPack = SpeechPack.UK) {
+        if (jobs[pack]?.isActive == true || isReady(pack)) return
+        jobs[pack] = scope.launch {
+            states[pack] = State.Downloading(0f)
+            val part = File(filesDir, "${pack.dirName}.part")
             try {
                 part.deleteRecursively()
                 val storage = appContext.getSystemService(StorageManager::class.java)
                 val free = runCatching { storage.getAllocatableBytes(storage.getUuidForPath(filesDir)) }.getOrDefault(Long.MAX_VALUE)
-                if (free < (DISK_MB + 150L) * 1024 * 1024) {
-                    throw IllegalStateException("недостатньо місця на телефоні (потрібно ≈$DISK_MB МБ)")
+                if (free < (pack.diskMb + 150L) * 1024 * 1024) {
+                    throw IllegalStateException("недостатньо місця на телефоні (потрібно ≈${pack.diskMb} МБ)")
                 }
-                val conn = URL(MODEL_URL).openConnection() as HttpURLConnection
+                val conn = URL(pack.url).openConnection() as HttpURLConnection
                 conn.connectTimeout = 20_000
                 conn.readTimeout = 30_000
                 if (conn.responseCode != HttpURLConnection.HTTP_OK) throw IllegalStateException("сервер відповів ${conn.responseCode}")
-                val total = conn.contentLengthLong.takeIf { it > 0 } ?: (DOWNLOAD_MB * 1024L * 1024)
+                val total = conn.contentLengthLong.takeIf { it > 0 } ?: (pack.downloadMb * 1024L * 1024)
                 var shown = -1
                 val counting = Counting(conn.inputStream) { read ->
                     val percent = (read * 100 / total).toInt().coerceIn(0, 99)
                     if (percent != shown) {
                         shown = percent
-                        state = State.Downloading(percent / 100f)
+                        states[pack] = State.Downloading(percent / 100f)
                     }
                 }
                 ZipInputStream(counting.buffered()).use { zip ->
@@ -106,39 +118,62 @@ object OfflineSpeech {
                     }
                 }
                 File(part, ".ready").writeText("ok")
-                modelDir.deleteRecursively()
-                if (!part.renameTo(modelDir)) throw IllegalStateException("не вдалося зберегти модель")
-                state = State.Ready
+                dir(pack).deleteRecursively()
+                if (!part.renameTo(dir(pack))) throw IllegalStateException("не вдалося зберегти модель")
+                states[pack] = State.Ready
             } catch (e: CancellationException) {
-                state = State.Missing
+                states[pack] = State.Missing
                 throw e
             } catch (e: Exception) {
-                state = State.Failed(e.message ?: "немає з'єднання з інтернетом")
+                states[pack] = State.Failed(e.message ?: "немає з'єднання з інтернетом")
             } finally {
                 part.deleteRecursively()
             }
         }
     }
 
-    fun cancelDownload() {
-        job?.cancel()
+    fun cancelDownload(pack: SpeechPack = SpeechPack.UK) {
+        jobs[pack]?.cancel()
     }
 
-    /** Підвантажити модель заздалегідь (кілька секунд), щоб розпізнавання після запису було миттєвим. */
-    suspend fun warmUp() {
-        loadModel()
-    }
-
-    private suspend fun loadModel(): Model? = withContext(Dispatchers.IO) {
-        lock.withLock {
-            if (!isReady) return@withLock null
-            model ?: runCatching { Model(modelDir.path) }.getOrNull().also { model = it }
+    /** Видалити пакет, щоб звільнити місце. */
+    fun delete(pack: SpeechPack) {
+        cancelDownload(pack)
+        scope.launch {
+            lock.withLock { models.remove(pack)?.close() }
+            dir(pack).deleteRecursively()
+            states[pack] = State.Missing
         }
     }
 
-    /** Розпізнати моно PCM 16 біт, 16 кГц. */
-    suspend fun recognize(pcm: ByteArray): String? = withContext(Dispatchers.IO) {
-        val m = loadModel() ?: return@withContext null
+    /** Підвантажити моделі заздалегідь (кілька секунд), щоб розпізнавання після запису було миттєвим. */
+    suspend fun warmUp() {
+        readyPacks.forEach { loadModel(it) }
+    }
+
+    private suspend fun loadModel(pack: SpeechPack): Model? = withContext(Dispatchers.IO) {
+        lock.withLock {
+            if (!isReady(pack)) return@withLock null
+            models[pack] ?: runCatching { Model(dir(pack).path) }.getOrNull()?.also { models[pack] = it }
+        }
+    }
+
+    /**
+     * Розпізнати моно PCM 16 біт, 16 кГц усіма встановленими пакетами, починаючи з [first].
+     * Повертає перший результат, який підходить під [good] (наприклад, містить час), інакше — перший непорожній.
+     */
+    suspend fun recognize(pcm: ByteArray, first: SpeechPack, good: (String) -> Boolean): String? {
+        var fallback: String? = null
+        for (pack in readyPacks.sortedBy { if (it == first) 0 else 1 }) {
+            val text = recognizeWith(pack, pcm) ?: continue
+            if (good(text)) return text
+            if (fallback == null) fallback = text
+        }
+        return fallback
+    }
+
+    private suspend fun recognizeWith(pack: SpeechPack, pcm: ByteArray): String? = withContext(Dispatchers.IO) {
+        val m = loadModel(pack) ?: return@withContext null
         runCatching {
             Recognizer(m, 16_000f).use { r ->
                 var i = 0

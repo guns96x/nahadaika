@@ -58,11 +58,12 @@ sealed interface Hearing {
  * у системний розпізнавач (Android 13+; вміють далеко не всі телефони).
  */
 object Transcriber {
-    suspend fun transcribe(context: Context, file: File): Hearing {
+    /** [good] — чи підходить розпізнане (наприклад, чи є в ньому час): тоді інші мовні пакети не пробуємо. */
+    suspend fun transcribe(context: Context, file: File, good: (String) -> Boolean = { true }): Hearing {
         val pcm = withContext(Dispatchers.IO) { runCatching { decodeToMono16k(file) }.getOrNull() }
         if (pcm == null || pcm.isEmpty()) return Hearing.Nothing
         if (OfflineSpeech.isReady) {
-            return OfflineSpeech.recognize(pcm)?.let(Hearing::Heard) ?: Hearing.Nothing
+            return OfflineSpeech.recognize(pcm, Prefs.speechPrimary(context), good)?.let(Hearing::Heard) ?: Hearing.Nothing
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !Prefs.systemFileSpeechFailed(context)) {
             // Спершу розпізнавач на пристрої, потім стандартний.

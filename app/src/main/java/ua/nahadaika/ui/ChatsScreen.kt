@@ -8,7 +8,6 @@ import androidx.compose.ui.graphics.lerp
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import ua.nahadaika.ui.theme.PrimaryCircle
-import ua.nahadaika.ui.theme.ThemeModeButton
 import ua.nahadaika.ui.theme.AppBackground
 import ua.nahadaika.ui.theme.Glass
 import ua.nahadaika.ui.theme.GlassIconButton
@@ -50,6 +49,7 @@ import androidx.compose.material.icons.filled.BatteryAlert
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material3.AlertDialog
@@ -92,13 +92,14 @@ import ua.nahadaika.data.Repeat
 import ua.nahadaika.data.Repo
 import ua.nahadaika.Prefs
 import ua.nahadaika.media.OfflineSpeech
+import ua.nahadaika.media.SpeechPack
 import ua.nahadaika.data.alarmAt
 import ua.nahadaika.previewText
 import ua.nahadaika.shortWhen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatsScreen(onOpenChat: (Long) -> Unit, onBack: () -> Unit) {
+fun ChatsScreen(onOpenChat: (Long) -> Unit, onBack: () -> Unit, onOpenSettings: () -> Unit = {}) {
     val chats by Repo.chats.collectAsStateWithLifecycle(emptyList())
     val reminders by Repo.allReminders.collectAsStateWithLifecycle(emptyList())
     val scope = rememberCoroutineScope()
@@ -130,7 +131,7 @@ fun ChatsScreen(onOpenChat: (Long) -> Unit, onBack: () -> Unit) {
                     Text("Чати", color = Glass.Text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 }
                 Spacer(Modifier.width(8.dp))
-                ThemeModeButton(size = 56.dp, haze = hazeState)
+                GlassIconButton(Icons.Default.Settings, "Налаштування", onClick = onOpenSettings, size = 56.dp, haze = hazeState)
             }
         },
         floatingActionButton = {
@@ -401,7 +402,7 @@ private fun SpeechBanner() {
         OfflineSpeech.State.Missing -> if (Prefs.speechOfferShown(context) && !dismissed) {
             Banner(
                 icon = Icons.Default.GraphicEq,
-                text = "Розпізнавати час у голосових (≈${OfflineSpeech.DOWNLOAD_MB} МБ)",
+                text = "Розпізнавати час у голосових (≈${SpeechPack.UK.downloadMb} МБ)",
                 action = "Завантажити",
                 onAction = OfflineSpeech::download,
                 onDismiss = {

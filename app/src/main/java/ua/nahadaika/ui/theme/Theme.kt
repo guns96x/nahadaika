@@ -44,11 +44,11 @@ private fun Typography.withInter(): Typography {
 enum class ThemeMode { AUTO, DARK, LIGHT }
 
 object ThemeSettings {
-    var mode by mutableStateOf(ThemeMode.DARK)
+    var mode by mutableStateOf(ThemeMode.LIGHT)
         private set
 
     fun init(context: Context) {
-        mode = runCatching { ThemeMode.valueOf(Prefs.themeMode(context)) }.getOrDefault(ThemeMode.DARK)
+        mode = runCatching { ThemeMode.valueOf(Prefs.themeMode(context)) }.getOrDefault(ThemeMode.LIGHT)
     }
 
     fun set(context: Context, value: ThemeMode) {

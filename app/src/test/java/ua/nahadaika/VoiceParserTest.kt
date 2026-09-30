@@ -103,4 +103,9 @@ class VoiceParserTest {
     @Test fun russianDaily() = check("каждый день в восемь витамины", "Витамины", d(10, 1, 8), Repeat.DAILY)
     @Test fun russianDayAfterTomorrow() = check("послезавтра в 11 стоматолог", "Стоматолог", d(10, 2, 11))
     @Test fun wordNumbersInTextStay() = check("завтра купити три хліби", "Купити 3 хліби", d(10, 1, 9))
+
+    @Test fun customDefaultTime() {
+        val cmd = VoiceParser.parse("завтра купити хліб", now, defaultTime = java.time.LocalTime.of(8, 0))
+        assertEquals(d(10, 1, 8), LocalDateTime.ofInstant(Instant.ofEpochMilli(cmd.at!!), ZoneId.systemDefault()))
+    }
 }

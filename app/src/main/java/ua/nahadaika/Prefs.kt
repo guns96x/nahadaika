@@ -2,6 +2,8 @@ package ua.nahadaika
 
 import android.content.Context
 import ua.nahadaika.data.Kind
+import ua.nahadaika.media.SpeechPack
+import java.time.LocalTime
 
 /** Дрібні налаштування, які застосунок запам'ятовує між запусками. */
 object Prefs {
@@ -30,7 +32,7 @@ object Prefs {
     fun setTimerSeconds(context: Context, seconds: Int) = prefs(context).edit().putInt("timer_seconds", seconds).apply()
 
     /** Тема: AUTO / DARK / LIGHT (назва з ThemeMode). */
-    fun themeMode(context: Context): String = prefs(context).getString("theme_mode", null) ?: "DARK"
+    fun themeMode(context: Context): String = prefs(context).getString("theme_mode", null) ?: "LIGHT"
     fun setThemeMode(context: Context, mode: String) = prefs(context).edit().putString("theme_mode", mode).apply()
 
     /** Системний розпізнавач не вміє читати записи — не пробувати його щоразу. */
@@ -44,4 +46,28 @@ object Prefs {
     /** Банер «завантажити розпізнавання» закрили. */
     fun speechBannerDismissed(context: Context): Boolean = prefs(context).getBoolean("speech_banner_dismissed", false)
     fun setSpeechBannerDismissed(context: Context) = prefs(context).edit().putBoolean("speech_banner_dismissed", true).apply()
+
+    // ---- Налаштування ----
+
+    /** Розпізнавати час у голосових і відео та ставити нагадування саме. */
+    fun autoSchedule(context: Context): Boolean = prefs(context).getBoolean("auto_schedule", true)
+    fun setAutoSchedule(context: Context, on: Boolean) = prefs(context).edit().putBoolean("auto_schedule", on).apply()
+
+    /** Додавати розпізнаний текст підписом до голосового чи відео. */
+    fun voiceCaption(context: Context): Boolean = prefs(context).getBoolean("voice_caption", true)
+    fun setVoiceCaption(context: Context, on: Boolean) = prefs(context).edit().putBoolean("voice_caption", on).apply()
+
+    /** Мовний пакет, яким розпізнавати спершу. */
+    fun speechPrimary(context: Context): SpeechPack =
+        runCatching { SpeechPack.valueOf(prefs(context).getString("speech_primary", null)!!) }.getOrDefault(SpeechPack.UK)
+    fun setSpeechPrimary(context: Context, pack: SpeechPack) = prefs(context).edit().putString("speech_primary", pack.name).apply()
+
+    /** Перша кнопка «відкласти» у сповіщенні, хвилин. */
+    fun snoozeMinutes(context: Context): Int = prefs(context).getInt("snooze_minutes", 10)
+    fun setSnoozeMinutes(context: Context, minutes: Int) = prefs(context).edit().putInt("snooze_minutes", minutes).apply()
+
+    /** Година, коли нагадувати, якщо сказано лише день («завтра купити хліб»). */
+    fun defaultHour(context: Context): Int = prefs(context).getInt("default_hour", 9)
+    fun setDefaultHour(context: Context, hour: Int) = prefs(context).edit().putInt("default_hour", hour).apply()
+    fun defaultTime(context: Context): LocalTime = LocalTime.of(defaultHour(context), 0)
 }

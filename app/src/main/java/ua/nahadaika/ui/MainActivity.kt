@@ -101,17 +101,22 @@ private fun AppRoot(focus: Focus?, quick: Quick?, onQuickConsumed: () -> Unit) {
     val chats by Repo.chats.collectAsStateWithLifecycle(null)
     var chatId by rememberSaveable { mutableLongStateOf(Prefs.lastChatId(context)) }
     var showList by rememberSaveable { mutableStateOf(false) }
+    var showSettings by rememberSaveable { mutableStateOf(false) }
     var activeFocus by remember { mutableStateOf<Focus?>(null) }
 
     LaunchedEffect(focus) {
         if (focus != null) {
             chatId = focus.chatId
             showList = false
+            showSettings = false
             activeFocus = focus
         }
     }
     LaunchedEffect(quick) {
-        if (quick != null) showList = false
+        if (quick != null) {
+            showList = false
+            showSettings = false
+        }
     }
 
     val list = chats ?: return
@@ -124,8 +129,11 @@ private fun AppRoot(focus: Focus?, quick: Quick?, onQuickConsumed: () -> Unit) {
     }
     if (current == null) return
 
-    if (showList) {
+    if (showSettings) {
+        SettingsScreen(onBack = { showSettings = false })
+    } else if (showList) {
         ChatsScreen(
+            onOpenSettings = { showSettings = true },
             onOpenChat = {
                 chatId = it
                 showList = false

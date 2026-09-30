@@ -93,11 +93,11 @@ private fun dayWheelLabel(index: Int): String = when (index) {
 
 private data class AtPreset(val label: String, val at: () -> Long)
 
-private fun atPresets(): List<AtPreset> {
+private fun atPresets(defaultHour: Int): List<AtPreset> {
     val today = LocalDate.now()
     return buildList {
         if (LocalTime.now() < LocalTime.of(19, 30)) add(AtPreset("Сьогодні 20:00") { today.atTime(20, 0).toMillis() })
-        add(AtPreset("Завтра 09:00") { today.plusDays(1).atTime(9, 0).toMillis() })
+        add(AtPreset("Завтра %02d:00".format(defaultHour)) { today.plusDays(1).atTime(defaultHour, 0).toMillis() })
         add(AtPreset("Завтра 20:00") { today.plusDays(1).atTime(20, 0).toMillis() })
         add(AtPreset("Через тиждень") {
             LocalDateTime.now().plusWeeks(1).truncatedTo(ChronoUnit.MINUTES).toMillis()
@@ -200,7 +200,7 @@ fun ScheduleSheet(
             } else {
                 DateTimeWheels(at, onChange = { at = it })
                 ChipsRow {
-                    atPresets().forEach { preset ->
+                    atPresets(Prefs.defaultHour(context)).forEach { preset ->
                         GlassChip(preset.label, onClick = { at = preset.at() })
                     }
                 }
