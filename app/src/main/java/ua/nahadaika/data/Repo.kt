@@ -2,12 +2,24 @@ package ua.nahadaika.data
 
 import android.annotation.SuppressLint
 import android.content.Context
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import ua.nahadaika.alarm.AlarmScheduler
 import ua.nahadaika.alarm.Notifier
+import ua.nahadaika.widget.ReminderWidget
 import java.io.File
+import java.io.InputStream
+import java.io.OutputStream
 import java.time.Instant
 import java.time.ZoneId
 
@@ -25,11 +37,31 @@ object Repo {
         0xFF6EC9CB, 0xFFFAA774, 0xFF65AADD, 0xFFA695E7,
     ).map { it.toInt() }
 
+    private var widgetJob: Job? = null
+
     fun init(context: Context) {
         val appContext = context.applicationContext
         if (::app.isInitialized && app === appContext) return
         app = appContext
         db = AppDatabase.create(app)
+        watchWidget()
+    }
+
+    /** Будь-яка зміна нагадувань чи чатів — перемалювати віджет (якщо він стоїть на екрані). */
+    @OptIn(FlowPreview::class)
+    private fun watchWidget() {
+        widgetJob?.cancel()
+        widgetJob = CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            merge(db.reminders().observeAll().map { }, db.chats().observeAll().map { })
+                .debounce(300)
+                .collect { ReminderWidget.refresh(app) }
+        }
+    }
+
+    /** Найближче нагадування, що ще не спрацювало, і назва його чату — для віджета. */
+    suspend fun nextPending(): Pair<Reminder, String?>? {
+        val r = db.reminders().pending().minByOrNull { it.alarmAt() } ?: return null
+        return r to db.chats().get(r.chatId)?.name
     }
 
     // ---- Чати ----
@@ -77,6 +109,24 @@ object Repo {
     suspend fun deleteReminder(reminder: Reminder) {
         cleanup(reminder)
         db.reminders().delete(reminder)
+    }
+
+    /** Прибрати виконані нагадування разом з медіафайлами; [chatId] = null — у всіх чатах. */
+    suspend fun clearDone(chatId: Long? = null): Int {
+        val done = db.reminders().done().filter { chatId == null || it.chatId == chatId }
+        done.forEach { deleteReminder(it) }
+        return done.size
+    }
+
+    // ---- Резервна копія ----
+
+    suspend fun exportBackup(out: OutputStream) = Backup.export(db, out)
+
+    /** Додає дані з копії до наявних і переставляє будильники. */
+    suspend fun importBackup(input: InputStream): ImportResult {
+        val result = Backup.import(app, db, input)
+        rescheduleAll()
+        return result
     }
 
     private fun cleanup(reminder: Reminder) {

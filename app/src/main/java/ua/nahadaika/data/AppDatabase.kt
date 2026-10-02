@@ -21,6 +21,9 @@ interface ChatDao {
     @Query("SELECT * FROM chats WHERE id = :id")
     fun observe(id: Long): Flow<Chat?>
 
+    @Query("SELECT * FROM chats ORDER BY createdAt")
+    suspend fun all(): List<Chat>
+
     @Query("SELECT * FROM chats WHERE id = :id")
     suspend fun get(id: Long): Chat?
 
@@ -50,6 +53,12 @@ interface ReminderDao {
 
     @Query("SELECT * FROM reminders WHERE fired = 0")
     suspend fun pending(): List<Reminder>
+
+    @Query("SELECT * FROM reminders WHERE fired = 1")
+    suspend fun done(): List<Reminder>
+
+    @Query("SELECT * FROM reminders")
+    suspend fun all(): List<Reminder>
 
     @Query("SELECT * FROM reminders WHERE id = :id")
     suspend fun get(id: Long): Reminder?

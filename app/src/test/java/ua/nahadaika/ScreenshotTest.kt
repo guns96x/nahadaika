@@ -8,7 +8,10 @@ import android.graphics.Paint
 import android.graphics.Shader
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performTextClearance
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performClick
@@ -32,6 +35,7 @@ import ua.nahadaika.media.MediaFiles
 import ua.nahadaika.ui.ChatScreen
 import ua.nahadaika.ui.ChatsScreen
 import ua.nahadaika.ui.ScheduleSheet
+import ua.nahadaika.ui.SearchScreen
 import ua.nahadaika.ui.theme.NahadaikaTheme
 import ua.nahadaika.ui.theme.ThemeMode
 import ua.nahadaika.ui.theme.ThemeSettings
@@ -168,5 +172,26 @@ class ScreenshotTest {
         compose.setContent { NahadaikaTheme { ChatScreen(chatId = chatId, focus = null, onFocusConsumed = {}, quick = null, onQuickConsumed = {}, onOpenChats = {}) } }
         compose.waitForIdle()
         compose.onRoot().captureRoboImage("build/screenshots/8_empty_large_font.png")
+    }
+
+    /** Пошук по всіх чатах: усі, пошук за словом і архів виконаних. */
+    @Test
+    fun search() {
+        val home = seed()
+        runBlocking {
+            Repo.createReminder(
+                Reminder(chatId = home, kind = Kind.TEXT, text = "Зателефонувати лікарю", triggerAt = at(-1, 9), fired = true, lastFiredAt = at(-1, 9)),
+            )
+        }
+        compose.setContent { NahadaikaTheme { SearchScreen(onBack = {}, onOpen = { _, _ -> }) } }
+        compose.waitForIdle()
+        compose.onRoot().captureRoboImage("build/screenshots/9_search_all.png")
+        compose.onNode(hasSetTextAction()).performTextInput("вітамін")
+        compose.waitForIdle()
+        compose.onRoot().captureRoboImage("build/screenshots/9b_search_query.png")
+        compose.onNode(hasSetTextAction()).performTextClearance()
+        compose.onNodeWithText("Виконані").performClick()
+        compose.waitForIdle()
+        compose.onRoot().captureRoboImage("build/screenshots/9c_search_done.png")
     }
 }

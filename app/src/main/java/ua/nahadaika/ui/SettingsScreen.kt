@@ -95,6 +95,16 @@ import ua.nahadaika.ui.theme.ThemeSettings
 import ua.nahadaika.ui.theme.edgeFade
 import ua.nahadaika.ui.theme.glass
 import ua.nahadaika.ui.theme.glassHaze
+import androidx.compose.material.icons.filled.Backup
+import androidx.compose.material.icons.filled.Restore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import android.widget.Toast
+import ua.nahadaika.data.Repo
+import ua.nahadaika.data.BackupFormatException
+import androidx.compose.runtime.rememberCoroutineScope
+import java.time.LocalDate
 
 /** Налаштування: мовні пакети, розпізнавання, нагадування, запис, вигляд, дозволи. */
 @SuppressLint("BatteryLife")
@@ -310,6 +320,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         }
                     }
                 }
+                item { BackupSection() }
                 item {
                     Section("Оновлення") {
                         UpdateRow()
@@ -440,6 +451,57 @@ private fun ChoiceRow(icon: ImageVector, title: String, subtitle: String? = null
             Titles(title, subtitle, Modifier.weight(1f))
         }
         Box(Modifier.padding(start = 38.dp, top = 10.dp)) { control() }
+    }
+}
+
+/** Резервна копія в один ZIP-файл: зберегти куди завгодно (Диск, пам'ять) і відновити на новому телефоні. */
+@Composable
+private fun BackupSection() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    fun toast(msg: String) = Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+
+    val save = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            busy = true
+            val ok = withContext(Dispatchers.IO) {
+                runCatching { context.contentResolver.openOutputStream(uri)!!.use { Repo.exportBackup(it) } }.isSuccess
+            }
+            busy = false
+            toast(if (ok) "Копію збережено" else "Не вдалося зберегти копію")
+        }
+    }
+    val restore = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            busy = true
+            val result = withContext(Dispatchers.IO) {
+                runCatching { context.contentResolver.openInputStream(uri)!!.use { Repo.importBackup(it) } }
+            }
+            busy = false
+            result.onSuccess {
+                toast(
+                    if (it.reminders == 0 && it.chats == 0) "Нових нагадувань у копії немає"
+                    else "Відновлено: нагадувань ${it.reminders}, чатів ${it.chats}" + if (it.skipped > 0) " (вже були: ${it.skipped})" else "",
+                )
+            }.onFailure { toast((it as? BackupFormatException)?.message ?: "Не вдалося відновити копію") }
+        }
+    }
+
+    Section(
+        "Резервна копія",
+        footer = "Усе зберігається лише на телефоні, тож копія — єдиний спосіб перенести дані на новий. " +
+            "Відновлення додає до наявного і не створює дублів.",
+    ) {
+        LinkRow(Icons.Default.Backup, "Зберегти копію", if (busy) "Зачекайте…" else "Чати, нагадування, голосові, відео й фото одним файлом") {
+            if (!busy) save.launch("nahadaika-${LocalDate.now()}.zip")
+        }
+        Divider()
+        LinkRow(Icons.Default.Restore, "Відновити з копії", "Додасть нагадування з файлу до наявних") {
+            if (!busy) restore.launch(arrayOf("application/zip", "application/octet-stream"))
+        }
     }
 }
 

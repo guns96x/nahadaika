@@ -106,6 +106,7 @@ private fun AppRoot(focus: Focus?, quick: Quick?, onQuickConsumed: () -> Unit, o
     var chatId by rememberSaveable { mutableLongStateOf(Prefs.lastChatId(context)) }
     var showList by rememberSaveable { mutableStateOf(false) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
+    var showSearch by rememberSaveable { mutableStateOf(false) }
     // Зі сповіщення про нову версію — одразу в налаштування.
     LaunchedEffect(openUpdates) {
         if (openUpdates != 0L) showSettings = true
@@ -123,6 +124,7 @@ private fun AppRoot(focus: Focus?, quick: Quick?, onQuickConsumed: () -> Unit, o
             chatId = focus.chatId
             showList = false
             showSettings = false
+            showSearch = false
             activeFocus = focus
         }
     }
@@ -145,9 +147,20 @@ private fun AppRoot(focus: Focus?, quick: Quick?, onQuickConsumed: () -> Unit, o
 
     if (showSettings) {
         SettingsScreen(onBack = { showSettings = false })
+    } else if (showSearch) {
+        SearchScreen(
+            onBack = { showSearch = false },
+            onOpen = { openChatId, reminderId ->
+                chatId = openChatId
+                activeFocus = Focus(openChatId, reminderId, autoplay = false)
+                showList = false
+                showSearch = false
+            },
+        )
     } else if (showList) {
         ChatsScreen(
             onOpenSettings = { showSettings = true },
+            onOpenSearch = { showSearch = true },
             onOpenChat = {
                 chatId = it
                 showList = false
@@ -162,6 +175,7 @@ private fun AppRoot(focus: Focus?, quick: Quick?, onQuickConsumed: () -> Unit, o
             quick = quick,
             onQuickConsumed = onQuickConsumed,
             onOpenChats = { showList = true },
+            onOpenSearch = { showSearch = true },
         )
     }
 }

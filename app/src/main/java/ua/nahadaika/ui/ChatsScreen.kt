@@ -49,6 +49,7 @@ import androidx.compose.material.icons.filled.BatteryAlert
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Download
@@ -101,7 +102,7 @@ import ua.nahadaika.shortWhen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatsScreen(onOpenChat: (Long) -> Unit, onBack: () -> Unit, onOpenSettings: () -> Unit = {}) {
+fun ChatsScreen(onOpenChat: (Long) -> Unit, onBack: () -> Unit, onOpenSettings: () -> Unit = {}, onOpenSearch: () -> Unit = {}) {
     val chats by Repo.chats.collectAsStateWithLifecycle(emptyList())
     val reminders by Repo.allReminders.collectAsStateWithLifecycle(emptyList())
     val scope = rememberCoroutineScope()
@@ -132,6 +133,8 @@ fun ChatsScreen(onOpenChat: (Long) -> Unit, onBack: () -> Unit, onOpenSettings: 
                 ) {
                     Text("Чати", color = Glass.Text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 }
+                Spacer(Modifier.width(8.dp))
+                GlassIconButton(Icons.Default.Search, "Пошук", onClick = onOpenSearch, size = 56.dp, haze = hazeState)
                 Spacer(Modifier.width(8.dp))
                 GlassIconButton(Icons.Default.Settings, "Налаштування", onClick = onOpenSettings, size = 56.dp, haze = hazeState)
             }

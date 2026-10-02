@@ -121,6 +121,10 @@ object VoiceParser {
             ((tens[m.groupValues[1].lowercase()] ?: 0) + (m.groups[2]?.value?.let { units[it.lowercase()] } ?: 0)).toString()
         }
         .replace(simple) { m -> (units[m.value.lowercase()] ?: teens.getValue(m.value.lowercase())).toString() }
+        // «дві з половиною години» (вже цифрами) → «2 години 30 хвилин».
+        .replace(Regex("$B(\\d+)\\s+з\\s+(?:половиною|половиной)\\s+(?:годин\\p{L}*|час(?:а|ов)?)$E", RegexOption.IGNORE_CASE)) { m ->
+            "${m.groupValues[1]} години 30 хвилин"
+        }
 
     private val weekdayStems = listOf(
         "понеділ" to DayOfWeek.MONDAY, "вівтор" to DayOfWeek.TUESDAY, "серед" to DayOfWeek.WEDNESDAY,
@@ -298,15 +302,21 @@ object VoiceParser {
             val total = ((part(HOURS) ?: 0.0) * 3600 + (part(MINUTES) ?: 0.0) * 60 + (part(SECONDS) ?: 0.0)).toLong()
             absolute = if (total % 60 == 0L) base.plusSeconds(total) else now.truncatedTo(ChronoUnit.SECONDS).plusSeconds(total)
         }
-        c.take("${B}через\\s+(?:$NUM\\s*)?(?:дн\\p{L}*|день|добу|сутки|суток)$E")?.let {
-            dayOffset = (num(it.groups[1]?.value) ?: 1.0).toLong()
-        }
-        c.take("${B}через\\s+(?:$NUM\\s*)?(?:тиждень|тижні|тижнів|неделю|недели|недель)$E")?.let {
-            dayOffset = 7 * (num(it.groups[1]?.value) ?: 1.0).toLong()
-        }
-        c.take("${B}через\\s+(?:$NUM\\s*)?(?:місяць|місяці|місяців|месяц|месяца|месяцев)$E")?.let {
-            monthOffset = (num(it.groups[1]?.value) ?: 1.0).toLong()
-        }
+        // «через …» і «за …» (але не «за 3 дні до відпустки»): «за тиждень», «за два дні».
+        val notBefore = "(?!\\s+(?:до|перед)$E)"
+        (
+            c.take("${B}через\\s+(?:$NUM\\s*)?(?:дн\\p{L}*|день|добу|сутки|суток)$E")
+                ?: c.take("${B}за\\s+$NUM\\s*(?:дн\\p{L}*|день|добу|сутки|суток)$E$notBefore")
+            )?.let { dayOffset = (num(it.groups[1]?.value) ?: 1.0).toLong() }
+        (
+            c.take("${B}через\\s+(?:$NUM\\s*)?(?:тиждень|тижні|тижнів|неделю|недели|недель)$E")
+                ?: c.take("${B}за\\s+(?:$NUM\\s*)?(?:тиждень|тижні|тижнів|неделю|недели|недель)$E$notBefore")
+            )?.let { dayOffset = 7 * (num(it.groups[1]?.value) ?: 1.0).toLong() }
+        c.take("${B}(?:через|за)\\s+(?:пів\\s*року|півроку|полгода|полугода)$E$notBefore")?.let { monthOffset = 6 }
+        (
+            c.take("${B}через\\s+(?:$NUM\\s*)?(?:місяць|місяці|місяців|месяц|месяца|месяцев)$E")
+                ?: c.take("${B}за\\s+(?:$NUM\\s*)?(?:місяць|місяці|місяців|месяц|месяца|месяцев)$E$notBefore")
+            )?.let { monthOffset = (num(it.groups[1]?.value) ?: 1.0).toLong() }
         c.take("${B}через\\s+(?:$NUM\\s*)?(?:рік|роки|років|лет)$E")?.let {
             monthOffset = 12 * (num(it.groups[1]?.value) ?: 1.0).toLong()
         }
@@ -368,11 +378,12 @@ object VoiceParser {
         // «ранку», «ввечері» — уточнюють годину або задають її самі.
         var period: String? = null
         val periods = listOf(
+            "(?:(?:в|у)\\s+кінці\\s+(?:робочого\\s+)?дня|наприкінці\\s+(?:робочого\\s+)?дня|в\\s+конце\\s+(?:рабочего\\s+)?дня)" to "endofday",
             "(?:ранку|вранці|зранку|уранці|утра|утром)" to "morning",
             "(?:(?:в|на|у)\\s+обід|в\\s+обед|на\\s+обед)" to "lunch",
             "(?:після\\s+роботи|после\\s+работы|з\\s+роботи)" to "afterwork",
             "(?:перед\\s+сном|перед\\s+сном)" to "bedtime",
-            "(?:дня|вдень|удень|після\\s+обіду|пообіді|днем|днём|после\\s+обеда)" to "day",
+            "(?:дня|вдень|удень|після\\s+обіду|по\\s+обіді|пообіді|днем|днём|после\\s+обеда)" to "day",
             "(?:вечора|ввечері|увечері|звечора|вечера|вечером)" to "evening",
             "(?:ночі|вночі|уночі|ночи|ночью)" to "night",
         )
@@ -387,6 +398,7 @@ object VoiceParser {
             time == null -> when (period) {
                 "morning" -> LocalTime.of(9, 0)
                 "day" -> LocalTime.of(14, 0)
+                "endofday" -> LocalTime.of(18, 0)
                 "lunch" -> LocalTime.of(13, 0)
                 "afterwork" -> LocalTime.of(18, 30)
                 "bedtime" -> LocalTime.of(22, 0)
@@ -414,21 +426,33 @@ object VoiceParser {
             c.take("$B(?:на\\s+)?завтра$E") != null -> date = today.plusDays(1)
             c.take("$B(?:на\\s+)?(?:сьогодні|сегодня)$E") != null -> date = today
         }
+        // «наступного тижня» — понеділок; разом із днем тижня («на наступному тижні в середу») — саме цей день.
+        val nextMonday = today.with(TemporalAdjusters.next(DayOfWeek.MONDAY))
+        var nextWeek = false
+        if (date == null && c.take("$B(?:наступного\\s+тижня|на\\s+наступному\\s+тижні|на\\s+следующей\\s+неделе)$E") != null) {
+            date = nextMonday
+            nextWeek = true
+        }
+        var dateIsMonthEnd = false
         if (date == null) {
             when {
                 c.take("$B(?:на\\s+вихідних|у\\s+вихідні|в\\s+вихідні|на\\s+выходных|в\\s+выходные)$E") != null -> {
                     date = today.with(TemporalAdjusters.next(DayOfWeek.SATURDAY)); dateIsWeekday = true
                 }
-                c.take("$B(?:наступного\\s+тижня|на\\s+наступному\\s+тижні|на\\s+следующей\\s+неделе)$E") != null ->
-                    date = today.with(TemporalAdjusters.next(DayOfWeek.MONDAY))
                 c.take("$B(?:в\\s+кінці\\s+тижня|наприкінці\\s+тижня|в\\s+конце\\s+недели)$E") != null -> {
                     date = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.FRIDAY)); dateIsWeekday = true
                 }
+                c.take("$B(?:в\\s+кінці|наприкінці|в\\s+конце)\\s+(?:цього\\s+)?(?:місяця|месяца)$E") != null -> {
+                    date = today.with(TemporalAdjusters.lastDayOfMonth()); dateIsMonthEnd = true
+                }
+                c.take("$B(?:на\\s+початку\\s+(?:наступного\\s+)?місяця|наступного\\s+місяця|на\\s+наступному\\s+місяці|в\\s+начале\\s+следующего\\s+месяца)$E") != null ->
+                    date = today.plusMonths(1).withDayOfMonth(1)
             }
         }
-        if (date == null) {
+        if (date == null || nextWeek) {
             c.take("$B(?:(?:в|у|во|на)\\s+)?(?:цю\\s+|цей\\s+|эту\\s+|этот\\s+|наступн\\p{L}*\\s+|следующ\\p{L}*\\s+)?$WEEKDAY$E")?.let {
-                date = today.with(TemporalAdjusters.nextOrSame(weekday(it.groupValues[1])))
+                val day = weekday(it.groupValues[1])
+                date = (if (nextWeek) nextMonday else today).with(TemporalAdjusters.nextOrSame(day))
                 dateIsWeekday = true
             }
         }
@@ -475,6 +499,7 @@ object VoiceParser {
                         dateIsWeekday -> result.plusWeeks(1)
                         dateWithoutYear -> result.plusYears(1)
                         dateIsDayOfMonth -> result.plusMonths(1)
+                        dateIsMonthEnd -> result.plusMonths(1).with(TemporalAdjusters.lastDayOfMonth())
                         repeat != Repeat.NONE -> nextAfter(result, repeat, base)
                         else -> result
                     }

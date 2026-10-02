@@ -95,5 +95,29 @@
             android:turnScreenOn="true"
             tools:targetApi="o_mr1" />
         <receiver android:name=".update.InstallReceiver" android:exported="false" />
+
+        <!-- Віджет: найближче нагадування й кнопки швидкого запису. -->
+        <receiver
+            android:name=".widget.ReminderWidget"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info" />
+        </receiver>
+
+        <!-- Плитка в шторці: одразу «сказати нагадування». -->
+        <service
+            android:name=".widget.DictateTile"
+            android:exported="true"
+            android:icon="@drawable/ic_notification"
+            android:label="@string/tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

@@ -158,6 +158,22 @@ class VoiceParserTest {
     @Test fun alarmHalfPast() = check("постав будильник на пів на сьому", "Будильник", d(10, 1, 6, 30))
     @Test fun timerHourAndHalf() = check("таймер на півтори години", "Таймер", d(9, 30, 11, 30))
 
+    // «за» як «через», кінець і початок місяця, тиждень + день тижня.
+    @Test fun zaWeek() = check("за тиждень поміняти фільтр", "Поміняти фільтр", d(10, 7, 10))
+    @Test fun zaDaysWords() = check("за два дні подзвонити лікарю", "Подзвонити лікарю", d(10, 2, 10))
+    @Test fun zaMonth() = check("за місяць оплатити курс", "Оплатити курс", d(10, 30, 10))
+    @Test fun zaDaysBeforeIsNotRelative() =
+        check("за 3 дні до відпустки купити квитки", "За 3 дні до відпустки купити квитки", null)
+    @Test fun inTwoDaysAtHour() = check("через два дні о восьмій забрати посилку", "Забрати посилку", d(10, 2, 8))
+    @Test fun inHalfYear() = check("через пів року продовжити паспорт", "Продовжити паспорт", d(3, 30, 10, year = 2027))
+    @Test fun endOfMonthAlreadyPastToday() = check("в кінці місяця заплатити податки", "Заплатити податки", d(10, 31, 9))
+    @Test fun endOfMonthWithTime() = check("наприкінці місяця о 12 звіт", "Звіт", d(9, 30, 12))
+    @Test fun nextMonthStart() = check("наступного місяця оплатити курс", "Оплатити курс", d(10, 1, 9))
+    @Test fun nextWeekWithWeekday() = check("на наступному тижні в середу о 10 лікар", "Лікар", d(10, 7, 10))
+    @Test fun twoAndHalfHours() = check("через дві з половиною години вийняти пиріг", "Вийняти пиріг", d(9, 30, 12, 30))
+    @Test fun endOfDay() = check("в кінці дня надіслати звіт", "Надіслати звіт", d(9, 30, 18))
+    @Test fun afterLunchSpaced() = check("завтра по обіді зустріч", "Зустріч", d(10, 1, 14))
+
     // Кілька нагадувань в одній фразі.
     private fun many(phrase: String) = VoiceParser.parseMany(phrase, now).map {
         Triple(it.text, it.at?.let { a -> LocalDateTime.ofInstant(Instant.ofEpochMilli(a), ZoneId.systemDefault()) }, it.repeat)

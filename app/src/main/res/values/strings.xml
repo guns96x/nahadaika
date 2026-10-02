@@ -7,4 +7,6 @@
     <string name="sc_voice_long">Записати голосове нагадування</string>
     <string name="sc_dictate_short">Сказати</string>
     <string name="sc_dictate_long">Сказати нагадування</string>
+    <string name="widget_description">Найближче нагадування й кнопки швидкого запису</string>
+    <string name="tile_label">Нагадати голосом</string>
 </resources>
