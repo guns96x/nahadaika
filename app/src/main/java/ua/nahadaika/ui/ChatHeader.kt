@@ -31,10 +31,10 @@ import ua.nahadaika.ui.theme.edgeFade
 import ua.nahadaika.ui.theme.glassHaze
 import java.time.LocalDate
 
-internal val HeaderHeight = 56.dp
+internal val HeaderHeight = 48.dp
 
 /** Кнопки праворуч трохи менші, щоб капсула з назвою чату лишалась широкою. */
-private val SideButton = 48.dp
+private val SideButton = 44.dp
 
 /** Окремі скляні капсули однакової висоти, як у Telegram: ☰ | чат | пошук | тема — і смужка днів під ними. */
 @Composable
@@ -54,8 +54,8 @@ internal fun ChatHeader(
             .fillMaxWidth()
             .edgeFade(top = true)
             .statusBarsPadding()
-            .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             GlassIconButton(Icons.Default.Menu, "Усі чати", onClick = onOpenChats, size = HeaderHeight, haze = haze)
@@ -66,17 +66,17 @@ internal fun ChatHeader(
                     .height(HeaderHeight)
                     .glassHaze(haze)
                     .clickable(onClick = onOpenChats)
-                    .padding(start = 6.dp, end = 18.dp),
+                    .padding(start = 5.dp, end = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 chat?.let { c ->
-                    Avatar(c, size = 44)
+                    Avatar(c, size = 38)
                     Spacer(Modifier.width(10.dp))
                     Column {
                         Text(
                             c.name,
                             color = Glass.Text,
-                            fontSize = 16.sp,
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -84,7 +84,7 @@ internal fun ChatHeader(
                         Text(
                             nextIn ?: "немає запланованих",
                             color = Glass.TextDim,
-                            fontSize = 13.sp,
+                            fontSize = 12.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )

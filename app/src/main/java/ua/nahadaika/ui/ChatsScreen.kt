@@ -122,21 +122,21 @@ fun ChatsScreen(onOpenChat: (Long) -> Unit, onBack: () -> Unit, onOpenSettings: 
                     .fillMaxWidth()
                     .edgeFade(top = true)
                     .statusBarsPadding()
-                    .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 12.dp),
+                    .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                GlassIconButton(Icons.AutoMirrored.Filled.ArrowBack, "Назад", onClick = onBack, size = 56.dp, haze = hazeState)
+                GlassIconButton(Icons.AutoMirrored.Filled.ArrowBack, "Назад", onClick = onBack, size = HeaderHeight, haze = hazeState)
                 Spacer(Modifier.width(8.dp))
                 Box(
-                    Modifier.weight(1f).height(56.dp).glassHaze(hazeState).padding(horizontal = 20.dp),
+                    Modifier.weight(1f).height(HeaderHeight).glassHaze(hazeState).padding(horizontal = 20.dp),
                     contentAlignment = Alignment.CenterStart,
                 ) {
                     Text("Чати", color = Glass.Text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 }
                 Spacer(Modifier.width(8.dp))
-                GlassIconButton(Icons.Default.Search, "Пошук", onClick = onOpenSearch, size = 56.dp, haze = hazeState)
+                GlassIconButton(Icons.Default.Search, "Пошук", onClick = onOpenSearch, size = HeaderHeight, haze = hazeState)
                 Spacer(Modifier.width(8.dp))
-                GlassIconButton(Icons.Default.Settings, "Налаштування", onClick = onOpenSettings, size = 56.dp, haze = hazeState)
+                GlassIconButton(Icons.Default.Settings, "Налаштування", onClick = onOpenSettings, size = HeaderHeight, haze = hazeState)
             }
         },
         floatingActionButton = {
@@ -155,7 +155,7 @@ fun ChatsScreen(onOpenChat: (Long) -> Unit, onBack: () -> Unit, onOpenSettings: 
                     top = padding.calculateTopPadding() + 6.dp,
                     bottom = padding.calculateBottomPadding() + 96.dp,
                 ),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 items(chats, key = { it.id }) { chat ->
                     val pending = reminders.filter { it.chatId == chat.id && !it.fired }.sortedBy { it.alarmAt() }
@@ -215,19 +215,19 @@ private fun ChatRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .glass(RoundedCornerShape(24.dp))
+                .glass(RoundedCornerShape(18.dp))
                 .combinedClickable(onClick = onClick, onLongClick = { menu = true })
-                .padding(horizontal = 12.dp, vertical = 12.dp),
+                .padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Avatar(chat, size = 54)
-            Spacer(Modifier.width(14.dp))
+            Avatar(chat, size = 42)
+            Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         chat.name,
                         color = Glass.Text,
-                        fontSize = 17.sp,
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,

@@ -109,12 +109,12 @@ fun DayStrip(
         }
     }
 
-    Column(modifier.glassHaze(haze, RoundedCornerShape(26.dp)).padding(top = 10.dp, bottom = 6.dp)) {
-        Row(Modifier.fillMaxWidth().height(28.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+    Column(modifier.glassHaze(haze, RoundedCornerShape(22.dp)).padding(top = 6.dp, bottom = 4.dp)) {
+        Row(Modifier.fillMaxWidth().height(24.dp).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 selected.format(monthFmt).replaceFirstChar { it.uppercase() },
                 color = Glass.Text,
-                fontSize = 15.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f),
             )
@@ -150,11 +150,11 @@ private fun DayCell(day: LocalDate, selected: Boolean, today: Boolean, dots: Lis
     val main = if (selected) Glass.OnPrimary else Glass.Text
     Column(
         Modifier
-            .width(46.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .width(42.dp)
+            .clip(RoundedCornerShape(14.dp))
             .background(bg)
             .clickable(onClickLabel = "Показати день", onClick = onClick)
-            .padding(vertical = 8.dp),
+            .padding(vertical = 5.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
@@ -166,16 +166,16 @@ private fun DayCell(day: LocalDate, selected: Boolean, today: Boolean, dots: Lis
                 else -> Glass.TextFaint
             },
         )
-        Text("${day.dayOfMonth}", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = if (today && !selected) Glass.Lavender else main)
+        Text("${day.dayOfMonth}", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (today && !selected) Glass.Lavender else main)
         Row(Modifier.height(8.dp).padding(top = 3.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             dots.take(3).forEach { Box(Modifier.size(5.dp).background(if (selected) Glass.OnPrimary else it, CircleShape)) }
         }
     }
 }
 
-private val TimeColumn = 46.dp
-private val NodeColumn = 48.dp
-private val NodeSize = 36.dp
+private val TimeColumn = 42.dp
+private val NodeColumn = 40.dp
+private val NodeSize = 28.dp
 private val SidePadding = 12.dp
 
 /** Пунктирна лінія таймлайну через увесь рядок (обрізана біля першого й останнього кружка). */
@@ -218,13 +218,13 @@ fun TimelineItem(
         Modifier
             .fillMaxWidth()
             .timelineLine(isFirst, isLast)
-            .padding(start = SidePadding, end = SidePadding, bottom = 14.dp),
+            .padding(start = SidePadding, end = SidePadding, bottom = 8.dp),
     ) {
         Text(
             formatTime(occurrence.at),
-            modifier = Modifier.width(TimeColumn).padding(top = 10.dp),
+            modifier = Modifier.width(TimeColumn).padding(top = 6.dp),
             textAlign = TextAlign.End,
-            fontSize = 13.sp,
+            fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
             color = if (done) Glass.TextFaint else Glass.TextDim,
         )
@@ -236,7 +236,7 @@ fun TimelineItem(
                     .background(if (done) color.copy(alpha = 0.28f) else color, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(if (done) Icons.Default.Check else kindIcon(r.kind), null, tint = Color.White, modifier = Modifier.size(18.dp))
+                Icon(if (done) Icons.Default.Check else kindIcon(r.kind), null, tint = Color.White, modifier = Modifier.size(15.dp))
             }
         }
         // Відео без підпису — «кружечок» без картки, як у Telegram; дії — через «⋯» під ним.
@@ -248,19 +248,19 @@ fun TimelineItem(
                     if (bare) {
                         Modifier.padding(top = 2.dp)
                     } else {
-                        Modifier.glass(RoundedCornerShape(20.dp), cardFill).clickable(onClick = onClick).padding(12.dp)
+                        Modifier.glass(RoundedCornerShape(16.dp), cardFill).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 8.dp)
                     },
                 ),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             // Заголовок — лише справжній текст; медіа говорить саме за себе.
             val title = r.text.ifBlank { if (r.kind == Kind.TEXT) "Нагадування" else "" }
             if (title.isNotEmpty()) Text(
                 title,
                 color = if (done) Glass.TextDim else Glass.Text,
-                fontSize = 16.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.Medium,
-                lineHeight = 22.sp,
+                lineHeight = 20.sp,
                 textDecoration = if (done && r.kind == Kind.TEXT) TextDecoration.LineThrough else null,
                 maxLines = 6,
                 overflow = TextOverflow.Ellipsis,
@@ -272,7 +272,7 @@ fun TimelineItem(
                     playing = videoPlaying,
                     onPlay = onPlayVideo,
                     onEnded = onVideoEnded,
-                    modifier = Modifier.size(160.dp),
+                    modifier = Modifier.size(128.dp),
                 )
                 Kind.PHOTO -> AsyncImage(
                     model = r.mediaPath?.let(::File),
@@ -280,8 +280,8 @@ fun TimelineItem(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(180.dp)
-                        .clip(RoundedCornerShape(16.dp))
+                        .height(140.dp)
+                        .clip(RoundedCornerShape(12.dp))
                         .background(Glass.Fill)
                         .clickable(onClick = onOpenPhoto),
                 )
@@ -314,7 +314,7 @@ fun TimelineItem(
                 }
                 if (bare) {
                     Spacer(Modifier.width(8.dp))
-                    Icon(Icons.Default.MoreHoriz, "Дії", Modifier.padding(8.dp).size(18.dp), tint = Glass.TextDim)
+                    Icon(Icons.Default.MoreHoriz, "Дії", Modifier.padding(4.dp).size(18.dp), tint = Glass.TextDim)
                 }
             }
         }
@@ -328,7 +328,7 @@ fun NowLine(now: Long, isFirst: Boolean, isLast: Boolean) {
         Modifier
             .fillMaxWidth()
             .timelineLine(isFirst, isLast)
-            .padding(start = SidePadding, end = SidePadding, bottom = 14.dp)
+            .padding(start = SidePadding, end = SidePadding, bottom = 8.dp)
             .height(NodeSize + 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

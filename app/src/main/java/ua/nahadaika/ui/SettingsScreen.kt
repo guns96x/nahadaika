@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -142,13 +143,13 @@ fun SettingsScreen(onBack: () -> Unit) {
                     .fillMaxWidth()
                     .edgeFade(top = true)
                     .statusBarsPadding()
-                    .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 12.dp),
+                    .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                GlassIconButton(Icons.AutoMirrored.Filled.ArrowBack, "Назад", onClick = onBack, size = 56.dp, haze = hazeState)
+                GlassIconButton(Icons.AutoMirrored.Filled.ArrowBack, "Назад", onClick = onBack, size = HeaderHeight, haze = hazeState)
                 Spacer(Modifier.width(8.dp))
                 Box(
-                    Modifier.weight(1f).height(56.dp).glassHaze(hazeState).padding(horizontal = 20.dp),
+                    Modifier.weight(1f).height(HeaderHeight).glassHaze(hazeState).padding(horizontal = 20.dp),
                     contentAlignment = Alignment.CenterStart,
                 ) {
                     Text("Налаштування", color = Glass.Text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
@@ -373,16 +374,16 @@ fun SettingsScreen(onBack: () -> Unit) {
 
 @Composable
 private fun Section(title: String, footer: String? = null, content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.padding(top = 12.dp)) {
+    Column(Modifier.padding(top = 8.dp)) {
         Text(
             title.uppercase(),
             color = Glass.TextFaint,
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
             letterSpacing = 0.6.sp,
-            modifier = Modifier.padding(start = 16.dp, bottom = 8.dp),
+            modifier = Modifier.padding(start = 16.dp, bottom = 6.dp),
         )
-        Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(22.dp)), content = content)
+        Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(18.dp)), content = content)
         if (footer != null) {
             Text(footer, color = Glass.TextFaint, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp))
         }
@@ -391,20 +392,20 @@ private fun Section(title: String, footer: String? = null, content: @Composable 
 
 @Composable
 private fun Divider() {
-    Box(Modifier.padding(start = 54.dp).fillMaxWidth().height(0.6.dp).background(Glass.FillStrong))
+    Box(Modifier.padding(start = 48.dp).fillMaxWidth().height(0.6.dp).background(Glass.FillStrong))
 }
 
 @Composable
 private fun RowIcon(icon: ImageVector, tint: Color = Glass.TextDim) {
-    Icon(icon, null, tint = tint, modifier = Modifier.size(22.dp))
+    Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp))
 }
 
 @Composable
 private fun Titles(title: String, subtitle: String?, modifier: Modifier = Modifier, dim: Boolean = false) {
     Column(modifier) {
-        Text(title, color = if (dim) Glass.TextFaint else Glass.Text, fontSize = 16.sp)
+        Text(title, color = if (dim) Glass.TextFaint else Glass.Text, fontSize = 15.sp)
         if (subtitle != null) {
-            Text(subtitle, color = Glass.TextFaint, fontSize = 13.sp, lineHeight = 17.sp, modifier = Modifier.padding(top = 2.dp))
+            Text(subtitle, color = Glass.TextFaint, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 1.dp))
         }
     }
 }
@@ -419,7 +420,7 @@ private fun SwitchRow(
     onChange: (Boolean) -> Unit,
 ) {
     Row(
-        Modifier.fillMaxWidth().clickable(enabled = enabled) { onChange(!checked) }.padding(start = 16.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
+        Modifier.fillMaxWidth().clickable(enabled = enabled) { onChange(!checked) }.padding(start = 14.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         RowIcon(icon)
@@ -444,13 +445,13 @@ private fun SwitchRow(
 
 @Composable
 private fun ChoiceRow(icon: ImageVector, title: String, subtitle: String? = null, control: @Composable () -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 14.dp, top = 12.dp, bottom = 14.dp)) {
+    Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 12.dp, top = 8.dp, bottom = 10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             RowIcon(icon)
             Spacer(Modifier.width(16.dp))
             Titles(title, subtitle, Modifier.weight(1f))
         }
-        Box(Modifier.padding(start = 38.dp, top = 10.dp)) { control() }
+        Box(Modifier.padding(start = 34.dp, top = 6.dp)) { control() }
     }
 }
 
@@ -508,7 +509,7 @@ private fun BackupSection() {
 @Composable
 private fun LinkRow(icon: ImageVector, title: String, subtitle: String?, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         RowIcon(icon)
@@ -520,7 +521,7 @@ private fun LinkRow(icon: ImageVector, title: String, subtitle: String?, onClick
 
 @Composable
 private fun InfoRow(icon: ImageVector, title: String, subtitle: String) {
-    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         RowIcon(icon)
         Spacer(Modifier.width(16.dp))
         Titles(title, subtitle, Modifier.weight(1f))
@@ -531,12 +532,12 @@ private fun InfoRow(icon: ImageVector, title: String, subtitle: String) {
 @Composable
 private fun StatusRow(icon: ImageVector, title: String, ok: Boolean, onFix: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable(enabled = !ok, onClick = onFix).padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp).height(44.dp),
+        Modifier.fillMaxWidth().clickable(enabled = !ok, onClick = onFix).padding(start = 14.dp, end = 8.dp, top = 4.dp, bottom = 4.dp).heightIn(min = 40.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         RowIcon(icon, if (ok) Glass.TextDim else Glass.Danger)
         Spacer(Modifier.width(16.dp))
-        Text(title, color = Glass.Text, fontSize = 16.sp, modifier = Modifier.weight(1f))
+        Text(title, color = Glass.Text, fontSize = 15.sp, modifier = Modifier.weight(1f))
         if (ok) {
             Icon(Icons.Default.Check, "Увімкнено", tint = Glass.Lavender, modifier = Modifier.padding(end = 8.dp).size(20.dp))
         } else {

@@ -74,7 +74,7 @@ internal fun VoicePlayer(reminder: Reminder, player: AudioPlayer, modifier: Modi
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            Modifier.size(44.dp).clip(CircleShape).background(Glass.Primary).clickable { player.toggle(path) },
+            Modifier.size(36.dp).clip(CircleShape).background(Glass.Primary).clickable { player.toggle(path) },
             contentAlignment = Alignment.Center,
         ) {
             Icon(

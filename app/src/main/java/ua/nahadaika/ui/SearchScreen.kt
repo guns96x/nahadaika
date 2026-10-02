@@ -111,8 +111,8 @@ fun SearchScreen(onBack: () -> Unit, onOpen: (chatId: Long, reminderId: Long) ->
                     .fillMaxWidth()
                     .edgeFade(top = true)
                     .statusBarsPadding()
-                    .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                    .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     GlassIconButton(Icons.AutoMirrored.Filled.ArrowBack, "Назад", onClick = onBack, size = HeaderHeight, haze = hazeState)
@@ -177,7 +177,7 @@ fun SearchScreen(onBack: () -> Unit, onOpen: (chatId: Long, reminderId: Long) ->
                         top = padding.calculateTopPadding() + 6.dp,
                         bottom = padding.calculateBottomPadding() + 16.dp,
                     ),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     items(hits, key = { it.reminder.id }) { hit ->
                         HitRow(hit) { onOpen(hit.reminder.chatId, hit.reminder.id) }
@@ -213,12 +213,12 @@ private fun FilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
             .clip(Glass.Pill)
             .background(if (selected) Glass.Primary else Glass.FillStrong)
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp),
     ) {
         Text(
             label,
             color = if (selected) Glass.OnPrimary else Glass.Text,
-            fontSize = 14.sp,
+            fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
         )
     }
@@ -230,18 +230,18 @@ private fun HitRow(hit: SearchHit, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .glass(RoundedCornerShape(22.dp))
+            .glass(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 10.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        hit.chat?.let { Avatar(it, size = 42) }
-        Spacer(Modifier.width(12.dp))
+        hit.chat?.let { Avatar(it, size = 34) }
+        Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(
                 previewText(r).ifBlank { "Нагадування" },
                 color = Glass.Text,
-                fontSize = 16.sp,
+                fontSize = 15.sp,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
