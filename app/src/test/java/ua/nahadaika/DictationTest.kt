@@ -104,8 +104,9 @@ class DictationTest {
         shadowOf(ShadowSpeechRecognizer.getLatestSpeechRecognizer())
             .triggerOnResults(results("завтра о 9 купити хліб, о 12 подзвонити в банк, а в п'ятницю о 18 кіно"))
         compose.waitUntil(5_000) { runBlocking { Repo.reminders(chatId).first() }.size == 3 }
-        val saved = runBlocking { Repo.reminders(chatId).first() }.sortedBy { it.triggerAt }
-        assertEquals(listOf("Купити хліб", "Подзвонити в банк", "Кіно"), saved.map { it.text })
+        // Порядок за часом залежить від дня тижня й години запуску («в п'ятницю о 18» буває і сьогодні) — порівнюємо без нього.
+        val saved = runBlocking { Repo.reminders(chatId).first() }
+        assertEquals(setOf("Купити хліб", "Подзвонити в банк", "Кіно"), saved.map { it.text }.toSet())
         // Підтвердження з'являється вже після створення останнього нагадування — чекаємо, а не перевіряємо миттєво.
         compose.waitUntil(5_000) {
             compose.onAllNodesWithText("Поставив 3 нагадування", substring = true).fetchSemanticsNodes().isNotEmpty()
