@@ -69,4 +69,36 @@ class InlineVideoTest {
         assertEquals(0, compose.onAllNodesWithContentDescription("Відтворити відео").fetchSemanticsNodes().size)
         assertEquals(1, compose.onAllNodes(isRoot()).fetchSemanticsNodes().size)
     }
+
+    @Test
+    fun fullscreenButtonOpensAndClosesViewer() {
+        shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        ShadowMediaPlayer.addMediaInfo(DataSource.toDataSource("/nope.mp4"), ShadowMediaPlayer.MediaInfo(9_000, 0))
+        Prefs.setGestureHintShown(app)
+        val chatId = runBlocking {
+            Repo.init(app)
+            val id = Repo.createChat("Дім")
+            Repo.createReminder(
+                Reminder(
+                    chatId = id, kind = Kind.VIDEO, mediaPath = "/nope.mp4", durationMs = 9_000,
+                    triggerAt = System.currentTimeMillis() + 3_600_000,
+                ),
+            )
+            id
+        }
+        compose.setContent {
+            NahadaikaTheme {
+                ChatScreen(chatId = chatId, focus = null, onFocusConsumed = {}, quick = null, onQuickConsumed = {}, onOpenChats = {})
+            }
+        }
+        compose.waitForIdle()
+
+        compose.onNodeWithContentDescription("На весь екран").performClick()
+        compose.waitForIdle()
+        // Повноекранний перегляд — окреме вікно (діалог) з кнопкою «Закрити».
+        assertEquals(2, compose.onAllNodes(isRoot()).fetchSemanticsNodes().size)
+        compose.onNodeWithContentDescription("Закрити").performClick()
+        compose.waitForIdle()
+        assertEquals(1, compose.onAllNodes(isRoot()).fetchSemanticsNodes().size)
+    }
 }

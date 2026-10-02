@@ -17,6 +17,10 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import kotlin.math.max
+import kotlin.math.min
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -98,16 +102,35 @@ internal fun VoicePlayer(reminder: Reminder, player: AudioPlayer, modifier: Modi
     }
 }
 
-/** Відео-«кружечок», як у Telegram: кадр-обкладинка з ▶; після тапу грає прямо тут, без окремого вікна. */
+/**
+ * Відео-«кружечок», як у Telegram: кадр-обкладинка з ▶; після тапу грає прямо тут, без окремого вікна.
+ * Кнопка ⤢ у кутку — переглянути на весь екран.
+ */
 @Composable
 internal fun VideoMedia(
     reminder: Reminder,
     playing: Boolean,
     onPlay: () -> Unit,
     onEnded: () -> Unit,
+    onFullscreen: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier.clip(CircleShape).background(Color.Black)) {
+    Box(modifier) {
+        VideoCircle(reminder, playing, onPlay, onEnded)
+        Box(
+            Modifier
+                .align(Alignment.BottomEnd)
+                .size(34.dp)
+                .glass(CircleShape, Color.Black.copy(alpha = 0.45f))
+                .clickable(onClickLabel = "На весь екран", onClick = onFullscreen),
+            contentAlignment = Alignment.Center,
+        ) { Icon(Icons.Default.Fullscreen, "На весь екран", tint = Color.White, modifier = Modifier.size(20.dp)) }
+    }
+}
+
+@Composable
+private fun VideoCircle(reminder: Reminder, playing: Boolean, onPlay: () -> Unit, onEnded: () -> Unit) {
+    Box(Modifier.fillMaxSize().clip(CircleShape).background(Color.Black)) {
         // Кадр-обкладинка лежить під плеєром, поки не з'явиться перший кадр відео.
         AsyncImage(
             model = reminder.mediaPath?.let(::File),
@@ -149,7 +172,7 @@ private fun VideoLabel(text: String, modifier: Modifier = Modifier) {
  * внизу — прогрес, у кутку — скільки лишилось. Кадр обрізається по центру під рамку.
  */
 @Composable
-private fun InlineVideo(path: String, durationMs: Long, onEnded: () -> Unit, modifier: Modifier = Modifier) {
+private fun InlineVideo(path: String, durationMs: Long, onEnded: () -> Unit, modifier: Modifier = Modifier, fullscreen: Boolean = false) {
     val ended by rememberUpdatedState(onEnded)
     val player = remember { MediaPlayer() }
     var prepared by remember { mutableStateOf(false) }
@@ -184,7 +207,11 @@ private fun InlineVideo(path: String, durationMs: Long, onEnded: () -> Unit, mod
                     var videoH = 0
                     fun crop() {
                         if (width == 0 || height == 0 || videoW == 0 || videoH == 0) return
-                        val scale = max(width.toFloat() / videoW, height.toFloat() / videoH)
+                        val scale = if (fullscreen) {
+                            min(width.toFloat() / videoW, height.toFloat() / videoH)
+                        } else {
+                            max(width.toFloat() / videoW, height.toFloat() / videoH)
+                        }
                         setTransform(
                             Matrix().apply {
                                 setScale(videoW * scale / width, videoH * scale / height, width / 2f, height / 2f)
@@ -241,9 +268,26 @@ private fun InlineVideo(path: String, durationMs: Long, onEnded: () -> Unit, mod
                 contentAlignment = Alignment.Center,
             ) { Icon(Icons.Default.PlayArrow, null, tint = Color.White, modifier = Modifier.size(28.dp)) }
         }
+        val fraction = if (total > 0) (position.toFloat() / total).coerceIn(0f, 1f) else 0f
+        if (fullscreen) {
+            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 20.dp, vertical = 28.dp)) {
+                LinearProgressIndicator(
+                    progress = { fraction },
+                    color = Color.White,
+                    trackColor = Color.White.copy(alpha = 0.25f),
+                    modifier = Modifier.fillMaxWidth().height(3.dp).clip(Glass.Pill),
+                )
+                Text(
+                    formatDuration((total - position).coerceAtLeast(0)),
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    modifier = Modifier.align(Alignment.End).padding(top = 6.dp),
+                )
+            }
+            return@Box
+        }
         VideoLabel(formatDuration((total - position).coerceAtLeast(0)), Modifier.align(Alignment.BottomCenter))
         // Прогрес — тонке кільце по краю «кружечка», як у Telegram.
-        val fraction = if (total > 0) (position.toFloat() / total).coerceIn(0f, 1f) else 0f
         Canvas(Modifier.fillMaxSize()) {
             val stroke = 3.dp.toPx()
             val inset = stroke / 2
@@ -254,13 +298,14 @@ private fun InlineVideo(path: String, durationMs: Long, onEnded: () -> Unit, mod
     }
 }
 
-/** Повноекранний перегляд фото. */
+/** Повноекранний перегляд фото чи відео. Фото закривається тапом; відео — кнопкою ✕ (тап — пауза). */
 @Composable
 fun MediaViewer(reminder: Reminder, onDismiss: () -> Unit) {
     val path = reminder.mediaPath ?: return
+    val video = reminder.kind == Kind.VIDEO
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(
-            Modifier.fillMaxSize().background(Color.Black).clickable(onClick = onDismiss),
+            Modifier.fillMaxSize().background(Color.Black).then(if (video) Modifier else Modifier.clickable(onClick = onDismiss)),
             contentAlignment = Alignment.Center,
         ) {
             when (reminder.kind) {
@@ -270,7 +315,20 @@ fun MediaViewer(reminder: Reminder, onDismiss: () -> Unit) {
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize(),
                 )
+                Kind.VIDEO -> InlineVideo(path, reminder.durationMs, onEnded = onDismiss, modifier = Modifier.fillMaxSize(), fullscreen = true)
                 else -> Unit
+            }
+            if (video) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .statusBarsPadding()
+                        .padding(12.dp)
+                        .size(44.dp)
+                        .glass(CircleShape, Color.Black.copy(alpha = 0.45f))
+                        .clickable(onClickLabel = "Закрити", onClick = onDismiss),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Default.Close, "Закрити", tint = Color.White) }
             }
             if (reminder.text.isNotBlank()) {
                 Text(

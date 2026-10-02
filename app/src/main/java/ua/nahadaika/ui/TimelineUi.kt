@@ -272,7 +272,8 @@ fun TimelineItem(
                     playing = videoPlaying,
                     onPlay = onPlayVideo,
                     onEnded = onVideoEnded,
-                    modifier = Modifier.size(128.dp),
+                    onFullscreen = onOpenPhoto,
+                    modifier = Modifier.size(156.dp),
                 )
                 Kind.PHOTO -> AsyncImage(
                     model = r.mediaPath?.let(::File),

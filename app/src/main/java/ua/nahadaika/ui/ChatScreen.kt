@@ -687,7 +687,12 @@ fun ChatScreen(
                                     player = player,
                                     videoPlaying = r.id == playingVideoId,
                                     onClick = { actionsFor = r },
-                                    onOpenPhoto = { viewing = r },
+                                    onOpenPhoto = {
+                                        // На весь екран — inline-відтворення зупиняємо, щоб не грало двічі.
+                                        player.stop()
+                                        playingVideoId = null
+                                        viewing = r
+                                    },
                                     onPlayVideo = {
                                         player.stop()
                                         playingVideoId = r.id
