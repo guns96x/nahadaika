@@ -10,6 +10,7 @@ import android.speech.SpeechRecognizer
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -105,7 +106,10 @@ class DictationTest {
         compose.waitUntil(5_000) { runBlocking { Repo.reminders(chatId).first() }.size == 3 }
         val saved = runBlocking { Repo.reminders(chatId).first() }.sortedBy { it.triggerAt }
         assertEquals(listOf("Купити хліб", "Подзвонити в банк", "Кіно"), saved.map { it.text })
-        compose.onNodeWithText("Поставив 3 нагадування", substring = true).assertExists()
+        // Підтвердження з'являється вже після створення останнього нагадування — чекаємо, а не перевіряємо миттєво.
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithText("Поставив 3 нагадування", substring = true).fetchSemanticsNodes().isNotEmpty()
+        }
     }
 
     private fun results(text: String) = Bundle().apply {
