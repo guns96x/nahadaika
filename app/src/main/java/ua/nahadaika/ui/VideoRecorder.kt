@@ -3,11 +3,13 @@ package ua.nahadaika.ui
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
+import android.util.Log
 import android.widget.Toast
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.MirrorMode
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.video.ExperimentalPersistentRecording
 import androidx.camera.video.FallbackStrategy
 import androidx.camera.video.FileOutputOptions
 import androidx.camera.video.Quality
@@ -35,7 +37,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -49,6 +50,8 @@ import ua.nahadaika.media.Attachment
 import ua.nahadaika.media.MediaFiles
 import java.io.File
 
+private const val TAG = "VideoCircle"
+
 /** Один запис: файл і рішення, чи зберегти його після зупинки. */
 private class Take(val file: File) {
     var keep = false
@@ -56,11 +59,21 @@ private class Take(val file: File) {
     var recording: Recording? = null
 }
 
+/** Що сказати людині, якщо камера не записала відео. */
+private fun finalizeMessage(error: Int): String = when (error) {
+    VideoRecordEvent.Finalize.ERROR_INSUFFICIENT_STORAGE -> "Не вистачає місця на телефоні"
+    VideoRecordEvent.Finalize.ERROR_ENCODING_FAILED -> "Камера не змогла закодувати відео"
+    VideoRecordEvent.Finalize.ERROR_NO_VALID_DATA -> "Камера не встигла записати жодного кадру"
+    else -> "Не вдалося записати відео (помилка $error)"
+}
+
 /**
  * Відео-«кружечок», як у Telegram: камера відкривається й запис стартує одразу.
  * [finish]: null — іде запис; true — зберегти; false — відкинути. Результат — у [onResult].
- * [front] змінюється кнопкою ⟲ (лише в режимі 🔒) — запис починається наново з іншої камери.
+ * [front] змінюється кнопкою ⟲ (лише в режимі 🔒): запис не переривається — той самий файл
+ * продовжується з іншої камери (persistent recording), як у Telegram.
  */
+@androidx.annotation.OptIn(markerClass = [ExperimentalPersistentRecording::class])
 @SuppressLint("MissingPermission") // дозволи перевіряються перед показом, на мікрофон — нижче
 @Composable
 fun VideoCircleRecorder(
@@ -76,7 +89,10 @@ fun VideoCircleRecorder(
     val lifecycleOwner = LocalLifecycleOwner.current
     val currentOnResult by rememberUpdatedState(onResult)
     val currentOnElapsed by rememberUpdatedState(onElapsed)
+    val currentOnFlip by rememberUpdatedState(onFlip)
     var take by remember { mutableStateOf<Take?>(null) }
+    // Поки камера перемикається, кнопку ⟲ ховаємо — подвійне натискання ламало прив'язку.
+    var switching by remember { mutableStateOf(false) }
 
     val previewView = remember {
         PreviewView(context).apply {
@@ -91,69 +107,86 @@ fun VideoCircleRecorder(
             .build()
         VideoCapture.Builder(recorder).setMirrorMode(MirrorMode.MIRROR_MODE_ON_FRONT_ONLY).build()
     }
+    val providerFuture = remember { ProcessCameraProvider.getInstance(context) }
 
-    fun startTake(attempt: Int = 0) {
+    fun startTake() {
         val t = Take(MediaFiles.newFile(context, "mp4"))
         val pending = videoCapture.output.prepareRecording(context, FileOutputOptions.Builder(t.file).build())
+            .asPersistentRecording()
         val audioGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
             PackageManager.PERMISSION_GRANTED
         currentOnElapsed(0)
-        t.recording = try {
-            (if (audioGranted) pending.withAudioEnabled() else pending).start(ContextCompat.getMainExecutor(context)) { event ->
-                when (event) {
-                    is VideoRecordEvent.Status -> {
-                        t.durationMs = event.recordingStats.recordedDurationNanos / 1_000_000
-                        if (take === t) currentOnElapsed(t.durationMs)
-                    }
-                    is VideoRecordEvent.Finalize -> {
-                        val ok = t.keep && t.file.length() > 0 && t.durationMs >= 700 &&
-                            (event.error == VideoRecordEvent.Finalize.ERROR_NONE ||
-                                event.error == VideoRecordEvent.Finalize.ERROR_SOURCE_INACTIVE)
-                        if (ok) {
-                            currentOnResult(Attachment(Kind.VIDEO, t.file, t.durationMs))
-                        } else {
+        take = t
+        t.recording = (if (audioGranted) pending.withAudioEnabled() else pending).start(ContextCompat.getMainExecutor(context)) { event ->
+            when (event) {
+                is VideoRecordEvent.Status -> {
+                    t.durationMs = event.recordingStats.recordedDurationNanos / 1_000_000
+                    if (take === t) currentOnElapsed(t.durationMs)
+                }
+                is VideoRecordEvent.Finalize -> {
+                    val errorOk = event.error == VideoRecordEvent.Finalize.ERROR_NONE ||
+                        event.error == VideoRecordEvent.Finalize.ERROR_SOURCE_INACTIVE
+                    if (!errorOk) Log.w(TAG, "Finalize error ${event.error}", event.cause)
+                    val ok = t.keep && t.file.length() > 0 && t.durationMs >= 700 && errorOk
+                    when {
+                        ok -> currentOnResult(Attachment(Kind.VIDEO, t.file, t.durationMs))
+                        !t.keep -> t.file.delete()
+                        else -> {
                             t.file.delete()
-                            if (t.keep) {
-                                Toast.makeText(context, "Відео занадто коротке", Toast.LENGTH_SHORT).show()
-                                currentOnResult(null)
-                            }
+                            val message = if (errorOk || t.durationMs in 1 until 700) "Відео занадто коротке" else finalizeMessage(event.error)
+                            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                            currentOnResult(null)
                         }
                     }
                 }
             }
-        } catch (_: IllegalStateException) {
-            // Попередній запис (після зміни камери) ще завершується — пробуємо трохи пізніше.
-            t.file.delete()
-            if (attempt < 10) previewView.postDelayed({ startTake(attempt + 1) }, 200) else currentOnResult(null)
-            return
         }
-        take = t
     }
 
-    // Прив'язка камери; при зміні камери поточний запис відкидається і починається новий.
+    // Прив'язка камери. Запис не зупиняється: persistent recording переживає зміну камери.
     DisposableEffect(front) {
-        val future = ProcessCameraProvider.getInstance(context)
-        var provider: ProcessCameraProvider? = null
         var disposed = false
-        future.addListener({
+        switching = true
+        providerFuture.addListener({
             if (disposed) return@addListener
-            try {
-                val p = future.get()
-                provider = p
-                val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
-                val selector = if (front) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
+            val p = providerFuture.get()
+            val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
+            fun bind(useFront: Boolean) {
                 p.unbindAll()
+                val selector = if (useFront) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
                 p.bindToLifecycle(lifecycleOwner, selector, preview, videoCapture)
-                startTake()
-            } catch (_: Exception) {
+            }
+            try {
+                try {
+                    bind(front)
+                } catch (e: Exception) {
+                    // Деякі телефони не дають записувати відео з однієї з камер — пробуємо іншу, а не закриваємо запис.
+                    Log.w(TAG, "bind front=$front failed", e)
+                    bind(!front)
+                    Toast.makeText(
+                        context,
+                        if (front) "Фронтальна камера недоступна — пишу з основної" else "Основна камера недоступна — пишу з фронтальної",
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                    currentOnFlip()
+                }
+                if (take == null) startTake()
+            } catch (e: Exception) {
+                Log.w(TAG, "camera start failed", e)
                 Toast.makeText(context, "Не вдалося увімкнути камеру", Toast.LENGTH_SHORT).show()
                 currentOnResult(null)
+            } finally {
+                switching = false
             }
         }, ContextCompat.getMainExecutor(context))
+        onDispose { disposed = true }
+    }
+
+    // Вихід з екрана запису: незбережений запис зупиняємо (persistent recording сам не зупиняється), камеру відпускаємо.
+    DisposableEffect(Unit) {
         onDispose {
-            disposed = true
             take?.let { t -> if (!t.keep) t.recording?.stop() }
-            provider?.unbindAll()
+            if (providerFuture.isDone) runCatching { providerFuture.get().unbindAll() }
         }
     }
 
@@ -179,7 +212,7 @@ fun VideoCircleRecorder(
                     .clip(CircleShape)
                     .border(2.dp, Glass.Stroke, CircleShape),
             )
-            if (locked) {
+            if (locked && !switching) {
                 GlassIconButton(
                     Icons.Default.Cameraswitch,
                     "Змінити камеру",
