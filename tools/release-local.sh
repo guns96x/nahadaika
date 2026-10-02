@@ -25,3 +25,6 @@ fi
 ./gradlew testDebugUnitTest assembleRelease
 git push origin HEAD:main
 GITHUB_SHA="$(git rev-parse HEAD)" bash tools/release.sh
+
+# Тимчасові файли релізу — не лишаємо в робочій копії.
+rm -rf out prev

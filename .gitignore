@@ -5,3 +5,6 @@ local.properties
 *.keystore
 .idea/
 *.iml
+# Тимчасові файли tools/release.sh
+/out/
+/prev/
