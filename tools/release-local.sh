@@ -9,6 +9,8 @@ KEYDIR="${NAHADAIKA_KEYDIR:-$HOME/.nahadaika}"
 export NAHADAIKA_KEYSTORE="$KEYDIR/nahadaika-release.jks"
 NAHADAIKA_KEYSTORE_PASSWORD="$(tr -d '\r\n' < "$KEYDIR/password")"
 export NAHADAIKA_KEYSTORE_PASSWORD
+# Python на Windows інакше пише файли й читає аргументи в cp1251 — «що нового» ламається.
+export PYTHONUTF8=1
 export ANDROID_HOME="${ANDROID_HOME:-$LOCALAPPDATA/Android/Sdk}"
 if [ -z "${JAVA_HOME:-}" ]; then
   JAVA_HOME="$(ls -d "/c/Program Files/Eclipse Adoptium/jdk-17"* 2>/dev/null | tail -1)"

@@ -59,7 +59,7 @@ def main() -> None:
 
     prev_json = os.path.join(a.prev_dir, "update.json") if a.prev_dir else ""
     if prev_json and os.path.exists(prev_json):
-        prev = json.load(open(prev_json))
+        prev = json.load(open(prev_json, encoding="utf-8"))
         prev_apk = os.path.join(a.prev_dir, prev["apk"]["name"])
         if os.path.exists(prev_apk) and prev["versionCode"] < a.code:
             old = open(prev_apk, "rb").read()
@@ -72,7 +72,7 @@ def main() -> None:
             })
             print(f"патч {name}: {len(patch) // 1024} КБ замість {len(new) // 1024} КБ")
 
-    json.dump(info, open(os.path.join(a.out, "update.json"), "w"), ensure_ascii=False, indent=2)
+    json.dump(info, open(os.path.join(a.out, "update.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=2)
     print(json.dumps(info, ensure_ascii=False, indent=2))
 
 
