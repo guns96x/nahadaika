@@ -1,0 +1,2 @@
+# Скрипти виконуються bash і на Windows — лише LF.
+*.sh text eol=lf
