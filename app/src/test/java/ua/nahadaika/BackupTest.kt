@@ -46,7 +46,8 @@ class BackupTest {
     private suspend fun seed(): Long {
         val chat = Repo.createChat("Дім")
         val now = System.currentTimeMillis()
-        Repo.createReminder(Reminder(chatId = chat, kind = Kind.TEXT, text = "Купити хліб", triggerAt = now + hour))
+        val bread = Repo.createReminder(Reminder(chatId = chat, kind = Kind.TEXT, text = "Купити хліб", triggerAt = now + hour))
+        Repo.addComment(bread, "Беру на себе")
         Repo.createReminder(
             Reminder(chatId = chat, kind = Kind.TEXT, text = "Вітаміни", triggerAt = now + 2 * hour, repeat = Repeat.DAILY, alarm = true),
         )
@@ -83,6 +84,7 @@ class BackupTest {
         assertEquals(Repeat.DAILY, restored.getValue("Вітаміни").repeat)
         assertTrue(restored.getValue("Вітаміни").alarm)
         assertTrue(restored.getValue("Було").fired)
+        assertEquals(listOf("Беру на себе"), Repo.comments(restored.getValue("Купити хліб").id).first().map { it.text })
         val voice = restored.getValue("Голос")
         assertEquals(4200L, voice.durationMs)
         assertEquals(listOf<Byte>(1, 2, 3, 4, 5), File(voice.mediaPath!!).readBytes().toList())

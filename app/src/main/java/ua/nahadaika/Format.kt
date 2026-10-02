@@ -97,3 +97,44 @@ fun previewText(r: Reminder): String {
         Kind.PHOTO -> "🖼 " + (caption ?: "Фото")
     }
 }
+
+private const val TITLE_MAX = 40
+
+/**
+ * Короткий заголовок для згорнутої картки: перше речення (або рядок) тексту, обрізане по слову.
+ * Медіа без підпису — вид і тривалість: «🎤 Голосове · 0:09».
+ */
+fun reminderTitle(r: Reminder): String {
+    val text = r.text.trim()
+    val prefix = when (r.kind) {
+        Kind.TEXT -> ""
+        Kind.VOICE -> "🎤 "
+        Kind.VIDEO -> "🎬 "
+        Kind.PHOTO -> "🖼 "
+    }
+    if (text.isEmpty()) {
+        return when (r.kind) {
+            Kind.TEXT -> "Нагадування"
+            Kind.VOICE -> "🎤 Голосове · ${formatDuration(r.durationMs)}"
+            Kind.VIDEO -> "🎬 Кружечок · ${formatDuration(r.durationMs)}"
+            Kind.PHOTO -> "🖼 Фото"
+        }
+    }
+    val firstLine = text.lineSequence().first().trim()
+    // Перше речення, якщо воно не надто коротке («Ок.» — не заголовок).
+    val sentence = Regex("^(.{12,}?[.!?…])(\\s|$)").find(firstLine)?.groupValues?.get(1) ?: firstLine
+    val title = if (sentence.length <= TITLE_MAX) {
+        sentence
+    } else {
+        val cut = sentence.take(TITLE_MAX + 1)
+        val space = cut.lastIndexOf(' ').takeIf { it >= TITLE_MAX / 2 } ?: TITLE_MAX
+        cut.take(space).trimEnd(',', ';', ':', ' ', '-', '—') + "…"
+    }
+    return prefix + title
+}
+
+/** Чи є в нагадуванні щось понад заголовок — щоб показати повний текст у розгорнутій картці. */
+fun hasMoreThanTitle(r: Reminder): Boolean {
+    val text = r.text.trim()
+    return text.isNotEmpty() && reminderTitle(r).removePrefix("🎤 ").removePrefix("🎬 ").removePrefix("🖼 ") != text
+}

@@ -64,6 +64,16 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import ua.nahadaika.data.CommentStat
+import ua.nahadaika.hasMoreThanTitle
+import ua.nahadaika.reminderTitle
 
 private val uk = Locale.forLanguageTag("uk")
 private val monthFmt = DateTimeFormatter.ofPattern("LLLL yyyy", uk)
@@ -195,7 +205,12 @@ private fun Modifier.timelineLine(isFirst: Boolean, isLast: Boolean): Modifier {
     }
 }
 
-/** Нагадування на лінії: час ліворуч, кольоровий кружок, картка з текстом і медіа. */
+/**
+ * Нагадування на лінії: час ліворуч, кольоровий кружок і картка-акордеон.
+ * Згорнута — лише автоматичний заголовок і значки; тап розгортає повний текст, медіа, дії та обговорення
+ * ([expandedContent]). Розгорнутою буває одна картка — перемикає [onClick] у чаті.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TimelineItem(
     occurrence: Occurrence,
@@ -203,17 +218,28 @@ fun TimelineItem(
     isFirst: Boolean,
     isLast: Boolean,
     highlighted: Boolean,
+    expanded: Boolean,
+    stat: CommentStat?,
     player: AudioPlayer,
     videoPlaying: Boolean,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
     onOpenPhoto: () -> Unit,
     onPlayVideo: () -> Unit,
     onVideoEnded: () -> Unit,
+    expandedContent: @Composable ColumnScope.() -> Unit = {},
 ) {
     val r = occurrence.reminder
     val done = occurrence.done
     val color = kindColor(r.kind)
-    val cardFill by animateColorAsState(if (highlighted) Glass.Lavender.copy(alpha = 0.18f) else Glass.Fill, label = "card")
+    val cardFill by animateColorAsState(
+        when {
+            highlighted -> Glass.Lavender.copy(alpha = 0.18f)
+            expanded -> Glass.FillStrong
+            else -> Glass.Fill
+        },
+        label = "card",
+    )
     Row(
         Modifier
             .fillMaxWidth()
@@ -239,85 +265,109 @@ fun TimelineItem(
                 Icon(if (done) Icons.Default.Check else kindIcon(r.kind), null, tint = Color.White, modifier = Modifier.size(15.dp))
             }
         }
-        // Відео без підпису — «кружечок» без картки, як у Telegram; дії — через «⋯» під ним.
-        val bare = r.kind == Kind.VIDEO && r.text.isBlank()
         Column(
             Modifier
                 .weight(1f)
-                .then(
-                    if (bare) {
-                        Modifier.padding(top = 2.dp)
-                    } else {
-                        Modifier.glass(RoundedCornerShape(16.dp), cardFill).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 8.dp)
-                    },
-                ),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+                .glass(RoundedCornerShape(16.dp), cardFill)
+                .combinedClickable(
+                    onClickLabel = if (expanded) "Згорнути" else "Розгорнути",
+                    onLongClickLabel = "Дії",
+                    onClick = onClick,
+                    onLongClick = onLongClick,
+                )
+                .animateContentSize()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            // Заголовок — лише справжній текст; медіа говорить саме за себе.
-            val title = r.text.ifBlank { if (r.kind == Kind.TEXT) "Нагадування" else "" }
-            if (title.isNotEmpty()) Text(
-                title,
-                color = if (done) Glass.TextDim else Glass.Text,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Medium,
-                lineHeight = 20.sp,
-                textDecoration = if (done && r.kind == Kind.TEXT) TextDecoration.LineThrough else null,
-                maxLines = 6,
-                overflow = TextOverflow.Ellipsis,
-            )
-            when (r.kind) {
-                Kind.VOICE -> VoicePlayer(r, player)
-                Kind.VIDEO -> VideoMedia(
-                    r,
-                    playing = videoPlaying,
-                    onPlay = onPlayVideo,
-                    onEnded = onVideoEnded,
-                    onFullscreen = onOpenPhoto,
-                    modifier = Modifier.size(156.dp),
+            // Згорнута картка: один рядок — заголовок і значки.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    reminderTitle(r),
+                    color = if (done) Glass.TextDim else Glass.Text,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    textDecoration = if (done && r.kind == Kind.TEXT) TextDecoration.LineThrough else null,
+                    maxLines = if (expanded) 3 else 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
-                Kind.PHOTO -> AsyncImage(
-                    model = r.mediaPath?.let(::File),
-                    contentDescription = "Фото",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(140.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Glass.Fill)
-                        .clickable(onClick = onOpenPhoto),
-                )
-                Kind.TEXT -> Unit
+                if (r.alarm) MiniIcon(Icons.Default.Alarm, "Будильник")
+                if (r.snoozedUntil != null && !done) MiniIcon(Icons.Default.Snooze, "Відкладено")
+                if (r.repeat != Repeat.NONE) MiniIcon(Icons.Default.Repeat, repeatLabel(r.repeat))
+                if (stat != null && stat.count > 0) CommentBadge(stat)
             }
-            Row(
-                Modifier.then(if (bare) Modifier.clip(Glass.Pill).clickable(onClickLabel = "Дії", onClick = onClick).padding(start = 6.dp) else Modifier),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (done) {
-                    Icon(Icons.Default.Check, null, Modifier.size(14.dp), tint = Glass.TextFaint)
-                    Spacer(Modifier.width(4.dp))
-                    Text("надіслано", fontSize = 12.sp, color = Glass.TextFaint)
-                } else {
-                    Text(inLabel(occurrence.at - now), fontSize = 12.sp, color = Glass.Lavender, fontWeight = FontWeight.Medium)
+            if (expanded) {
+                r.authorName?.let { Text("від $it", fontSize = 12.sp, color = Glass.TextFaint) }
+                if (hasMoreThanTitle(r)) {
+                    Text(r.text, color = Glass.Text, fontSize = 15.sp, lineHeight = 20.sp)
                 }
-                Spacer(Modifier.weight(1f))
-                if (r.alarm) {
-                    Icon(Icons.Default.Alarm, "Будильник", Modifier.size(14.dp), tint = Glass.TextFaint)
-                    Spacer(Modifier.width(6.dp))
+                when (r.kind) {
+                    Kind.VOICE -> VoicePlayer(r, player)
+                    Kind.VIDEO -> VideoMedia(
+                        r,
+                        playing = videoPlaying,
+                        onPlay = onPlayVideo,
+                        onEnded = onVideoEnded,
+                        onFullscreen = onOpenPhoto,
+                        modifier = Modifier.size(156.dp),
+                    )
+                    Kind.PHOTO -> AsyncImage(
+                        model = r.mediaPath?.let(::File),
+                        contentDescription = "Фото",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(160.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Glass.Fill)
+                            .clickable(onClick = onOpenPhoto),
+                    )
+                    Kind.TEXT -> Unit
                 }
-                if (r.snoozedUntil != null && !done) {
-                    Icon(Icons.Default.Snooze, "Відкладено", Modifier.size(14.dp), tint = Glass.TextFaint)
-                    Spacer(Modifier.width(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (done) {
+                        Icon(Icons.Default.Check, null, Modifier.size(14.dp), tint = Glass.TextFaint)
+                        Spacer(Modifier.width(4.dp))
+                        Text("надіслано", fontSize = 12.sp, color = Glass.TextFaint)
+                    } else {
+                        Text(inLabel(occurrence.at - now), fontSize = 12.sp, color = Glass.Lavender, fontWeight = FontWeight.Medium)
+                    }
+                    if (r.repeat != Repeat.NONE) {
+                        Text(" · ${repeatLabel(r.repeat).lowercase()}", fontSize = 12.sp, color = Glass.TextFaint)
+                    }
                 }
-                if (r.repeat != Repeat.NONE) {
-                    Icon(Icons.Default.Repeat, null, Modifier.size(14.dp), tint = Glass.TextFaint)
-                    Spacer(Modifier.width(3.dp))
-                    Text(repeatLabel(r.repeat).lowercase(), fontSize = 12.sp, color = Glass.TextFaint)
-                }
-                if (bare) {
-                    Spacer(Modifier.width(8.dp))
-                    Icon(Icons.Default.MoreHoriz, "Дії", Modifier.padding(4.dp).size(18.dp), tint = Glass.TextDim)
-                }
+                expandedContent()
             }
+        }
+    }
+}
+
+@Composable
+private fun MiniIcon(icon: ImageVector, description: String) {
+    Icon(icon, description, Modifier.padding(start = 6.dp).size(14.dp), tint = Glass.TextFaint)
+}
+
+/** «💬 3»; якщо там є нове від інших — підсвічено, з крапкою. */
+@Composable
+private fun CommentBadge(stat: CommentStat) {
+    val unread = stat.unread > 0
+    Row(
+        Modifier
+            .padding(start = 8.dp)
+            .clip(Glass.Pill)
+            .background(if (unread) Glass.Lavender.copy(alpha = 0.22f) else Glass.FillStrong)
+            .padding(horizontal = 7.dp, vertical = 2.dp)
+            .semantics(mergeDescendants = true) {
+                contentDescription = if (unread) "Нові повідомлення: ${stat.unread}" else "Обговорення: ${stat.count}"
+            },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.AutoMirrored.Filled.Chat, null, Modifier.size(12.dp), tint = if (unread) Glass.Lavender else Glass.TextDim)
+        Spacer(Modifier.width(3.dp))
+        Text("${stat.count}", fontSize = 12.sp, color = if (unread) Glass.Lavender else Glass.TextDim, fontWeight = FontWeight.Medium)
+        if (unread) {
+            Spacer(Modifier.width(4.dp))
+            Box(Modifier.size(6.dp).background(Glass.Lavender, CircleShape))
         }
     }
 }

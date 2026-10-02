@@ -70,8 +70,15 @@ class AlarmTest {
         val room = AppDatabase.create(app)
         // Хеш схеми версії 1 невідомий тесту — дозволяємо Room прийняти базу як є, перевіряємо лише міграцію.
         val r = runBlocking { room.reminders().get(1) }
+        // Версія 3: обговорення під нагадуваннями.
+        val comments = runBlocking {
+            room.comments().insert(ua.nahadaika.data.Comment(reminderId = 1, text = "Ок"))
+            room.comments().byReminder(1)
+        }
         room.close()
         assertEquals("Хліб", r!!.text)
         assertFalse(r.alarm)
+        assertEquals(0L, r.commentsReadAt)
+        assertEquals(listOf("Ок"), comments.map { it.text })
     }
 }

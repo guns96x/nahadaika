@@ -129,6 +129,10 @@ fun ChatScreen(
     val snackbar = remember { SnackbarHostState() }
     val chat by Repo.chat(chatId).collectAsStateWithLifecycle(null)
     val all by Repo.reminders(chatId).collectAsStateWithLifecycle(emptyList())
+    val statList by Repo.commentStats(chatId).collectAsStateWithLifecycle(emptyList())
+    val stats = remember(statList) { statList.associateBy { it.reminderId } }
+    // Розгорнута картка — одна; тап по іншій згортає попередню.
+    var expandedId by rememberSaveable { mutableStateOf<Long?>(null) }
 
     val scheduled = remember(all) { all.filter { !it.fired }.sortedBy { it.alarmAt() } }
     var nowTick by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -203,6 +207,7 @@ fun ChatScreen(
         val r = all.find { it.id == f.reminderId } ?: return@LaunchedEffect
         selectedDate = (if (r.fired) r.lastFiredAt ?: r.triggerAt else r.alarmAt()).toLocalDate()
         highlightId = r.id
+        expandedId = r.id
         if (f.autoplay && r.kind == Kind.VOICE) r.mediaPath?.let(player::play)
         onFocusConsumed()
     }
@@ -684,9 +689,20 @@ fun ChatScreen(
                                     isFirst = isFirst,
                                     isLast = isLast,
                                     highlighted = r.id == highlightId,
+                                    expanded = r.id == expandedId,
+                                    stat = stats[r.id],
                                     player = player,
                                     videoPlaying = r.id == playingVideoId,
-                                    onClick = { actionsFor = r },
+                                    onClick = {
+                                        if (expandedId == r.id) {
+                                            expandedId = null
+                                        } else {
+                                            expandedId = r.id
+                                        }
+                                        // Згорнули картку з відео, що грає, — зупиняємо.
+                                        if (playingVideoId != null && playingVideoId != expandedId) playingVideoId = null
+                                    },
+                                    onLongClick = { actionsFor = r },
                                     onOpenPhoto = {
                                         // На весь екран — inline-відтворення зупиняємо, щоб не грало двічі.
                                         player.stop()
@@ -698,6 +714,15 @@ fun ChatScreen(
                                         playingVideoId = r.id
                                     },
                                     onVideoEnded = { if (playingVideoId == r.id) playingVideoId = null },
+                                    expandedContent = {
+                                        ReminderExpanded(
+                                            reminder = r,
+                                            onReschedule = { rescheduling = r },
+                                            onDone = { scope.launch { Repo.markDone(r.id) } },
+                                            onEditText = { editingText = r },
+                                            onMore = { actionsFor = r },
+                                        )
+                                    },
                                 )
                             }
                         }

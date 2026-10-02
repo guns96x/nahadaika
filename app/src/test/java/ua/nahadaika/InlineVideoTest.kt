@@ -6,6 +6,7 @@ import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.runBlocking
@@ -59,6 +60,9 @@ class InlineVideoTest {
             }
         }
         compose.waitForIdle()
+        // Згорнута картка показує лише заголовок — розгортаємо.
+        compose.onNodeWithText("🎬 Кружечок · 0:09").performClick()
+        compose.waitForIdle()
 
         compose.mainClock.autoAdvance = false
         compose.onNodeWithContentDescription("Відтворити відео").performClick()
@@ -91,6 +95,8 @@ class InlineVideoTest {
                 ChatScreen(chatId = chatId, focus = null, onFocusConsumed = {}, quick = null, onQuickConsumed = {}, onOpenChats = {})
             }
         }
+        compose.waitForIdle()
+        compose.onNodeWithText("🎬 Кружечок · 0:09").performClick()
         compose.waitForIdle()
 
         compose.onNodeWithContentDescription("На весь екран").performClick()

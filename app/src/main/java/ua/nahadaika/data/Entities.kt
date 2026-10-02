@@ -13,6 +13,8 @@ data class Chat(
     val name: String,
     val color: Int,
     val createdAt: Long = System.currentTimeMillis(),
+    /** Ідентифікатор спільного чату на сервері; null — чат лише на цьому телефоні. */
+    val remoteId: String? = null,
 )
 
 enum class Kind { TEXT, VOICE, VIDEO, PHOTO }
@@ -52,7 +54,39 @@ data class Reminder(
     val createdAt: Long = System.currentTimeMillis(),
     /** Будильник: гучна мелодія, поки не вимкнуть, і екран на весь дисплей. */
     @ColumnInfo(defaultValue = "0") val alarm: Boolean = false,
+    /** Ідентифікатор на сервері (спільні чати); null — лише локально. */
+    val remoteId: String? = null,
+    /** Хто поставив нагадування у спільному чаті; null — я. */
+    val authorName: String? = null,
+    /** До якого моменту обговорення прочитане — щоб позначати нове. */
+    @ColumnInfo(defaultValue = "0") val commentsReadAt: Long = 0,
 )
+
+/** Повідомлення в обговоренні під нагадуванням. */
+@Entity(
+    tableName = "comments",
+    foreignKeys = [
+        ForeignKey(
+            entity = Reminder::class,
+            parentColumns = ["id"],
+            childColumns = ["reminderId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index("reminderId")],
+)
+data class Comment(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val reminderId: Long,
+    val text: String,
+    /** null — моє повідомлення; інакше ім'я учасника спільного чату. */
+    val authorName: String? = null,
+    val createdAt: Long = System.currentTimeMillis(),
+    val remoteId: String? = null,
+)
+
+/** Підсумок обговорення для картки: скільки повідомлень і скільки нових від інших. */
+data class CommentStat(val reminderId: Long, val count: Int, val unread: Int)
 
 /** Час, на який реально стоїть будильник. */
 fun Reminder.alarmAt(): Long = snoozedUntil ?: triggerAt

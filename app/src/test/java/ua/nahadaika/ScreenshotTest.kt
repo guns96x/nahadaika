@@ -19,6 +19,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.github.takahirom.roborazzi.captureScreenRoboImage
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
@@ -193,5 +194,22 @@ class ScreenshotTest {
         compose.onNodeWithText("Виконані").performClick()
         compose.waitForIdle()
         compose.onRoot().captureRoboImage("build/screenshots/9c_search_done.png")
+    }
+
+    /** Акордеон: згорнуті заголовки, одна розгорнута картка з діями й обговоренням. */
+    @Test
+    fun chatExpanded() {
+        val home = seed()
+        runBlocking {
+            val parcel = Repo.reminders(home).first().first { it.text.startsWith("Забрати посилку") }
+            Repo.addComment(parcel.id, "Візьми паспорт")
+            Repo.receiveComment(parcel.id, "Добре, після роботи заберу", authorName = "Оля")
+        }
+        compose.setContent { NahadaikaTheme { ChatScreen(chatId = home, focus = null, onFocusConsumed = {}, quick = null, onQuickConsumed = {}, onOpenChats = {}) } }
+        compose.waitForIdle()
+        compose.onRoot().captureRoboImage("build/screenshots/13_chat_collapsed.png")
+        compose.onNodeWithText("Забрати посилку на пошті 📦").performClick()
+        compose.waitForIdle()
+        compose.onRoot().captureRoboImage("build/screenshots/13b_chat_expanded.png")
     }
 }

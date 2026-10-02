@@ -33,9 +33,10 @@ object Backup {
     suspend fun export(db: AppDatabase, out: OutputStream) {
         val chats = db.chats().all()
         val reminders = db.reminders().all()
+        val comments = reminders.associate { it.id to db.comments().byReminder(it.id) }
         ZipOutputStream(out.buffered()).use { zip ->
             zip.putNextEntry(ZipEntry(DATA))
-            zip.write(toJson(chats, reminders).toString().toByteArray(Charsets.UTF_8))
+            zip.write(toJson(chats, reminders, comments).toString().toByteArray(Charsets.UTF_8))
             zip.closeEntry()
             reminders.mapNotNull { it.mediaPath }.distinct().map(::File).filter { it.isFile }.forEach { file ->
                 zip.putNextEntry(ZipEntry(MEDIA + file.name))
@@ -111,7 +112,19 @@ object Backup {
             }
             val media = j.optString("media").takeIf { it.isNotEmpty() }?.let { File(staging, it) }?.takeIf { it.isFile }
             val target = media?.let { MediaFiles.newFile(context, it.extension.ifEmpty { "bin" }).also { t -> it.copyTo(t) } }
-            db.reminders().insert(settle(draft.copy(mediaPath = target?.absolutePath), now))
+            val id = db.reminders().insert(settle(draft.copy(mediaPath = target?.absolutePath), now))
+            val comments = j.optJSONArray("comments")
+            for (k in 0 until (comments?.length() ?: 0)) {
+                val c = comments!!.getJSONObject(k)
+                db.comments().insert(
+                    Comment(
+                        reminderId = id,
+                        text = c.getString("text"),
+                        authorName = if (c.isNull("author")) null else c.getString("author"),
+                        createdAt = c.optLong("createdAt", now),
+                    ),
+                )
+            }
             added++
         }
         return ImportResult(chats = addedChats, reminders = added, skipped = skipped)
@@ -128,7 +141,7 @@ object Backup {
 
     private fun fingerprint(r: Reminder) = listOf(r.chatId, r.kind, r.text, r.triggerAt, r.createdAt).joinToString("|")
 
-    internal fun toJson(chats: List<Chat>, reminders: List<Reminder>): JSONObject = JSONObject()
+    internal fun toJson(chats: List<Chat>, reminders: List<Reminder>, comments: Map<Long, List<Comment>> = emptyMap()): JSONObject = JSONObject()
         .put("app", "nahadaika")
         .put("format", FORMAT)
         .put("exportedAt", System.currentTimeMillis())
@@ -149,6 +162,9 @@ object Backup {
                 .put("lastFiredAt", r.lastFiredAt ?: JSONObject.NULL)
                 .put("createdAt", r.createdAt)
                 .put("alarm", r.alarm)
+                .put("comments", JSONArray(comments[r.id].orEmpty().map { c ->
+                    JSONObject().put("text", c.text).put("author", c.authorName ?: JSONObject.NULL).put("createdAt", c.createdAt)
+                }))
         }))
 
     private fun fromJson(j: JSONObject, chatId: Long, mediaPath: String?) = Reminder(

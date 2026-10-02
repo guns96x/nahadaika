@@ -114,6 +114,43 @@ object Repo {
         db.reminders().delete(reminder)
     }
 
+    // ---- Обговорення ----
+
+    fun comments(reminderId: Long): Flow<List<Comment>> = db.comments().observeByReminder(reminderId)
+    fun commentStats(chatId: Long): Flow<List<CommentStat>> = db.comments().observeStats(chatId)
+
+    suspend fun addComment(reminderId: Long, text: String) {
+        val t = text.trim()
+        if (t.isNotEmpty()) db.comments().insert(Comment(reminderId = reminderId, text = t))
+    }
+
+    /** Повідомлення від іншого учасника спільного чату (з синхронізації). */
+    suspend fun receiveComment(reminderId: Long, text: String, authorName: String, createdAt: Long = System.currentTimeMillis(), remoteId: String? = null) {
+        db.comments().insert(Comment(reminderId = reminderId, text = text, authorName = authorName, createdAt = createdAt, remoteId = remoteId))
+    }
+
+    /** Обговорення переглянуто — позначка «нове» зникає. */
+    suspend fun markCommentsRead(reminderId: Long) {
+        db.reminders().get(reminderId)?.let { db.reminders().update(it.copy(commentsReadAt = System.currentTimeMillis())) }
+    }
+
+    /**
+     * «Готово» без очікування: разове йде в історію, повторюване — на наступний раз.
+     * Сповіщення, якщо вже висить, прибираємо.
+     */
+    suspend fun markDone(id: Long) = lock.withLock {
+        val r = db.reminders().get(id) ?: return@withLock
+        val now = System.currentTimeMillis()
+        val updated = if (r.repeat == Repeat.NONE) {
+            r.copy(fired = true, snoozedUntil = null, lastFiredAt = now)
+        } else {
+            r.copy(triggerAt = nextOccurrence(r.triggerAt, r.repeat, maxOf(now, r.triggerAt)), snoozedUntil = null, lastFiredAt = now)
+        }
+        db.reminders().update(updated)
+        Notifier.cancel(app, id)
+        if (updated.fired) AlarmScheduler.cancel(app, id) else AlarmScheduler.schedule(app, updated)
+    }
+
     /** Прибрати виконані нагадування разом з медіафайлами; [chatId] = null — у всіх чатах. */
     suspend fun clearDone(chatId: Long? = null): Int {
         val done = db.reminders().done().filter { chatId == null || it.chatId == chatId }
