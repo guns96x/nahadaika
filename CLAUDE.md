@@ -15,4 +15,4 @@ Android (Kotlin 2.0, Compose, Room, CameraX, WorkManager, Vosk). Мова інт
 - Будь-яка зміна `VoiceParser` — з тестами у `VoiceParserTest` (фіксований «зараз»: середа 30.09.2026 10:00, Europe/Kyiv).
 - Зміна схеми Room — підняти версію в `AppDatabase` і додати міграцію (є тест міграції в `AlarmTest`).
 - Robolectric не вміє влучати в елементи з асиметричними заокругленнями без `@GraphicsMode(NATIVE)`.
-- Реліз: підняти `versionCode`/`versionName`, оновити `whatsnew.txt`, push у `main` — CI створить реліз і патч.
+- Реліз: підняти `versionCode`/`versionName`, оновити `whatsnew.txt`, закомітити й `bash tools/release-local.sh` (ключ у `~/.nahadaika/`). Без ключа на ПК — просто push у `main`, CI створить реліз і патч.

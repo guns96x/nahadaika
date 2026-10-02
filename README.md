@@ -48,7 +48,8 @@ Android-застосунок для нагадувань у форматі ча�
 
 1. Підніміть `versionCode` і `versionName` в `app/build.gradle.kts`, опишіть зміни в `whatsnew.txt`.
 2. Push у `main`. GitHub Actions збере APK, створить реліз `v<версія>` з APK, патчем від попередньої версії та `update.json` (`tools/release.sh`, `tools/make_update.py`).
-3. Для цього в *Settings → Secrets and variables → Actions* мають бути `NAHADAIKA_KEYSTORE_BASE64` (`.jks` у base64) і `NAHADAIKA_KEYSTORE_PASSWORD`.
+3. Або з ПК, швидше: `bash tools/release-local.sh` — тести, підписана збірка, push і реліз. Ключ і пароль беруться з `~/.nahadaika/` (`nahadaika-release.jks`, `password`), потрібні `gh` з входом і `pip install bsdiff4`. CI після цього лише проганяє тести.
+4. Для релізу з CI в *Settings → Secrets and variables → Actions* мають бути `NAHADAIKA_KEYSTORE_BASE64` (`.jks` у base64) і `NAHADAIKA_KEYSTORE_PASSWORD`.
 
 ## Структура
 
