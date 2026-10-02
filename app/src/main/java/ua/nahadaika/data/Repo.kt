@@ -44,13 +44,16 @@ object Repo {
         if (::app.isInitialized && app === appContext) return
         app = appContext
         db = AppDatabase.create(app)
-        watchWidget()
+        widgetJob?.cancel()
+        widgetJob = null
+        // Без віджета на екрані не чіпаємо базу при старті.
+        if (ReminderWidget.isPlaced(app)) watchWidget()
     }
 
-    /** Будь-яка зміна нагадувань чи чатів — перемалювати віджет (якщо він стоїть на екрані). */
+    /** Будь-яка зміна нагадувань чи чатів — перемалювати віджет. Вмикається, щойно віджет з'являється на екрані. */
     @OptIn(FlowPreview::class)
-    private fun watchWidget() {
-        widgetJob?.cancel()
+    fun watchWidget() {
+        if (widgetJob?.isActive == true) return
         widgetJob = CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             merge(db.reminders().observeAll().map { }, db.chats().observeAll().map { })
                 .debounce(300)

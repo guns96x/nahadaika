@@ -42,6 +42,19 @@ data class UpdateInfo(
     val downloadSize get() = patch?.size ?: apk.size
 
     companion object {
+        /**
+         * Адреси файлів релізу за іменами з update.json. Реліз має тег `v<versionName>`;
+         * посилання саме на цей тег, а не на «latest», щоб файли не змінились між перевіркою й завантаженням.
+         */
+        fun releaseUrls(json: String, repo: String): Map<String, String> {
+            val o = JSONObject(json)
+            val dir = "https://github.com/$repo/releases/download/v${o.getString("versionName")}/"
+            val patches = o.optJSONArray("patches")
+            val names = listOf(o.getJSONObject("apk").getString("name")) +
+                (0 until (patches?.length() ?: 0)).map { patches!!.getJSONObject(it).getString("name") }
+            return names.associateWith { dir + it }
+        }
+
         /** Розбір update.json; [urls] — адреси файлів релізу за іменами. */
         fun parse(json: String, urls: Map<String, String>, currentCode: Long): UpdateInfo {
             val o = JSONObject(json)
@@ -115,22 +128,18 @@ object Updates {
 
     class NoReleasesException : Exception("на GitHub ще немає опублікованих версій")
 
-    /** Остання версія з GitHub або null, якщо встановлена вже найновіша. */
+    /**
+     * Остання версія з GitHub або null, якщо встановлена вже найновіша.
+     * Беремо update.json прямим посиланням релізу, а не через api.github.com: у API без входу
+     * лише 60 запитів на годину з однієї IP (через VPN чи спільну мережу ліміт швидко вичерпується — «GitHub відповів 403»).
+     */
     suspend fun fetch(context: Context): UpdateInfo? = withContext(Dispatchers.IO) {
-        val conn = open("https://api.github.com/repos/${BuildConfig.UPDATE_REPO}/releases/latest")
-        conn.setRequestProperty("Accept", "application/vnd.github+json")
+        val conn = open("https://github.com/${BuildConfig.UPDATE_REPO}/releases/latest/download/update.json")
         if (conn.responseCode == HttpURLConnection.HTTP_NOT_FOUND) throw NoReleasesException()
         if (conn.responseCode != HttpURLConnection.HTTP_OK) error("GitHub відповів ${conn.responseCode}")
-        val release = JSONObject(conn.inputStream.bufferedReader().readText())
-        val assets = release.getJSONArray("assets")
-        val urls = (0 until assets.length()).associate {
-            val a = assets.getJSONObject(it)
-            a.getString("name") to a.getString("browser_download_url")
-        }
-        val json = urls["update.json"] ?: throw NoReleasesException()
-        val text = open(json).inputStream.bufferedReader().readText()
+        val text = conn.inputStream.bufferedReader().readText()
         val current = currentVersionCode(context)
-        UpdateInfo.parse(text, urls, current).takeIf { it.versionCode > current }
+        UpdateInfo.parse(text, UpdateInfo.releaseUrls(text, BuildConfig.UPDATE_REPO), current).takeIf { it.versionCode > current }
     }
 
     /** Завантажити оновлення (патч, якщо підходить, інакше повний APK) і запустити встановлення. */

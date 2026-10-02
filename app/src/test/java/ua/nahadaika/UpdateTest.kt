@@ -50,4 +50,10 @@ class UpdateTest {
         assertEquals("aa", info.apk.sha256)
         assertEquals(20_000_000, info.downloadSize)
     }
+
+    @Test fun assetUrlsPointToTheReleaseTag() {
+        val info = UpdateInfo.parse(json, UpdateInfo.releaseUrls(json, "guns96x/nahadaika"), currentCode = 15)
+        assertEquals("https://github.com/guns96x/nahadaika/releases/download/v3.7/Nahadaika-3.7.apk", info.apk.url)
+        assertEquals("https://github.com/guns96x/nahadaika/releases/download/v3.7/Nahadaika-15-to-16.patch", info.patch!!.url)
+    }
 }

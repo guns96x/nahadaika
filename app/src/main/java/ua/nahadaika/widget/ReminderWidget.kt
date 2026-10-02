@@ -22,6 +22,7 @@ import ua.nahadaika.whenLabel
 class ReminderWidget : AppWidgetProvider() {
     override fun onUpdate(context: Context, manager: AppWidgetManager, appWidgetIds: IntArray) {
         Repo.init(context)
+        Repo.watchWidget()
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -34,10 +35,15 @@ class ReminderWidget : AppWidgetProvider() {
     }
 
     companion object {
+        fun isPlaced(context: Context): Boolean = ids(context).isNotEmpty()
+
+        private fun ids(context: Context): IntArray =
+            AppWidgetManager.getInstance(context).getAppWidgetIds(ComponentName(context, ReminderWidget::class.java))
+
         /** Перемалювати всі віджети після зміни нагадувань; без віджетів нічого не робить. */
         fun refresh(context: Context) {
             val manager = AppWidgetManager.getInstance(context)
-            val ids = manager.getAppWidgetIds(ComponentName(context, ReminderWidget::class.java))
+            val ids = ids(context)
             if (ids.isEmpty()) return
             CoroutineScope(Dispatchers.IO).launch {
                 val next = Repo.nextPending()
