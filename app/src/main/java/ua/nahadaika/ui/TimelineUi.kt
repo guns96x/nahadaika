@@ -1,6 +1,14 @@
 package ua.nahadaika.ui
 
 import androidx.compose.animation.animateColorAsState
+import kotlinx.coroutines.flow.filter
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -95,88 +103,125 @@ private fun kindIcon(kind: Kind): ImageVector = when (kind) {
 private const val PAST_DAYS = 14L
 private const val FUTURE_DAYS = 120L
 
-/** Смужка днів, як у Structured: день тижня, число, крапки там, де є нагадування. */
+/** Клітинка дня; у центрі смужки вона збільшується до [CELL_MAX_SCALE] разів (ефект лінзи). */
+private val CELL_WIDTH = 38.dp
+private val CELL_HEIGHT = 38.dp
+private const val CELL_MAX_SCALE = 1.4f
+private val CELL_GAP = 4.dp
+
+/**
+ * Смужка днів: обраний день завжди в центрі й збільшений, сусідні плавно зменшуються до країв.
+ * Гортання прилипає до центру, і день, що став посередині, стає обраним; тап по дню — теж центрує його.
+ */
 @Composable
 fun DayStrip(
     selected: LocalDate,
     today: LocalDate,
     dotsFor: (LocalDate) -> List<Color>,
     onSelect: (LocalDate) -> Unit,
-    haze: HazeState,
     modifier: Modifier = Modifier,
 ) {
     val start = today.minusDays(PAST_DAYS)
     val count = (PAST_DAYS + FUTURE_DAYS + 1).toInt()
     val indexOf = { d: LocalDate -> ChronoUnit.DAYS.between(start, d).toInt().coerceIn(0, count - 1) }
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = (indexOf(selected) - 2).coerceAtLeast(0))
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = indexOf(selected))
+    val currentSelected by rememberUpdatedState(selected)
+    val onSelectNow by rememberUpdatedState(onSelect)
+
+    // Індекс клітинки, чий центр найближчий до центру смужки.
+    fun centeredIndex(): Int? {
+        val info = listState.layoutInfo
+        val middle = (info.viewportStartOffset + info.viewportEndOffset) / 2f
+        return info.visibleItemsInfo.minByOrNull { kotlin.math.abs(it.offset + it.size / 2f - middle) }?.index
+    }
+
+    // Обрали день не гортанням (тап, кнопка «Сьогодні», нагадування зі сповіщення) — центруємо його.
     LaunchedEffect(selected) {
         val i = indexOf(selected)
-        val visible = listState.layoutInfo.visibleItemsInfo
-        if (visible.none { it.index == i } || visible.first().index == i || visible.last().index == i) {
-            listState.animateScrollToItem((i - 2).coerceAtLeast(0))
+        if (centeredIndex() != i && !listState.isScrollInProgress) listState.animateScrollToItem(i)
+    }
+    // Прогортали й зупинились — день посередині стає обраним.
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }.filter { !it }.collect {
+            val c = centeredIndex() ?: return@collect
+            if (c != indexOf(currentSelected)) onSelectNow(start.plusDays(c.toLong()))
         }
     }
 
-    Column(modifier.glassHaze(haze, RoundedCornerShape(22.dp)).padding(top = 6.dp, bottom = 4.dp)) {
-        Row(Modifier.fillMaxWidth().height(24.dp).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                selected.format(DateTimeFormatter.ofPattern("LLLL yyyy", Locale.getDefault())).replaceFirstChar { it.uppercase() },
-                color = Glass.Text,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.weight(1f),
-            )
-            if (selected != today) {
-                Text(
-                    stringResource(R.string.chat_today),
-                    color = Glass.Lavender,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier
-                        .clip(Glass.Pill)
-                        .clickable { onSelect(today) }
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
-                )
+    BoxWithConstraints(modifier) {
+            val sidePadding = (maxWidth - CELL_WIDTH) / 2
+            val density = LocalDensity.current
+            val pitchPx = with(density) { (CELL_WIDTH + CELL_GAP).toPx() }
+            val pushPx = with(density) { 7.dp.toPx() }
+            LazyRow(
+                state = listState,
+                flingBehavior = rememberSnapFlingBehavior(listState),
+                modifier = Modifier.fillMaxWidth().height(CELL_HEIGHT * CELL_MAX_SCALE + 2.dp),
+                contentPadding = PaddingValues(horizontal = sidePadding),
+                horizontalArrangement = Arrangement.spacedBy(CELL_GAP),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                items(count) { i ->
+                    val day = start.plusDays(i.toLong())
+                    DayCell(
+                        day = day,
+                        selected = day == selected,
+                        today = day == today,
+                        dots = dotsFor(day),
+                        modifier = Modifier.graphicsLayer {
+                            // Лінза: чим ближче до центру, тим більша й яскравіша клітинка; сусідні розсуваються.
+                            val info = listState.layoutInfo
+                            val item = info.visibleItemsInfo.firstOrNull { it.index == i } ?: return@graphicsLayer
+                            val middle = (info.viewportStartOffset + info.viewportEndOffset) / 2f
+                            val t = (item.offset + item.size / 2f - middle) / pitchPx
+                            val near = (1f - kotlin.math.abs(t) / 2.4f).coerceIn(0f, 1f)
+                            val lens = near * near * (3f - 2f * near)
+                            val scale = 1f + (CELL_MAX_SCALE - 1f) * lens
+                            scaleX = scale
+                            scaleY = scale
+                            alpha = 0.5f + 0.5f * lens
+                            translationX = t.coerceIn(-1f, 1f) * pushPx
+                        },
+                        onClick = { onSelect(day) },
+                    )
+                }
             }
-        }
-        LazyRow(
-            state = listState,
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            items(count) { i ->
-                val day = start.plusDays(i.toLong())
-                DayCell(day, day == selected, day == today, dotsFor(day)) { onSelect(day) }
-            }
-        }
     }
 }
 
 @Composable
-private fun DayCell(day: LocalDate, selected: Boolean, today: Boolean, dots: List<Color>, onClick: () -> Unit) {
+private fun DayCell(day: LocalDate, selected: Boolean, today: Boolean, dots: List<Color>, modifier: Modifier, onClick: () -> Unit) {
     val bg by animateColorAsState(if (selected) Glass.Primary else Color.Transparent, label = "day")
     val main = if (selected) Glass.OnPrimary else Glass.Text
     Column(
-        Modifier
-            .width(42.dp)
-            .clip(RoundedCornerShape(14.dp))
+        modifier
+            .width(CELL_WIDTH)
+            .height(CELL_HEIGHT)
+            .clip(RoundedCornerShape(12.dp))
             .background(bg)
-            .clickable(onClickLabel = stringResource(R.string.chat_show_day), onClick = onClick)
-            .padding(vertical = 5.dp),
+            .clickable(onClickLabel = stringResource(R.string.chat_show_day), onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
         Text(
             day.format(DateTimeFormatter.ofPattern("EE", Locale.getDefault())).replaceFirstChar { it.uppercase() },
-            fontSize = 11.sp,
+            fontSize = 10.sp,
+            lineHeight = 11.sp,
             color = when {
                 selected -> Glass.OnPrimary.copy(alpha = 0.7f)
                 today -> Glass.Lavender
                 else -> Glass.TextFaint
             },
         )
-        Text("${day.dayOfMonth}", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (today && !selected) Glass.Lavender else main)
-        Row(Modifier.height(8.dp).padding(top = 3.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            dots.take(3).forEach { Box(Modifier.size(5.dp).background(if (selected) Glass.OnPrimary else it, CircleShape)) }
+        Text(
+            "${day.dayOfMonth}",
+            fontSize = 14.sp,
+            lineHeight = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = if (today && !selected) Glass.Lavender else main,
+        )
+        Row(Modifier.height(5.dp).padding(top = 1.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            dots.take(3).forEach { Box(Modifier.size(4.dp).background(if (selected) Glass.OnPrimary else it, CircleShape)) }
         }
     }
 }

@@ -19,6 +19,8 @@ import androidx.compose.ui.res.stringResource
 import ua.nahadaika.R
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import ua.nahadaika.localDateFormatter
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -74,7 +76,7 @@ internal fun ChatHeader(
                 chat?.let { c ->
                     Avatar(c, size = 38)
                     Spacer(Modifier.width(10.dp))
-                    Column {
+                    Column(Modifier.weight(1f)) {
                         Text(
                             c.name,
                             color = Glass.Text,
@@ -92,6 +94,25 @@ internal fun ChatHeader(
                         )
                     }
                 }
+                Spacer(Modifier.width(8.dp))
+                // Місяць обраного дня (коротко, щоб не тіснити підпис); якщо обрано не сьогодні — під ним швидкий повернення до сьогодні.
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        selectedDate.format(if (selectedDate.year == today.year) localDateFormatter("LLL", "LLL") else localDateFormatter("LLL yyyy", "LLLy")).replaceFirstChar { it.uppercase() },
+                        color = Glass.TextDim,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                    )
+                    if (selectedDate != today) {
+                        Text(
+                            stringResource(R.string.chat_today),
+                            color = Glass.Lavender,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.clip(Glass.Pill).clickable { onSelectDate(today) }.padding(vertical = 2.dp),
+                        )
+                    }
+                }
             }
             Spacer(Modifier.width(6.dp))
             GlassIconButton(Icons.Default.Search, stringResource(R.string.chat_search), onClick = onOpenSearch, size = SideButton, haze = haze)
@@ -103,7 +124,6 @@ internal fun ChatHeader(
             today = today,
             dotsFor = dotsFor,
             onSelect = onSelectDate,
-            haze = haze,
             modifier = Modifier.fillMaxWidth(),
         )
     }
