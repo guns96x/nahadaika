@@ -106,13 +106,7 @@ internal fun Composer(
     dragX: Float,
     dragY: Float,
     onAttach: (Kind?) -> Unit,
-    showDictate: Boolean,
     busy: Boolean,
-    listening: Boolean,
-    heard: String,
-    onDictate: () -> Unit,
-    onDictationDone: () -> Unit,
-    onDictationCancel: () -> Unit,
     onSend: () -> Unit,
     onToggleMode: () -> Unit,
     onHoldStart: () -> Boolean,
@@ -125,21 +119,18 @@ internal fun Composer(
         Box(Modifier.weight(1f)) {
             if (rec != null) {
                 RecordingPill(haze, rec, elapsed, dragX, onCancel)
-            } else if (listening) {
-                ListeningPill(haze, heard, onDictationCancel)
             } else {
-                InputPill(haze, text, onTextChange, onAttach, showDictate, busy, onDictate)
+                InputPill(haze, text, onTextChange, onAttach, busy)
             }
         }
         Spacer(Modifier.width(8.dp))
         // Одна й та сама кнопка весь час — щоб жест утримання не переривався.
         RecordButton(
-            canSend = canSend || listening,
-            done = listening,
+            canSend = canSend,
             recordMode = recordMode,
             rec = rec,
             dragY = dragY,
-            onSend = if (listening) onDictationDone else onSend,
+            onSend = onSend,
             onToggleMode = onToggleMode,
             onHoldStart = onHoldStart,
             onDrag = onDrag,
@@ -156,9 +147,7 @@ private fun InputPill(
     text: String,
     onTextChange: (String) -> Unit,
     onAttach: (Kind?) -> Unit,
-    showDictate: Boolean,
     busy: Boolean,
-    onDictate: () -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
     // Іконки прив'язані до низу, як у Telegram: при багаторядковому тексті вони лишаються біля кнопки.
@@ -191,42 +180,12 @@ private fun InputPill(
                 }
             },
         )
-        // Мікрофон як на клавіатурі: сказати нагадування; поки Gemini розбирає сказане — індикатор.
+        // Поки Gemini розбирає текст — маленький індикатор у полі.
         if (busy) {
             Box(Modifier.size(BarHeight), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(Modifier.size(18.dp), color = Glass.Lavender, strokeWidth = 2.dp)
             }
-        } else if (showDictate) {
-            BarIcon(Icons.Default.RecordVoiceOver, stringResource(R.string.dictation_button), Glass.Lavender, onClick = onDictate)
         }
-    }
-}
-
-/** «Сказати»: «Слухаю…», сказане з'являється наживо; ✕ — скасувати. */
-@Composable
-private fun ListeningPill(haze: HazeState, heard: String, onCancel: () -> Unit) {
-    val pulse by rememberInfiniteTransition(label = "listen").animateFloat(
-        initialValue = 1f,
-        targetValue = 0.3f,
-        animationSpec = infiniteRepeatable(tween(650), RepeatMode.Reverse),
-        label = "pulse",
-    )
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = BarHeight).glassHaze(haze, RoundedCornerShape(BarHeight / 2)).padding(start = 18.dp, end = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(10.dp).alpha(pulse).background(Glass.Lavender, CircleShape))
-        Spacer(Modifier.width(12.dp))
-        Text(
-            heard.ifBlank { stringResource(R.string.dictation_listening) },
-            color = if (heard.isBlank()) Glass.TextDim else Glass.Text,
-            fontSize = 16.sp,
-            lineHeight = 22.sp,
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f).padding(vertical = 14.dp),
-        )
-        IconButton(onClick = onCancel) { Icon(Icons.Default.Close, stringResource(R.string.chat_cancel), tint = Glass.TextDim) }
     }
 }
 
@@ -279,7 +238,6 @@ private fun RecordingPill(haze: HazeState, rec: Rec, elapsed: Long, dragX: Float
 @Composable
 private fun RecordButton(
     canSend: Boolean,
-    done: Boolean,
     recordMode: Kind,
     rec: Rec?,
     dragY: Float,
@@ -382,7 +340,6 @@ private fun RecordButton(
             contentAlignment = Alignment.Center,
         ) {
             val icon = when {
-                done -> Icons.Default.Check
                 canSend -> Icons.Default.AlarmAdd
                 rec?.locked == true -> Icons.Default.Check
                 (rec?.kind ?: recordMode) == Kind.VIDEO -> Icons.Default.Videocam

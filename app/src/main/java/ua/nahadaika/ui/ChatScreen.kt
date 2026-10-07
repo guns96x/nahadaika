@@ -86,7 +86,6 @@ import ua.nahadaika.dayLabel
 import ua.nahadaika.inLabel
 import ua.nahadaika.media.Attachment
 import ua.nahadaika.media.AudioPlayer
-import ua.nahadaika.media.LiveDictation
 import ua.nahadaika.media.MediaFiles
 import ua.nahadaika.media.VoiceRecorder
 import ua.nahadaika.occurrencesOn
@@ -171,9 +170,8 @@ fun ChatScreen(
     // «Розумний час»: фонове розпізнавання щойно записаного й запит згоди перед першим відправленням аудіо.
     var interpreting by remember { mutableStateOf<Job?>(null) }
     var askSmartFor by remember { mutableStateOf<Attachment?>(null) }
-    // «Сказати»: сказане вголос (текст, що вже розпізнав системний розпізнавач) і текст, що був у полі до цього.
-    val dictation = remember { LiveDictation(context) }
-    var askSmartSpoken by remember { mutableStateOf<Pair<String, String>?>(null) }
+    // Текст нагадування, що чекає згоди перед першим відправленням у Gemini.
+    var askSmartText by remember { mutableStateOf<String?>(null) }
     var rescheduling by remember { mutableStateOf<Reminder?>(null) }
     var actionsFor by remember { mutableStateOf<Reminder?>(null) }
     var editingText by remember { mutableStateOf<Reminder?>(null) }
@@ -186,7 +184,6 @@ fun ChatScreen(
     DisposableEffect(Unit) {
         onDispose {
             recorder.cancel()
-            dictation.cancel()
             player.stop()
             currentAttachment?.file?.delete()
         }
@@ -311,13 +308,13 @@ fun ChatScreen(
     }
 
     /**
-     * Результат розпізнавання (запису [media] або сказаного [spoken]): є час — одразу планувати;
-     * ні — відкрити вибір часу з уже готовим текстом. [base] — текст у полі до цього.
+     * Результат розпізнавання (запису [media] або тексту [typed]): є час — одразу планувати;
+     * ні — відкрити вибір часу з уже готовим текстом. [base] — текст у полі, що не йшов у Gemini.
      */
-    fun applyOutcome(media: Attachment?, outcome: VoiceOutcome, base: String, spoken: String? = null) {
+    fun applyOutcome(media: Attachment?, outcome: VoiceOutcome, base: String, typed: String? = null) {
         if (media != null && attachment !== media) return
-        // Поки Gemini думав, користувач уже щось дописав чи прикріпив — не чіпаємо (сказане лишилося в полі).
-        if (spoken != null && (attachment != null || text != listOf(base, spoken).filter { it.isNotBlank() }.joinToString(" "))) return
+        // Поки Gemini думав, користувач уже щось змінив чи прикріпив — не чіпаємо (текст лишився в полі).
+        if (typed != null && (attachment != null || text.trim() != typed)) return
         val drafts = (outcome as? VoiceOutcome.Success)?.result?.drafts.orEmpty()
         val first = drafts.firstOrNull()
         when {
@@ -336,8 +333,8 @@ fun ChatScreen(
                         else Res.s(R.string.voice_nothing),
                     )
                 }
-                // Сказане не губимо: навіть без часу воно лишається текстом у полі.
-                val add = first?.what?.takeIf { it.isNotBlank() } ?: spoken
+                // Текст не губимо: без часу він лишається в полі (Gemini прибирає з нього лише слова про час).
+                val add = first?.what?.takeIf { it.isNotBlank() } ?: typed
                 if (add != null) text = listOf(base, add).filter { it.isNotBlank() }.joinToString(" ")
                 if (first?.alarm == true) composeAlarm = true
                 showSchedule = true
@@ -353,50 +350,26 @@ fun ChatScreen(
         }
     }
 
-    // ---- «Сказати»: як мікрофон клавіатури; у Gemini йде лише текст ----
+    // ---- Текст (надрукований чи надиктований мікрофоном клавіатури): у Gemini йде лише він ----
 
-    fun interpretSpoken(spoken: String, base: String) {
-        text = listOf(base, spoken).filter { it.isNotBlank() }.joinToString(" ")
+    fun interpretTyped(typed: String) {
         interpreting = scope.launch {
-            val outcome = SmartVoice.interpretText(context, spoken)
+            val outcome = SmartVoice.interpretText(context, typed)
             interpreting = null
-            applyOutcome(null, outcome, base, spoken)
+            applyOutcome(null, outcome, base = "", typed = typed)
         }
     }
 
-    fun onSpoken(spoken: String, base: String) {
+    /** Кнопка ⏰: текст із часом («завтра о 9 хліб») ставиться сам, без часу чи з вкладенням — вибір часу. */
+    fun send() {
+        interpreting?.cancel()
+        interpreting = null
+        val typed = text.trim()
         val choice = Prefs.smartVoice(context)
         when {
-            !SmartVoice.available() || choice == false -> text = listOf(base, spoken).filter { it.isNotBlank() }.joinToString(" ")
-            choice == null -> {
-                text = listOf(base, spoken).filter { it.isNotBlank() }.joinToString(" ")
-                askSmartSpoken = spoken to base
-            }
-            else -> interpretSpoken(spoken, base)
-        }
-    }
-
-    fun startDictation() {
-        if (!dictation.isAvailable()) {
-            toast(Res.s(R.string.dictation_unavailable))
-            return
-        }
-        player.stop()
-        playingVideoId = null
-        showSchedule = false
-        val base = text.trim()
-        dictation.start(onResult = { onSpoken(it, base) }, onError = ::toast)
-    }
-
-    val dictatePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) startDictation() else toast(Res.s(R.string.chat_permission_mic_needed))
-    }
-
-    fun dictate() {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-            startDictation()
-        } else {
-            dictatePermission.launch(Manifest.permission.RECORD_AUDIO)
+            attachment != null || typed.isEmpty() || !SmartVoice.available() || choice == false -> showSchedule = true
+            choice == null -> askSmartText = typed
+            else -> interpretTyped(typed)
         }
     }
 
@@ -456,7 +429,6 @@ fun ChatScreen(
 
     fun beginRecording(kind: Kind, locked: Boolean): Boolean {
         player.stop()
-        dictation.cancel()
         playingVideoId = null
         if (kind == Kind.VOICE && !recorder.start()) {
             toast(Res.s(R.string.chat_microphone_failed))
@@ -610,18 +582,8 @@ fun ChatScreen(
                             else -> pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
                         }
                     },
-                    showDictate = SmartVoice.available(),
                     busy = interpreting != null && attachment == null,
-                    listening = dictation.listening,
-                    heard = dictation.partial,
-                    onDictate = ::dictate,
-                    onDictationDone = dictation::stop,
-                    onDictationCancel = dictation::cancel,
-                    onSend = {
-                        interpreting?.cancel()
-                        interpreting = null
-                        showSchedule = true
-                    },
+                    onSend = ::send,
                     onToggleMode = ::toggleMode,
                     onHoldStart = { requestRecording(recordMode, locked = false) },
                     onDrag = { x, y ->
@@ -737,11 +699,11 @@ fun ChatScreen(
             if (on && attachment === a) interpret(a) else if (attachment === a) showSchedule = true
         }
     }
-    askSmartSpoken?.let { (spoken, base) ->
+    askSmartText?.let { typed ->
         SmartConsentDialog { on ->
             Prefs.setSmartVoice(context, on)
-            askSmartSpoken = null
-            if (on) interpretSpoken(spoken, base)
+            askSmartText = null
+            if (on) interpretTyped(typed) else showSchedule = true
         }
     }
 
