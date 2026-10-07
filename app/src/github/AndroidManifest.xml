@@ -9,5 +9,15 @@
 
     <application>
         <receiver android:name=".update.InstallReceiver" android:exported="false" />
+
+        <!-- Запрошення в спільний чат: nahadaika://join/КОД -->
+        <activity android:name=".ui.MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="nahadaika" android:host="join" />
+            </intent-filter>
+        </activity>
     </application>
 </manifest>

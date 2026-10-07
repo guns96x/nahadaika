@@ -1,5 +1,8 @@
 package ua.nahadaika.ui
 
+import ua.nahadaika.share.SharedChats
+import androidx.compose.material.icons.filled.Group
+import android.widget.Toast
 import android.Manifest
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -103,7 +106,14 @@ import ua.nahadaika.shortWhen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatsScreen(onOpenChat: (Long) -> Unit, onBack: () -> Unit, onOpenSettings: () -> Unit = {}, onOpenSearch: () -> Unit = {}) {
+fun ChatsScreen(
+    onOpenChat: (Long) -> Unit,
+    onBack: () -> Unit,
+    onOpenSettings: () -> Unit = {},
+    onOpenSearch: () -> Unit = {},
+    joinCode: String? = null,
+    onJoinCodeConsumed: () -> Unit = {},
+) {
     val chats by Repo.chats.collectAsStateWithLifecycle(emptyList())
     val reminders by Repo.allReminders.collectAsStateWithLifecycle(emptyList())
     val scope = rememberCoroutineScope()
@@ -111,6 +121,48 @@ fun ChatsScreen(onOpenChat: (Long) -> Unit, onBack: () -> Unit, onOpenSettings: 
     var creating by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<Chat?>(null) }
     var deleting by remember { mutableStateOf<Chat?>(null) }
+
+    // Спільні чати: ім'я для учасників, код запрошення, приєднання за кодом.
+    val context = LocalContext.current
+    val sharing = SharedChats.available()
+    var askName by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var invite by remember { mutableStateOf<Pair<Chat, String>?>(null) }
+    var joining by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+
+    fun toast(id: Int) = Toast.makeText(context, context.getString(id), Toast.LENGTH_SHORT).show()
+
+    /** Учасники бачать ім'я автора — спершу питаємо його (один раз). */
+    fun withName(action: () -> Unit) {
+        if (Prefs.displayName(context).isBlank()) askName = action else action()
+    }
+
+    fun share(chat: Chat) = withName {
+        busy = true
+        scope.launch {
+            runCatching { SharedChats.share(chat) }
+                .onSuccess { invite = chat to it }
+                .onFailure { toast(R.string.share_failed) }
+            busy = false
+        }
+    }
+
+    fun join(code: String) = withName {
+        busy = true
+        scope.launch {
+            runCatching { SharedChats.join(code) }
+                .onSuccess { id -> if (id != null) onOpenChat(id) else toast(R.string.share_code_not_found) }
+                .onFailure { toast(R.string.share_failed) }
+            busy = false
+        }
+    }
+
+    LaunchedEffect(joinCode) {
+        if (joinCode != null) {
+            if (sharing) joining = joinCode
+            onJoinCodeConsumed()
+        }
+    }
 
     BackHandler(onBack = onBack)
 
@@ -169,6 +221,7 @@ fun ChatsScreen(onOpenChat: (Long) -> Unit, onBack: () -> Unit, onOpenSettings: 
                         onClick = { onOpenChat(chat.id) },
                         onRename = { renaming = chat },
                         onDelete = { deleting = chat },
+                        onShare = if (sharing) ({ share(chat) }) else null,
                     )
                 }
             }
@@ -176,7 +229,12 @@ fun ChatsScreen(onOpenChat: (Long) -> Unit, onBack: () -> Unit, onOpenSettings: 
     }
 
     if (creating) {
-        NameDialog(title = stringResource(R.string.chats_new_chat), initial = "", onDismiss = { creating = false }) { name ->
+        NameDialog(
+            title = stringResource(R.string.chats_new_chat),
+            initial = "",
+            onDismiss = { creating = false },
+            secondary = if (sharing) stringResource(R.string.share_have_code) to { creating = false; joining = "" } else null,
+        ) { name ->
             creating = false
             scope.launch { onOpenChat(Repo.createChat(name)) }
         }
@@ -185,6 +243,27 @@ fun ChatsScreen(onOpenChat: (Long) -> Unit, onBack: () -> Unit, onOpenSettings: 
         NameDialog(title = stringResource(R.string.chats_rename), initial = chat.name, onDismiss = { renaming = null }) { name ->
             renaming = null
             scope.launch { Repo.renameChat(chat, name) }
+        }
+    }
+    askName?.let { then ->
+        NameDialog(
+            title = stringResource(R.string.share_name_title),
+            initial = "",
+            placeholder = stringResource(R.string.share_name_hint),
+            onDismiss = { askName = null },
+        ) { name ->
+            Prefs.setDisplayName(context, name)
+            askName = null
+            then()
+        }
+    }
+    invite?.let { (chat, code) ->
+        InviteDialog(chat, code, onDismiss = { invite = null })
+    }
+    joining?.let { initial ->
+        JoinDialog(initial, busy = busy, onDismiss = { joining = null }) { code ->
+            joining = null
+            join(code)
         }
     }
     deleting?.let { chat ->
@@ -212,6 +291,7 @@ private fun ChatRow(
     onClick: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
+    onShare: (() -> Unit)? = null,
 ) {
     var menu by remember { mutableStateOf(false) }
     Box {
@@ -227,6 +307,10 @@ private fun ChatRow(
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (chat.remoteId != null) {
+                        Icon(Icons.Default.Group, stringResource(R.string.share_shared_chat), Modifier.size(16.dp), tint = Glass.Lavender)
+                        Spacer(Modifier.width(4.dp))
+                    }
                     Text(
                         chat.name,
                         color = Glass.Text,
@@ -264,6 +348,12 @@ private fun ChatRow(
             }
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            if (onShare != null) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(if (chat.remoteId == null) R.string.share_share else R.string.share_invite)) },
+                    onClick = { menu = false; onShare() },
+                )
+            }
             DropdownMenuItem(text = { Text(stringResource(R.string.chats_rename)) }, onClick = { menu = false; onRename() })
             DropdownMenuItem(text = { Text(stringResource(R.string.chats_delete)) }, onClick = { menu = false; onDelete() })
         }
@@ -289,7 +379,14 @@ fun Avatar(chat: Chat, size: Int) {
 }
 
 @Composable
-fun NameDialog(title: String, initial: String, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+fun NameDialog(
+    title: String,
+    initial: String,
+    onDismiss: () -> Unit,
+    placeholder: String? = null,
+    secondary: Pair<String, () -> Unit>? = null,
+    onConfirm: (String) -> Unit,
+) {
     var name by remember { mutableStateOf(initial) }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -299,11 +396,63 @@ fun NameDialog(title: String, initial: String, onDismiss: () -> Unit, onConfirm:
                 value = name,
                 onValueChange = { name = it },
                 singleLine = true,
-                placeholder = { Text(stringResource(R.string.chats_name_dialog_placeholder)) },
+                placeholder = { Text(placeholder ?: stringResource(R.string.chats_name_dialog_placeholder)) },
             )
         },
         confirmButton = {
             TextButton(onClick = { onConfirm(name) }, enabled = name.isNotBlank()) { Text(stringResource(R.string.chats_save)) }
+        },
+        dismissButton = {
+            Row {
+                secondary?.let { (label, action) -> TextButton(onClick = action) { Text(label) } }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.chats_cancel)) }
+            }
+        },
+    )
+}
+
+/** Код запрошення великими літерами й кнопка «Надіслати» (посилання + код). */
+@Composable
+private fun InviteDialog(chat: Chat, code: String, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val message = stringResource(R.string.share_invite_message, chat.name, "nahadaika://join/$code", code)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.share_invite_title, chat.name)) },
+        text = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                Text(code, color = Glass.Text, fontSize = 32.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 6.sp)
+                Spacer(Modifier.height(12.dp))
+                Text(stringResource(R.string.share_invite_note), color = Glass.TextDim, fontSize = 14.sp)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, message)
+                context.startActivitySafe(Intent.createChooser(send, null))
+            }) { Text(stringResource(R.string.share_invite_send)) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.share_done)) } },
+    )
+}
+
+/** Приєднатися до спільного чату за кодом із запрошення. */
+@Composable
+private fun JoinDialog(initial: String, busy: Boolean, onDismiss: () -> Unit, onJoin: (String) -> Unit) {
+    var code by remember { mutableStateOf(initial.uppercase()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.share_join_title)) },
+        text = {
+            OutlinedTextField(
+                value = code,
+                onValueChange = { code = it.uppercase().filter(Char::isLetterOrDigit).take(8) },
+                singleLine = true,
+                placeholder = { Text(stringResource(R.string.share_join_hint)) },
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onJoin(code) }, enabled = code.length >= 6 && !busy) { Text(stringResource(R.string.share_join_button)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.chats_cancel)) } },
     )

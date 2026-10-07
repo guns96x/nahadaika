@@ -13,6 +13,12 @@ val keystorePath: String? = System.getenv("NAHADAIKA_KEYSTORE")
 val keystorePassword: String? = System.getenv("NAHADAIKA_KEYSTORE_PASSWORD")
 val keyAliasName: String = System.getenv("NAHADAIKA_KEY_ALIAS") ?: "nahadaika"
 
+/** Налаштування поза репозиторієм (він публічний): змінна середовища або local.properties. */
+fun localSetting(property: String, env: String): String = System.getenv(env)
+    ?: rootProject.file("local.properties").takeIf { it.exists() }
+        ?.let { f -> Properties().also { p -> f.inputStream().use(p::load) }.getProperty(property) }
+    ?: ""
+
 android {
     namespace = "ua.nahadaika"
     compileSdk = 35
@@ -28,6 +34,10 @@ android {
         // Розумний час (Gemini): ключ є лише в debug-збірці github з local.properties (див. нижче), у релізі порожній.
         buildConfigField("String", "GEMINI_API_KEY", "\"\"")
         buildConfigField("String", "GEMINI_MODEL", "\"gemini-2.5-flash-lite\"")
+        // Спільні чати (Firebase): налаштування проєкту підставляються лише у варіант github, див. нижче.
+        buildConfigField("String", "FIREBASE_API_KEY", "\"\"")
+        buildConfigField("String", "FIREBASE_APP_ID", "\"\"")
+        buildConfigField("String", "FIREBASE_PROJECT_ID", "\"\"")
     }
 
     // github — APK зі самооновленням з GitHub Releases; play — для Google Play (без оновлень і без інтернету).
@@ -37,6 +47,10 @@ android {
             dimension = "dist"
             // Звідки застосунок бере оновлення (GitHub Releases).
             buildConfigField("String", "UPDATE_REPO", "\"guns96x/nahadaika\"")
+            // Проєкт Firebase для спільних чатів: firebase.* у local.properties або FIREBASE_* у середовищі.
+            buildConfigField("String", "FIREBASE_API_KEY", "\"${localSetting("firebase.apiKey", "FIREBASE_API_KEY")}\"")
+            buildConfigField("String", "FIREBASE_APP_ID", "\"${localSetting("firebase.appId", "FIREBASE_APP_ID")}\"")
+            buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${localSetting("firebase.projectId", "FIREBASE_PROJECT_ID")}\"")
         }
         create("play") {
             dimension = "dist"
@@ -88,10 +102,7 @@ android {
 
 // Ключ Gemini для прототипу: GEMINI_API_KEY у середовищі або gemini.api.key у local.properties (не комітити!).
 // Підставляється лише в debug-збірку github — публічний APK ключа не містить.
-val geminiKey: String = System.getenv("GEMINI_API_KEY")
-    ?: rootProject.file("local.properties").takeIf { it.exists() }
-        ?.let { f -> Properties().also { p -> f.inputStream().use(p::load) }.getProperty("gemini.api.key") }
-    ?: ""
+val geminiKey: String = localSetting("gemini.api.key", "GEMINI_API_KEY")
 androidComponents {
     onVariants { variant ->
         if (variant.name == "githubDebug" && geminiKey.isNotBlank()) {
@@ -111,6 +122,14 @@ dependencies {
 
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.work:work-runtime-ktx:2.9.1")
+
+    // Спільні чати — лише у варіанті github (у Play-збірці поки немає інтернету).
+    "githubImplementation"(platform("com.google.firebase:firebase-bom:33.7.0"))
+    "githubImplementation"("com.google.firebase:firebase-firestore")
+    "githubImplementation"("com.google.firebase:firebase-auth")
+    "githubImplementation"("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
+    // Firebase підміняє ListenableFuture порожньою заглушкою, а CameraX без неї не збирається.
+    "githubImplementation"("com.google.guava:guava:33.3.1-android")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
 

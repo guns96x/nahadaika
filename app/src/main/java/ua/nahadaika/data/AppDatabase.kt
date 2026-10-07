@@ -30,6 +30,12 @@ interface ChatDao {
     @Query("SELECT COUNT(*) FROM chats")
     suspend fun count(): Int
 
+    @Query("SELECT * FROM chats WHERE remoteId = :remoteId LIMIT 1")
+    suspend fun byRemoteId(remoteId: String): Chat?
+
+    @Query("SELECT * FROM chats WHERE remoteId IS NOT NULL")
+    suspend fun shared(): List<Chat>
+
     @Insert
     suspend fun insert(chat: Chat): Long
 
@@ -63,6 +69,12 @@ interface ReminderDao {
     @Query("SELECT * FROM reminders WHERE id = :id")
     suspend fun get(id: Long): Reminder?
 
+    @Query("SELECT * FROM reminders WHERE remoteId = :remoteId LIMIT 1")
+    suspend fun byRemoteId(remoteId: String): Reminder?
+
+    @Query("UPDATE reminders SET remoteId = :remoteId WHERE id = :id")
+    suspend fun setRemoteId(id: Long, remoteId: String)
+
     @Insert
     suspend fun insert(reminder: Reminder): Long
 
@@ -90,6 +102,12 @@ interface CommentDao {
 
     @Insert
     suspend fun insert(comment: Comment): Long
+
+    @Query("SELECT * FROM comments WHERE remoteId = :remoteId LIMIT 1")
+    suspend fun byRemoteId(remoteId: String): Comment?
+
+    @Query("UPDATE comments SET remoteId = :remoteId WHERE id = :id")
+    suspend fun setRemoteId(id: Long, remoteId: String)
 
     @Delete
     suspend fun delete(comment: Comment)

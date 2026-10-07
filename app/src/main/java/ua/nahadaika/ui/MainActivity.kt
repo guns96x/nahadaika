@@ -38,6 +38,7 @@ class MainActivity : ComponentActivity() {
     private val focus = mutableStateOf<Focus?>(null)
     private val quick = mutableStateOf<Quick?>(null)
     private val openUpdates = mutableLongStateOf(0L)
+    private val joinCode = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -62,7 +63,10 @@ class MainActivity : ComponentActivity() {
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
             }
             NahadaikaTheme {
-                AppRoot(focus.value, quick.value, onQuickConsumed = { quick.value = null }, openUpdates = openUpdates.longValue)
+                AppRoot(
+                    focus.value, quick.value, onQuickConsumed = { quick.value = null }, openUpdates = openUpdates.longValue,
+                    joinCode = joinCode.value, onJoinCodeConsumed = { joinCode.value = null },
+                )
             }
         }
     }
@@ -78,6 +82,8 @@ class MainActivity : ComponentActivity() {
             ACTION_QUICK_VOICE -> quick.value = Quick(QuickAction.VOICE)
             ACTION_OPEN_UPDATES -> openUpdates.longValue = System.nanoTime()
         }
+        // Запрошення в спільний чат: nahadaika://join/КОД
+        intent.data?.takeIf { it.scheme == "nahadaika" && it.host == "join" }?.lastPathSegment?.let { joinCode.value = it }
         val chatId = intent.getLongExtra(EXTRA_CHAT_ID, -1)
         if (chatId <= 0) return
         val reminderId = intent.getLongExtra(EXTRA_REMINDER_ID, -1)
@@ -98,7 +104,14 @@ class MainActivity : ComponentActivity() {
 
 /** Застосунок одразу відкривається в останньому чаті; список чатів — окремим екраном. */
 @Composable
-private fun AppRoot(focus: Focus?, quick: Quick?, onQuickConsumed: () -> Unit, openUpdates: Long = 0L) {
+private fun AppRoot(
+    focus: Focus?,
+    quick: Quick?,
+    onQuickConsumed: () -> Unit,
+    openUpdates: Long = 0L,
+    joinCode: String? = null,
+    onJoinCodeConsumed: () -> Unit = {},
+) {
     val context = LocalContext.current
     val chats by Repo.chats.collectAsStateWithLifecycle(null)
     var chatId by rememberSaveable { mutableLongStateOf(Prefs.lastChatId(context)) }
@@ -106,6 +119,10 @@ private fun AppRoot(focus: Focus?, quick: Quick?, onQuickConsumed: () -> Unit, o
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showSearch by rememberSaveable { mutableStateOf(false) }
     // Зі сповіщення про нову версію — одразу в налаштування.
+    // Відкрили запрошення — показуємо список чатів із вікном «Приєднатися».
+    LaunchedEffect(joinCode) {
+        if (joinCode != null) showList = true
+    }
     LaunchedEffect(openUpdates) {
         if (openUpdates != 0L) showSettings = true
     }
@@ -159,6 +176,8 @@ private fun AppRoot(focus: Focus?, quick: Quick?, onQuickConsumed: () -> Unit, o
                 showList = false
             },
             onBack = { showList = false },
+            joinCode = joinCode,
+            onJoinCodeConsumed = onJoinCodeConsumed,
         )
     } else {
         ChatScreen(

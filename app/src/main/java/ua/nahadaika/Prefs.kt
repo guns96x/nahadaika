@@ -48,6 +48,15 @@ object Prefs {
         if (prefs(context).contains("smart_voice")) prefs(context).getBoolean("smart_voice", false) else null
     fun setSmartVoice(context: Context, on: Boolean) = prefs(context).edit().putBoolean("smart_voice", on).apply()
 
+    /** Ім'я, яке бачать учасники спільних чатів. */
+    fun displayName(context: Context): String = prefs(context).getString("display_name", null).orEmpty()
+    fun setDisplayName(context: Context, name: String) = prefs(context).edit().putString("display_name", name.trim()).apply()
+
+    /** Код запрошення спільного чату (щоб показати його знову без сервера). */
+    fun inviteCode(context: Context, remoteChatId: String): String? = prefs(context).getString("invite_$remoteChatId", null)
+    fun setInviteCode(context: Context, remoteChatId: String, code: String) =
+        prefs(context).edit().putString("invite_$remoteChatId", code).apply()
+
     // ---- Оновлення ----
 
     fun autoUpdate(context: Context): Boolean = prefs(context).getBoolean("auto_update", true)

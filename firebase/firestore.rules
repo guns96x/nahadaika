@@ -1,0 +1,49 @@
+rules_version = '2';
+
+// Спільні чати Нагадайки. Вхід — анонімний (Firebase Auth), тож «користувач» = телефон.
+// Розгорнути: firebase deploy --only firestore:rules (або вставити в консолі Firebase → Firestore → Rules).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isMember(chatId) {
+      return signedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.members;
+    }
+
+    // Запрошення: прочитати можна лише за точним кодом (без переліку), створює — учасник чату.
+    match /invites/{code} {
+      allow get: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && isMember(request.resource.data.chatId);
+      allow list, update, delete: if false;
+    }
+
+    match /chats/{chatId} {
+      allow create: if signedIn() && request.resource.data.members == [request.auth.uid];
+      allow read: if signedIn() && request.auth.uid in resource.data.members;
+      // Учасник змінює чат як завгодно; новий — лише додає себе й має чинний код запрошення.
+      allow update: if signedIn() && (
+        request.auth.uid in resource.data.members
+        || (
+          request.resource.data.members.removeAll(resource.data.members) == [request.auth.uid]
+          && request.resource.data.members.hasAll(resource.data.members)
+          && get(/databases/$(database)/documents/invites/$(request.resource.data.joinCode)).data.chatId == chatId
+        )
+      );
+
+      match /reminders/{reminderId} {
+        allow read, write: if isMember(chatId);
+      }
+
+      // Повідомлення пише лише сам автор і більше не змінює.
+      match /comments/{commentId} {
+        allow read: if isMember(chatId);
+        allow create: if isMember(chatId) && request.resource.data.authorUid == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+  }
+}

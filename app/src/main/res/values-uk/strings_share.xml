@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="share_share">Поділитися з рідними</string>
+    <string name="share_invite">Запросити</string>
+    <string name="share_shared_chat">Спільний чат</string>
+    <string name="share_name_title">Як вас підписувати?</string>
+    <string name="share_name_hint">Учасники бачитимуть це ім\'я біля ваших нагадувань</string>
+    <string name="share_invite_title">Запросити в «%1$s»</string>
+    <string name="share_invite_note">Надішліть код або посилання. Поки спільні лише текстові нагадування й обговорення.</string>
+    <string name="share_invite_send">Надіслати</string>
+    <string name="share_invite_message">Приєднуйся до «%1$s» у Нагадайці: відкрий %2$s або введи код %3$s</string>
+    <string name="share_done">Готово</string>
+    <string name="share_have_code">Маю код</string>
+    <string name="share_join_title">Приєднатися до чату</string>
+    <string name="share_join_hint">Код запрошення</string>
+    <string name="share_join_button">Приєднатися</string>
+    <string name="share_failed">Не вдалося з\'єднатися — перевірте інтернет</string>
+    <string name="share_code_not_found">Чату з таким кодом немає</string>
+</resources>

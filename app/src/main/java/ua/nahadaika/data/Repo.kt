@@ -18,6 +18,8 @@ import ua.nahadaika.R
 import ua.nahadaika.Res
 import ua.nahadaika.alarm.AlarmScheduler
 import ua.nahadaika.alarm.Notifier
+import ua.nahadaika.share.ChatSnapshot
+import ua.nahadaika.share.SharedChats
 import ua.nahadaika.widget.ReminderWidget
 import java.io.File
 import java.io.InputStream
@@ -91,6 +93,7 @@ object Repo {
     suspend fun deleteChat(chat: Chat) {
         db.reminders().byChat(chat.id).forEach { cleanup(it) }
         db.chats().delete(chat)
+        SharedChats.onChatDeleted(chat)
     }
 
     // ---- Нагадування ----
@@ -98,6 +101,7 @@ object Repo {
     suspend fun createReminder(reminder: Reminder): Long {
         val id = db.reminders().insert(reminder)
         AlarmScheduler.schedule(app, reminder.copy(id = id))
+        SharedChats.onReminderChanged(id)
         return id
     }
 
@@ -105,15 +109,19 @@ object Repo {
         val updated = reminder.copy(triggerAt = at, repeat = repeat, snoozedUntil = null, fired = false)
         db.reminders().update(updated)
         AlarmScheduler.schedule(app, updated)
+        SharedChats.onReminderChanged(updated.id)
     }
 
     suspend fun editText(reminder: Reminder, text: String) {
         db.reminders().get(reminder.id)?.let { db.reminders().update(it.copy(text = text.trim())) }
+        SharedChats.onReminderChanged(reminder.id)
     }
 
     suspend fun deleteReminder(reminder: Reminder) {
-        cleanup(reminder)
-        db.reminders().delete(reminder)
+        val current = db.reminders().get(reminder.id) ?: reminder
+        cleanup(current)
+        db.reminders().delete(current)
+        SharedChats.onReminderDeleted(current)
     }
 
     // ---- Обговорення ----
@@ -123,7 +131,9 @@ object Repo {
 
     suspend fun addComment(reminderId: Long, text: String) {
         val t = text.trim()
-        if (t.isNotEmpty()) db.comments().insert(Comment(reminderId = reminderId, text = t))
+        if (t.isEmpty()) return
+        val comment = Comment(reminderId = reminderId, text = t)
+        SharedChats.onCommentAdded(comment.copy(id = db.comments().insert(comment)))
     }
 
     /** Повідомлення від іншого учасника спільного чату (з синхронізації). */
@@ -151,6 +161,7 @@ object Repo {
         db.reminders().update(updated)
         Notifier.cancel(app, id)
         if (updated.fired) AlarmScheduler.cancel(app, id) else AlarmScheduler.schedule(app, updated)
+        SharedChats.onReminderChanged(id)
     }
 
     /** Прибрати виконані нагадування разом з медіафайлами; [chatId] = null — у всіх чатах. */
@@ -158,6 +169,89 @@ object Repo {
         val done = db.reminders().done().filter { chatId == null || it.chatId == chatId }
         done.forEach { deleteReminder(it) }
         return done.size
+    }
+
+    // ---- Спільні чати ----
+
+    suspend fun sharedChats(): List<Chat> = db.chats().shared()
+    suspend fun chatById(id: Long): Chat? = db.chats().get(id)
+    suspend fun chatByRemoteId(remoteId: String): Chat? = db.chats().byRemoteId(remoteId)
+    suspend fun reminder(id: Long): Reminder? = db.reminders().get(id)
+    suspend fun remindersOf(chatId: Long): List<Reminder> = db.reminders().byChat(chatId)
+
+    suspend fun setChatRemoteId(chatId: Long, remoteId: String) {
+        db.chats().get(chatId)?.let { db.chats().update(it.copy(remoteId = remoteId)) }
+    }
+
+    suspend fun setReminderRemoteId(id: Long, remoteId: String) = db.reminders().setRemoteId(id, remoteId)
+    suspend fun setCommentRemoteId(id: Long, remoteId: String) = db.comments().setRemoteId(id, remoteId)
+
+    suspend fun createSharedChat(name: String, remoteId: String): Long {
+        val color = chatColors[(db.chats().count()) % chatColors.size]
+        return db.chats().insert(Chat(name = name.trim(), color = color, remoteId = remoteId))
+    }
+
+    /**
+     * Злити стан спільного чату з сервера: нове — додати, змінене — оновити, видалене — прибрати.
+     * Будильники ставить кожен телефон сам. Разове з минулого (історія чату) не дзвонить запізно,
+     * повторюване переходить на найближчий раз. Свої зміни сюди повертаються «луною» й нічого не міняють.
+     */
+    suspend fun applyRemote(chatId: Long, snapshot: ChatSnapshot, myUid: String) = lock.withLock {
+        val now = System.currentTimeMillis()
+        for (rr in snapshot.reminders) {
+            val author = if (rr.authorUid == myUid) null else rr.authorName
+            val target = if (rr.repeat != Repeat.NONE && rr.triggerAt <= now) nextOccurrence(rr.triggerAt, rr.repeat, now) else rr.triggerAt
+            val local = db.reminders().byRemoteId(rr.id)
+            if (local == null) {
+                val fired = rr.done || (rr.repeat == Repeat.NONE && rr.triggerAt <= now)
+                val created = Reminder(
+                    chatId = chatId, kind = Kind.TEXT, text = rr.text, triggerAt = target, repeat = rr.repeat,
+                    alarm = rr.alarm, fired = fired, createdAt = rr.createdAt, authorName = author, remoteId = rr.id,
+                )
+                val id = db.reminders().insert(created)
+                if (!fired) AlarmScheduler.schedule(app, created.copy(id = id))
+                continue
+            }
+            val moved = target != local.triggerAt
+            val fired = when {
+                rr.repeat != Repeat.NONE -> false
+                rr.done -> true
+                moved -> rr.triggerAt <= now
+                else -> local.fired
+            }
+            val updated = local.copy(
+                text = rr.text,
+                triggerAt = if (moved) target else local.triggerAt,
+                repeat = rr.repeat,
+                alarm = rr.alarm,
+                fired = fired,
+                snoozedUntil = if (moved || fired) null else local.snoozedUntil,
+                authorName = author,
+            )
+            if (updated == local) continue
+            db.reminders().update(updated)
+            if (updated.fired) {
+                AlarmScheduler.cancel(app, local.id)
+                Notifier.cancel(app, local.id)
+            } else {
+                AlarmScheduler.schedule(app, updated)
+            }
+        }
+        val remoteIds = snapshot.reminders.mapTo(HashSet()) { it.id }
+        db.reminders().byChat(chatId).filter { it.remoteId != null && it.remoteId !in remoteIds }.forEach {
+            cleanup(it)
+            db.reminders().delete(it)
+        }
+        for (rc in snapshot.comments) {
+            if (db.comments().byRemoteId(rc.id) != null) continue
+            val reminder = db.reminders().byRemoteId(rc.reminderId) ?: continue
+            db.comments().insert(
+                Comment(
+                    reminderId = reminder.id, text = rc.text, createdAt = rc.createdAt, remoteId = rc.id,
+                    authorName = if (rc.authorUid == myUid) null else rc.authorName,
+                ),
+            )
+        }
     }
 
     // ---- Резервна копія ----

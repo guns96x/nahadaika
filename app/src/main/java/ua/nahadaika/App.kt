@@ -6,6 +6,7 @@ import coil.ImageLoaderFactory
 import coil.decode.VideoFrameDecoder
 import ua.nahadaika.alarm.Notifier
 import ua.nahadaika.data.Repo
+import ua.nahadaika.share.SharedSetup
 import ua.nahadaika.update.SelfUpdate
 import ua.nahadaika.ui.theme.ThemeSettings
 
@@ -17,6 +18,7 @@ class App : Application(), ImageLoaderFactory {
         ThemeSettings.init(this)
         Notifier.createChannel(this)
         SelfUpdate.init(this)
+        SharedSetup.init(this)
     }
 
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
