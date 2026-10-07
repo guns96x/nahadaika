@@ -3,7 +3,7 @@
 # звідти застосунок бере оновлення. Запускається в CI з теки reminder-app.
 set -euo pipefail
 
-APK=app/build/outputs/apk/release/app-release.apk
+APK=app/build/outputs/apk/github/release/app-github-release.apk
 AAPT="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)aapt"
 BADGING="$("$AAPT" dump badging "$APK")"
 CODE="$(sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" <<<"$BADGING" | head -1)"

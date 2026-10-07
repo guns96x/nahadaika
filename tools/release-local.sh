@@ -22,7 +22,7 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
   exit 1
 fi
 
-./gradlew testDebugUnitTest assembleRelease
+./gradlew testDebugUnitTest assembleGithubRelease
 git push origin HEAD:main
 GITHUB_SHA="$(git rev-parse HEAD)" bash tools/release.sh
 

@@ -29,7 +29,8 @@ Android-застосунок для нагадувань у форматі ча�
 ```bash
 ./gradlew testDebugUnitTest   # тести (Robolectric) + знімки екранів у app/build/screenshots
 ./gradlew lintDebug
-./gradlew assembleRelease     # app/build/outputs/apk/release/app-release.apk
+./gradlew assembleGithubRelease  # app/build/outputs/apk/github/release/app-github-release.apk (з самооновленням)
+./gradlew assemblePlayRelease    # варіант для Google Play: без оновлень і без інтернету
 ```
 
 ### Підпис

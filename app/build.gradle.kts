@@ -21,8 +21,19 @@ android {
         targetSdk = 35
         versionCode = 25
         versionName = "3.16"
-        // Звідки застосунок бере оновлення (GitHub Releases).
-        buildConfigField("String", "UPDATE_REPO", "\"guns96x/nahadaika\"")
+    }
+
+    // github — APK зі самооновленням з GitHub Releases; play — для Google Play (без оновлень і без інтернету).
+    flavorDimensions += "dist"
+    productFlavors {
+        create("github") {
+            dimension = "dist"
+            // Звідки застосунок бере оновлення (GitHub Releases).
+            buildConfigField("String", "UPDATE_REPO", "\"guns96x/nahadaika\"")
+        }
+        create("play") {
+            dimension = "dist"
+        }
     }
 
     signingConfigs {
@@ -107,3 +118,7 @@ dependencies {
     testImplementation("io.github.takahirom.roborazzi:roborazzi:1.32.2")
     testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.32.2")
 }
+
+// Збірки йдуть у двох варіантах (github, play): ці задачі прогонюють обидва.
+tasks.register("testDebugUnitTest") { dependsOn("testGithubDebugUnitTest", "testPlayDebugUnitTest") }
+tasks.register("lintDebug") { dependsOn("lintGithubDebug", "lintPlayDebug") }

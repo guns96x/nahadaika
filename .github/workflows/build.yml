@@ -40,12 +40,12 @@ jobs:
       - name: Збірка APK
         env:
           NAHADAIKA_KEYSTORE_PASSWORD: ${{ secrets.NAHADAIKA_KEYSTORE_PASSWORD }}
-        run: ./gradlew assembleRelease
+        run: ./gradlew assembleGithubRelease
 
       - uses: actions/upload-artifact@v4
         with:
           name: nahadaika-apk
-          path: app/build/outputs/apk/release/app-release.apk
+          path: app/build/outputs/apk/github/release/app-github-release.apk
 
       - name: Реліз для оновлення в застосунку (APK + патч від попередньої версії)
         if: github.event_name != 'pull_request' && env.NAHADAIKA_KEYSTORE != ''

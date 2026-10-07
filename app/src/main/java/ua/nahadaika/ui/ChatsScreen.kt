@@ -93,7 +93,6 @@ import ua.nahadaika.data.Reminder
 import ua.nahadaika.data.Repeat
 import ua.nahadaika.data.Repo
 import ua.nahadaika.Prefs
-import ua.nahadaika.update.Updates
 import ua.nahadaika.data.alarmAt
 import ua.nahadaika.previewText
 import ua.nahadaika.shortWhen
@@ -384,35 +383,8 @@ fun PermissionBanners() {
     }
 }
 
-/** Нова версія застосунку: «Оновити» одним натиском, далі — хід завантаження. */
 @Composable
-private fun UpdateBanner() {
-    val context = LocalContext.current
-    when (val st = Updates.state) {
-        is Updates.State.Available -> Banner(
-            icon = Icons.Default.SystemUpdate,
-            text = "Доступна нова версія ${st.info.versionName}",
-            action = "Оновити",
-            onAction = { Updates.download(context, st.info) },
-        )
-        is Updates.State.Downloading -> Banner(
-            icon = Icons.Default.SystemUpdate,
-            text = "Оновлення… ${(st.progress * 100).toInt()}%",
-            action = "",
-            onAction = {},
-        )
-        is Updates.State.ReadyToInstall -> Banner(
-            icon = Icons.Default.SystemUpdate,
-            text = "Версія ${st.info.versionName} завантажена",
-            action = "Встановити",
-            onAction = { Updates.install(context, st.info, st.file) },
-        )
-        else -> Unit
-    }
-}
-
-@Composable
-private fun Banner(icon: ImageVector, text: String, action: String, onAction: () -> Unit, onDismiss: (() -> Unit)? = null) {
+internal fun Banner(icon: ImageVector, text: String, action: String, onAction: () -> Unit, onDismiss: (() -> Unit)? = null) {
     Row(
         Modifier.fillMaxWidth().padding(top = 4.dp).glass(RoundedCornerShape(20.dp)).padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,

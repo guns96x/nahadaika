@@ -4,10 +4,6 @@
 
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <!-- Перевірка й завантаження оновлень із GitHub. -->
-    <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Оновлення застосунку з GitHub Releases. -->
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Будильник на весь екран поверх блокування. -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.CAMERA" />
@@ -15,11 +11,8 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-    <!-- Точні будильники: на Android 13+ дозвіл для застосунків-нагадувань надається автоматично -->
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
-    <uses-permission
-        android:name="android.permission.SCHEDULE_EXACT_ALARM"
-        android:maxSdkVersion="32" />
+    <!-- Точні будильники: на Android 13+ користувач дозволяє їх у налаштуваннях (екран-підказка є в застосунку). -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
@@ -87,7 +80,6 @@
             android:taskAffinity=""
             android:turnScreenOn="true"
             tools:targetApi="o_mr1" />
-        <receiver android:name=".update.InstallReceiver" android:exported="false" />
 
         <!-- Віджет: найближче нагадування й кнопки швидкого запису. -->
         <receiver

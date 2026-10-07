@@ -4,9 +4,10 @@ Android (Kotlin 2.0, Compose, Room, CameraX, WorkManager, Vosk). Мова інт
 
 ## Команди
 
-- `./gradlew testDebugUnitTest` — усі тести (JVM + Robolectric). Знімки екранів пишуться в `app/build/screenshots` — переглядайте їх після змін UI.
-- `./gradlew lintDebug` — lint (тести не аналізуються, `ignoreTestSources`).
-- `./gradlew assembleRelease` — з `NAHADAIKA_KEYSTORE` і `NAHADAIKA_KEYSTORE_PASSWORD`, інакше debug-підпис.
+- `./gradlew testDebugUnitTest` — усі тести обох варіантів (JVM + Robolectric); спільні лежать у `src/test`, лише для github — у `src/testGithub`. Знімки екранів пишуться в `app/build/screenshots` — переглядайте їх після змін UI.
+- `./gradlew lintDebug` — lint обох варіантів (тести не аналізуються, `ignoreTestSources`).
+- Два варіанти збірки: `github` (самооновлення з GitHub Releases, `src/github`) і `play` (без оновлень і без `INTERNET`, `src/play`). Код оновлень — лише в `src/github`, у main — фасад `SelfUpdate`, `UpdateBanner`, `UpdateSection` (у play порожні).
+- `./gradlew assembleGithubRelease` / `assemblePlayRelease` — з `NAHADAIKA_KEYSTORE` і `NAHADAIKA_KEYSTORE_PASSWORD`, інакше debug-підпис.
 - Maven Central інколи відповідає 429 — просто повторіть.
 
 ## Правила

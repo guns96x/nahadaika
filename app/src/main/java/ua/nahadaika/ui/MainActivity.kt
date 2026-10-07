@@ -21,7 +21,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import ua.nahadaika.Prefs
-import ua.nahadaika.update.Updates
+import ua.nahadaika.update.SelfUpdate
 import ua.nahadaika.alarm.Notifier
 import ua.nahadaika.data.Repo
 import ua.nahadaika.ui.theme.NahadaikaTheme
@@ -109,12 +109,7 @@ private fun AppRoot(focus: Focus?, quick: Quick?, onQuickConsumed: () -> Unit, o
     LaunchedEffect(openUpdates) {
         if (openUpdates != 0L) showSettings = true
     }
-    // Тиха перевірка оновлень при відкритті (не частіше ніж раз на 6 годин).
-    LaunchedEffect(Unit) {
-        if (Prefs.autoUpdate(context) && System.currentTimeMillis() - Prefs.lastUpdateCheck(context) > 6 * 3_600_000L) {
-            Updates.check(context, silent = true)
-        }
-    }
+    LaunchedEffect(Unit) { SelfUpdate.checkOnLaunch(context) }
     var activeFocus by remember { mutableStateOf<Focus?>(null) }
 
     LaunchedEffect(focus) {

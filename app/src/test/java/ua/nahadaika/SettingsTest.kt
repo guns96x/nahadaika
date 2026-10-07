@@ -28,9 +28,6 @@ import ua.nahadaika.ui.SettingsScreen
 import ua.nahadaika.ui.theme.NahadaikaTheme
 import ua.nahadaika.ui.theme.ThemeMode
 import ua.nahadaika.ui.theme.ThemeSettings
-import ua.nahadaika.update.UpdateAsset
-import ua.nahadaika.update.UpdateInfo
-import ua.nahadaika.update.Updates
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -49,10 +46,6 @@ class SettingsTest {
     @Test
     fun changesAreSaved() {
         show()
-        compose.onAllNodes(isToggleable())[0].assertIsOn().performClick()
-        compose.onAllNodes(isToggleable())[0].assertIsOff()
-        assertFalse(Prefs.autoUpdate(app))
-
         compose.onNodeWithText("15 хв").performClick()
         assertEquals(15, Prefs.snoozeMinutes(app))
         compose.onNodeWithText("8:00").performClick()
@@ -73,22 +66,5 @@ class SettingsTest {
         compose.waitForIdle()
         compose.onRoot().captureRoboImage("build/screenshots/11_settings_light.png")
         ThemeSettings.set(app, ThemeMode.DARK)
-    }
-
-    @Test
-    fun showsAvailableUpdate() {
-        Updates.state = Updates.State.Available(
-            UpdateInfo(
-                versionCode = 99, versionName = "3.7", notes = "• Будильник, що справді дзвонить",
-                apk = UpdateAsset("https://x/apk", 20_600_000, "aa"),
-                patch = UpdateAsset("https://x/patch", 1_800_000, "bb"), patchFromSha256 = "cc",
-            ),
-        )
-        show()
-        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Оновити"))
-        compose.onNodeWithText("Доступна версія 3.7").assertExists()
-        compose.onNodeWithText("Завантажити 1,7 МБ замість 19,6 МБ").assertExists()
-        compose.onRoot().captureRoboImage("build/screenshots/12_update_available.png")
-        Updates.state = Updates.State.Idle
     }
 }
