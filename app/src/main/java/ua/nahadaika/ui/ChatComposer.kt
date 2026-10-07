@@ -395,7 +395,7 @@ private fun MenuItem(icon: ImageVector, label: String, onClick: () -> Unit) {
 }
 
 @Composable
-internal fun AttachmentPreview(attachment: Attachment, player: AudioPlayer, haze: HazeState, onRemove: () -> Unit) {
+internal fun AttachmentPreview(attachment: Attachment, player: AudioPlayer, haze: HazeState, recognizing: Boolean = false, onRemove: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().glassHaze(haze, RoundedCornerShape(22.dp)).padding(8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -433,6 +433,13 @@ internal fun AttachmentPreview(attachment: Attachment, player: AudioPlayer, haze
                 },
                 color = Glass.Text,
             )
+            if (recognizing) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 3.dp)) {
+                    CircularProgressIndicator(Modifier.size(11.dp), color = Glass.Lavender, strokeWidth = 1.5.dp)
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.chat_recognizing), color = Glass.TextDim, fontSize = 13.sp)
+                }
+            }
         }
         IconButton(onClick = onRemove) { Icon(Icons.Default.Close, stringResource(R.string.chat_remove_attachment), tint = Glass.TextDim) }
     }

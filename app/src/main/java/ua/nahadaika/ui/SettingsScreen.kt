@@ -81,6 +81,7 @@ import androidx.compose.ui.res.stringResource
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import ua.nahadaika.Prefs
+import ua.nahadaika.voice.SmartVoice
 import ua.nahadaika.R
 import ua.nahadaika.Res
 import ua.nahadaika.alarm.AlarmScheduler
@@ -114,6 +115,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     BackHandler(onBack = onBack)
 
     // Налаштування живуть у Prefs; тут — їхні копії для миттєвого перемальовування.
+    var smartVoice by remember { mutableStateOf(Prefs.smartVoice(context) == true) }
     var snooze by remember { mutableIntStateOf(Prefs.snoozeMinutes(context)) }
     var defaultHour by remember { mutableIntStateOf(Prefs.defaultHour(context)) }
     var recordMode by remember { mutableStateOf(Prefs.recordMode(context)) }
@@ -164,6 +166,21 @@ fun SettingsScreen(onBack: () -> Unit) {
                 ),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
+                if (SmartVoice.available()) {
+                    item {
+                        Section(stringResource(R.string.settings_section_smart)) {
+                            SwitchRow(
+                                Icons.Default.GraphicEq,
+                                stringResource(R.string.settings_smart_title),
+                                stringResource(R.string.settings_smart_subtitle),
+                                smartVoice,
+                            ) {
+                                smartVoice = it
+                                Prefs.setSmartVoice(context, it)
+                            }
+                        }
+                    }
+                }
                 item {
                     Section(stringResource(R.string.settings_section_reminders)) {
                         val snoozeOptions = listOf(5, 10, 15, 30)

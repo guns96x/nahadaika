@@ -68,12 +68,16 @@ import dev.chrisbanes.haze.hazeSource
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ua.nahadaika.Occurrence
 import ua.nahadaika.Prefs
 import ua.nahadaika.data.Kind
+import ua.nahadaika.voice.SmartVoice
+import ua.nahadaika.voice.VoiceDraft
+import ua.nahadaika.voice.VoiceOutcome
 import ua.nahadaika.data.Reminder
 import ua.nahadaika.data.Repeat
 import ua.nahadaika.data.Repo
@@ -164,6 +168,9 @@ fun ChatScreen(
     var showSchedule by remember { mutableStateOf(false) }
     // Нове нагадування — як будильник (гучно, на весь екран).
     var composeAlarm by remember { mutableStateOf(false) }
+    // «Розумний час»: фонове розпізнавання щойно записаного й запит згоди перед першим відправленням аудіо.
+    var interpreting by remember { mutableStateOf<Job?>(null) }
+    var askSmartFor by remember { mutableStateOf<Attachment?>(null) }
     var rescheduling by remember { mutableStateOf<Reminder?>(null) }
     var actionsFor by remember { mutableStateOf<Reminder?>(null) }
     var editingText by remember { mutableStateOf<Reminder?>(null) }
@@ -218,6 +225,10 @@ fun ChatScreen(
     fun toast(msg: String) = Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
 
     fun replaceAttachment(new: Attachment?) {
+        if (new !== attachment) {
+            interpreting?.cancel()
+            interpreting = null
+        }
         attachment?.file?.delete()
         attachment = new
     }
@@ -263,10 +274,84 @@ fun ChatScreen(
         schedule(reminder)
     }
 
-    /** Прикріпити запис і одразу відкрити вибір часу. */
+    /** Кілька нагадувань з однієї фрази; кожне отримує власну копію запису (видалення одного не зачепить інші). */
+    fun scheduleMany(drafts: List<VoiceDraft>, media: Attachment) {
+        if (player.currentPath == media.file.absolutePath) player.stop()
+        if (attachment === media) attachment = null
+        showSchedule = false
+        composeAlarm = false
+        scope.launch {
+            val ids = drafts.mapIndexed { i, d ->
+                val file = if (i == 0) {
+                    media.file
+                } else {
+                    withContext(Dispatchers.IO) { MediaFiles.newFile(context, media.file.extension).also { media.file.copyTo(it, overwrite = true) } }
+                }
+                Repo.createReminder(
+                    Reminder(
+                        chatId = chatId, kind = media.kind, text = d.what, mediaPath = file.absolutePath,
+                        durationMs = media.durationMs, triggerAt = d.at!!, repeat = d.repeat, alarm = d.alarm,
+                    ),
+                )
+            }
+            selectedDate = drafts.first().at!!.toLocalDate()
+            highlightId = ids.first()
+            val summary = drafts.joinToString("; ") { d -> soonLabel(d.at!!) + if (d.what.isNotBlank()) " — ${d.what.take(24)}" else "" }
+            snackbar.showSnackbar(
+                Res.plural(R.plurals.voice_set_many, drafts.size, drafts.size, summary),
+                withDismissAction = true,
+                duration = SnackbarDuration.Long,
+            )
+        }
+    }
+
+    /** Результат розпізнавання: є час — одразу планувати; ні — відкрити вибір часу з уже готовим текстом. */
+    fun applyOutcome(a: Attachment, outcome: VoiceOutcome) {
+        if (attachment !== a) return
+        val drafts = (outcome as? VoiceOutcome.Success)?.result?.drafts.orEmpty()
+        val first = drafts.firstOrNull()
+        when {
+            drafts.size > 1 && drafts.all { it.at != null } -> scheduleMany(drafts, a)
+            first?.at != null -> scheduleComposed(
+                first.at, first.repeat,
+                listOf(text.trim(), first.what).filter { it.isNotBlank() }.joinToString(" "),
+                alarm = first.alarm,
+            )
+            else -> {
+                when (outcome) {
+                    VoiceOutcome.Offline -> toast(Res.s(R.string.voice_offline))
+                    is VoiceOutcome.Failed -> toast(Res.s(R.string.voice_failed))
+                    is VoiceOutcome.Success -> toast(
+                        if (first != null) Res.s(R.string.voice_no_time, outcome.result.transcript.ifBlank { first.what })
+                        else Res.s(R.string.voice_nothing),
+                    )
+                }
+                if (first != null) {
+                    text = listOf(text.trim(), first.what).filter { it.isNotBlank() }.joinToString(" ")
+                    if (first.alarm) composeAlarm = true
+                }
+                showSchedule = true
+            }
+        }
+    }
+
+    fun interpret(a: Attachment) {
+        interpreting = scope.launch {
+            val outcome = SmartVoice.interpret(context, a)
+            interpreting = null
+            applyOutcome(a, outcome)
+        }
+    }
+
+    /** Прикріпити запис; якщо ввімкнено «розумний час» — дізнатися, коли нагадати, інакше одразу вибір часу. */
     fun attachRecording(a: Attachment) {
         replaceAttachment(a)
-        showSchedule = true
+        val choice = Prefs.smartVoice(context)
+        when {
+            !SmartVoice.available() || choice == false -> showSchedule = true
+            choice == null -> askSmartFor = a
+            else -> interpret(a)
+        }
     }
 
     // ---- Камера, галерея, мікрофон ----
@@ -444,7 +529,7 @@ fun ChatScreen(
             ) {
                 if (rec == null) {
                     attachment?.let { a ->
-                        AttachmentPreview(a, player, hazeState, onRemove = {
+                        AttachmentPreview(a, player, hazeState, recognizing = interpreting != null, onRemove = {
                             if (player.currentPath == a.file.absolutePath) player.stop()
                             replaceAttachment(null)
                         })
@@ -467,7 +552,11 @@ fun ChatScreen(
                             else -> pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
                         }
                     },
-                    onSend = { showSchedule = true },
+                    onSend = {
+                        interpreting?.cancel()
+                        interpreting = null
+                        showSchedule = true
+                    },
                     onToggleMode = ::toggleMode,
                     onHoldStart = { requestRecording(recordMode, locked = false) },
                     onDrag = { x, y ->
@@ -575,6 +664,21 @@ fun ChatScreen(
     }
 
     // ---- Діалоги ----
+
+    askSmartFor?.let { a ->
+        fun answer(on: Boolean) {
+            Prefs.setSmartVoice(context, on)
+            askSmartFor = null
+            if (on && attachment === a) interpret(a) else if (attachment === a) showSchedule = true
+        }
+        AlertDialog(
+            onDismissRequest = { answer(false) },
+            title = { Text(stringResource(R.string.voice_consent_title)) },
+            text = { Text(stringResource(R.string.voice_consent_text)) },
+            confirmButton = { TextButton(onClick = { answer(true) }) { Text(stringResource(R.string.voice_consent_allow)) } },
+            dismissButton = { TextButton(onClick = { answer(false) }) { Text(stringResource(R.string.voice_consent_decline)) } },
+        )
+    }
 
     if (showSchedule) {
         ScheduleSheet(

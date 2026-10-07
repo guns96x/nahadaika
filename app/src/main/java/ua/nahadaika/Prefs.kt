@@ -43,6 +43,11 @@ object Prefs {
     fun setDefaultHour(context: Context, hour: Int) = prefs(context).edit().putInt("default_hour", hour).apply()
     fun defaultTime(context: Context): LocalTime = LocalTime.of(defaultHour(context), 0)
 
+    /** «Розумний час» з голосу: null — ще не питали, true/false — вибір користувача. */
+    fun smartVoice(context: Context): Boolean? =
+        if (prefs(context).contains("smart_voice")) prefs(context).getBoolean("smart_voice", false) else null
+    fun setSmartVoice(context: Context, on: Boolean) = prefs(context).edit().putBoolean("smart_voice", on).apply()
+
     // ---- Оновлення ----
 
     fun autoUpdate(context: Context): Boolean = prefs(context).getBoolean("auto_update", true)

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_recognizing">Figuring out when to remind…</string>
+    <string name="voice_offline">No internet — choose the time manually</string>
+    <string name="voice_failed">Couldn\'t recognize the note — choose the time manually</string>
+    <string name="voice_nothing">Couldn\'t tell when to remind you in the recording</string>
+    <string name="voice_no_time">Heard: “%1$s” — but couldn\'t tell when to remind</string>
+    <string name="voice_consent_title">Set the time from recordings?</string>
+    <string name="voice_consent_text">The recording\'s sound is sent to Google Gemini only to find out what and when to remind. Nothing else leaves your phone. You can turn this off in settings.</string>
+    <string name="voice_consent_allow">Allow</string>
+    <string name="voice_consent_decline">Not now</string>
+    <string name="settings_section_smart">Smart time</string>
+    <string name="settings_smart_title">Time from voice and video</string>
+    <string name="settings_smart_subtitle">Say “tomorrow at 9…” — the reminder is set automatically. The recording\'s sound is sent to Google Gemini.</string>
+    <plurals name="voice_set_many">
+        <item quantity="one">Set %1$d reminder: %2$s</item>
+        <item quantity="other">Set %1$d reminders: %2$s</item>
+    </plurals>
+</resources>

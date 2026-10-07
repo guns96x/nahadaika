@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -23,6 +25,9 @@ android {
         versionName = "3.16"
         // Мови інтерфейсу; нову мову додавати і сюди, і в res/xml/locales_config.xml.
         resourceConfigurations += listOf("uk", "en")
+        // Розумний час (Gemini): ключ є лише в debug-збірці github з local.properties (див. нижче), у релізі порожній.
+        buildConfigField("String", "GEMINI_API_KEY", "\"\"")
+        buildConfigField("String", "GEMINI_MODEL", "\"gemini-2.5-flash-lite\"")
     }
 
     // github — APK зі самооновленням з GitHub Releases; play — для Google Play (без оновлень і без інтернету).
@@ -77,6 +82,20 @@ android {
         unitTests {
             isIncludeAndroidResources = true
             all { it.systemProperty("roborazzi.test.record", "true") }
+        }
+    }
+}
+
+// Ключ Gemini для прототипу: GEMINI_API_KEY у середовищі або gemini.api.key у local.properties (не комітити!).
+// Підставляється лише в debug-збірку github — публічний APK ключа не містить.
+val geminiKey: String = System.getenv("GEMINI_API_KEY")
+    ?: rootProject.file("local.properties").takeIf { it.exists() }
+        ?.let { f -> Properties().also { p -> f.inputStream().use(p::load) }.getProperty("gemini.api.key") }
+    ?: ""
+androidComponents {
+    onVariants { variant ->
+        if (variant.name == "githubDebug" && geminiKey.isNotBlank()) {
+            variant.buildConfigFields?.put("GEMINI_API_KEY", com.android.build.api.variant.BuildConfigField("String", "\"$geminiKey\"", "Gemini key (debug only)"))
         }
     }
 }
