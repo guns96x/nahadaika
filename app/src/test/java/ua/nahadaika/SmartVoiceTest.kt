@@ -126,6 +126,7 @@ class SmartVoiceTest {
         assertTrue(prompt.contains("Wednesday"))
         assertTrue(prompt.contains("Europe/Kyiv"))
         assertTrue(prompt.contains("09:00"))
+        assertTrue("без часу — усе одно нагадування", prompt.contains("even when no time is named"))
         val inline = parts.getJSONObject(1).getJSONObject("inline_data")
         assertEquals("audio/mp4", inline.getString("mime_type"))
         assertEquals("AQID", inline.getString("data"))
@@ -140,15 +141,24 @@ class SmartVoiceTest {
         assertFalse(SmartVoice.available())
         val file = java.io.File.createTempFile("voice", ".m4a").apply { deleteOnExit() }
         val result = VoiceResult("т", emptyList())
-        SmartVoice.interpreter = VoiceInterpreter { _, mime, ctx ->
-            assertEquals("audio/mp4", mime)
-            assertEquals(now, ctx.now)
-            VoiceOutcome.Success(result)
+        SmartVoice.interpreter = object : VoiceInterpreter {
+            override suspend fun interpret(audio: java.io.File, mime: String, context: VoiceContext): VoiceOutcome {
+                assertEquals("audio/mp4", mime)
+                assertEquals(now, context.now)
+                return VoiceOutcome.Success(result)
+            }
+
+            override suspend fun interpretText(text: String, context: VoiceContext): VoiceOutcome {
+                assertEquals("завтра о дев'ятій хліб", text)
+                return VoiceOutcome.Success(VoiceResult(text, emptyList()))
+            }
         }
         assertTrue(SmartVoice.available())
         val outcome = SmartVoice.interpret(app, Attachment(Kind.VOICE, file), now)
         assertEquals(result, (outcome as VoiceOutcome.Success).result)
         assertNotNull(Prefs.defaultHour(app))
+        // Сказане вголос іде як текст, без звуку.
+        assertEquals("завтра о дев'ятій хліб", (SmartVoice.interpretText(app, "завтра о дев'ятій хліб", now) as VoiceOutcome.Success).result.transcript)
     }
 
     @Test fun consentIsUnsetUntilChosen() {

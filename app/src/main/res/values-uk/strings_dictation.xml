@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="dictation_button">Сказати нагадування</string>
+    <string name="dictation_listening">Слухаю… «завтра о 9 купити хліб»</string>
+    <string name="dictation_unavailable">На телефоні немає розпізнавання мовлення (потрібен застосунок Google)</string>
+    <string name="dictation_err_nothing">Не почув — спробуйте ще раз</string>
+    <string name="dictation_err_network">Немає зв\'язку з розпізнаванням Google — перевірте інтернет</string>
+    <string name="dictation_err_permission">Немає доступу до мікрофона</string>
+    <string name="dictation_err_busy">Розпізнавач зайнятий — спробуйте ще раз</string>
+    <string name="dictation_err_audio">Мікрофон зайнятий іншою програмою</string>
+    <string name="dictation_err_language">Розпізнавач Google не підтримує українську на цьому телефоні</string>
+    <string name="dictation_err_other">Помилка розпізнавання</string>
+</resources>

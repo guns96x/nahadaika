@@ -86,6 +86,7 @@ import ua.nahadaika.dayLabel
 import ua.nahadaika.inLabel
 import ua.nahadaika.media.Attachment
 import ua.nahadaika.media.AudioPlayer
+import ua.nahadaika.media.LiveDictation
 import ua.nahadaika.media.MediaFiles
 import ua.nahadaika.media.VoiceRecorder
 import ua.nahadaika.occurrencesOn
@@ -170,6 +171,9 @@ fun ChatScreen(
     // «Розумний час»: фонове розпізнавання щойно записаного й запит згоди перед першим відправленням аудіо.
     var interpreting by remember { mutableStateOf<Job?>(null) }
     var askSmartFor by remember { mutableStateOf<Attachment?>(null) }
+    // «Сказати»: сказане вголос (текст, що вже розпізнав системний розпізнавач) і текст, що був у полі до цього.
+    val dictation = remember { LiveDictation(context) }
+    var askSmartSpoken by remember { mutableStateOf<Pair<String, String>?>(null) }
     var rescheduling by remember { mutableStateOf<Reminder?>(null) }
     var actionsFor by remember { mutableStateOf<Reminder?>(null) }
     var editingText by remember { mutableStateOf<Reminder?>(null) }
@@ -182,6 +186,7 @@ fun ChatScreen(
     DisposableEffect(Unit) {
         onDispose {
             recorder.cancel()
+            dictation.cancel()
             player.stop()
             currentAttachment?.file?.delete()
         }
@@ -274,22 +279,23 @@ fun ChatScreen(
     }
 
     /** Кілька нагадувань з однієї фрази; кожне отримує власну копію запису (видалення одного не зачепить інші). */
-    fun scheduleMany(drafts: List<VoiceDraft>, media: Attachment) {
-        if (player.currentPath == media.file.absolutePath) player.stop()
-        if (attachment === media) attachment = null
+    fun scheduleMany(drafts: List<VoiceDraft>, media: Attachment?) {
+        if (media != null && player.currentPath == media.file.absolutePath) player.stop()
+        if (media != null && attachment === media) attachment = null
         showSchedule = false
         composeAlarm = false
         scope.launch {
             val ids = drafts.mapIndexed { i, d ->
-                val file = if (i == 0) {
-                    media.file
-                } else {
-                    withContext(Dispatchers.IO) { MediaFiles.newFile(context, media.file.extension).also { media.file.copyTo(it, overwrite = true) } }
+                val file = when {
+                    media == null -> null
+                    i == 0 -> media.file
+                    else -> withContext(Dispatchers.IO) { MediaFiles.newFile(context, media.file.extension).also { media.file.copyTo(it, overwrite = true) } }
                 }
                 Repo.createReminder(
                     Reminder(
-                        chatId = chatId, kind = media.kind, text = d.what, mediaPath = file.absolutePath,
-                        durationMs = media.durationMs, triggerAt = d.at!!, repeat = d.repeat, alarm = d.alarm,
+                        chatId = chatId, kind = media?.kind ?: Kind.TEXT, text = d.what.ifBlank { if (media == null) Res.s(R.string.chat_default_reminder_text) else "" },
+                        mediaPath = file?.absolutePath, durationMs = media?.durationMs ?: 0,
+                        triggerAt = d.at!!, repeat = d.repeat, alarm = d.alarm,
                     ),
                 )
             }
@@ -304,16 +310,21 @@ fun ChatScreen(
         }
     }
 
-    /** Результат розпізнавання: є час — одразу планувати; ні — відкрити вибір часу з уже готовим текстом. */
-    fun applyOutcome(a: Attachment, outcome: VoiceOutcome) {
-        if (attachment !== a) return
+    /**
+     * Результат розпізнавання (запису [media] або сказаного [spoken]): є час — одразу планувати;
+     * ні — відкрити вибір часу з уже готовим текстом. [base] — текст у полі до цього.
+     */
+    fun applyOutcome(media: Attachment?, outcome: VoiceOutcome, base: String, spoken: String? = null) {
+        if (media != null && attachment !== media) return
+        // Поки Gemini думав, користувач уже щось дописав чи прикріпив — не чіпаємо (сказане лишилося в полі).
+        if (spoken != null && (attachment != null || text != listOf(base, spoken).filter { it.isNotBlank() }.joinToString(" "))) return
         val drafts = (outcome as? VoiceOutcome.Success)?.result?.drafts.orEmpty()
         val first = drafts.firstOrNull()
         when {
-            drafts.size > 1 && drafts.all { it.at != null } -> scheduleMany(drafts, a)
+            drafts.size > 1 && drafts.all { it.at != null } -> scheduleMany(drafts, media)
             first?.at != null -> scheduleComposed(
                 first.at, first.repeat,
-                listOf(text.trim(), first.what).filter { it.isNotBlank() }.joinToString(" "),
+                listOf(base, first.what).filter { it.isNotBlank() }.joinToString(" "),
                 alarm = first.alarm,
             )
             else -> {
@@ -325,10 +336,10 @@ fun ChatScreen(
                         else Res.s(R.string.voice_nothing),
                     )
                 }
-                if (first != null) {
-                    text = listOf(text.trim(), first.what).filter { it.isNotBlank() }.joinToString(" ")
-                    if (first.alarm) composeAlarm = true
-                }
+                // Сказане не губимо: навіть без часу воно лишається текстом у полі.
+                val add = first?.what?.takeIf { it.isNotBlank() } ?: spoken
+                if (add != null) text = listOf(base, add).filter { it.isNotBlank() }.joinToString(" ")
+                if (first?.alarm == true) composeAlarm = true
                 showSchedule = true
             }
         }
@@ -338,7 +349,54 @@ fun ChatScreen(
         interpreting = scope.launch {
             val outcome = SmartVoice.interpret(context, a)
             interpreting = null
-            applyOutcome(a, outcome)
+            applyOutcome(a, outcome, text.trim())
+        }
+    }
+
+    // ---- «Сказати»: як мікрофон клавіатури; у Gemini йде лише текст ----
+
+    fun interpretSpoken(spoken: String, base: String) {
+        text = listOf(base, spoken).filter { it.isNotBlank() }.joinToString(" ")
+        interpreting = scope.launch {
+            val outcome = SmartVoice.interpretText(context, spoken)
+            interpreting = null
+            applyOutcome(null, outcome, base, spoken)
+        }
+    }
+
+    fun onSpoken(spoken: String, base: String) {
+        val choice = Prefs.smartVoice(context)
+        when {
+            !SmartVoice.available() || choice == false -> text = listOf(base, spoken).filter { it.isNotBlank() }.joinToString(" ")
+            choice == null -> {
+                text = listOf(base, spoken).filter { it.isNotBlank() }.joinToString(" ")
+                askSmartSpoken = spoken to base
+            }
+            else -> interpretSpoken(spoken, base)
+        }
+    }
+
+    fun startDictation() {
+        if (!dictation.isAvailable()) {
+            toast(Res.s(R.string.dictation_unavailable))
+            return
+        }
+        player.stop()
+        playingVideoId = null
+        showSchedule = false
+        val base = text.trim()
+        dictation.start(onResult = { onSpoken(it, base) }, onError = ::toast)
+    }
+
+    val dictatePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) startDictation() else toast(Res.s(R.string.chat_permission_mic_needed))
+    }
+
+    fun dictate() {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            startDictation()
+        } else {
+            dictatePermission.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
 
@@ -398,6 +456,7 @@ fun ChatScreen(
 
     fun beginRecording(kind: Kind, locked: Boolean): Boolean {
         player.stop()
+        dictation.cancel()
         playingVideoId = null
         if (kind == Kind.VOICE && !recorder.start()) {
             toast(Res.s(R.string.chat_microphone_failed))
@@ -551,6 +610,13 @@ fun ChatScreen(
                             else -> pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
                         }
                     },
+                    showDictate = SmartVoice.available(),
+                    busy = interpreting != null && attachment == null,
+                    listening = dictation.listening,
+                    heard = dictation.partial,
+                    onDictate = ::dictate,
+                    onDictationDone = dictation::stop,
+                    onDictationCancel = dictation::cancel,
                     onSend = {
                         interpreting?.cancel()
                         interpreting = null
@@ -665,18 +731,18 @@ fun ChatScreen(
     // ---- Діалоги ----
 
     askSmartFor?.let { a ->
-        fun answer(on: Boolean) {
+        SmartConsentDialog { on ->
             Prefs.setSmartVoice(context, on)
             askSmartFor = null
             if (on && attachment === a) interpret(a) else if (attachment === a) showSchedule = true
         }
-        AlertDialog(
-            onDismissRequest = { answer(false) },
-            title = { Text(stringResource(R.string.voice_consent_title)) },
-            text = { Text(stringResource(R.string.voice_consent_text)) },
-            confirmButton = { TextButton(onClick = { answer(true) }) { Text(stringResource(R.string.voice_consent_allow)) } },
-            dismissButton = { TextButton(onClick = { answer(false) }) { Text(stringResource(R.string.voice_consent_decline)) } },
-        )
+    }
+    askSmartSpoken?.let { (spoken, base) ->
+        SmartConsentDialog { on ->
+            Prefs.setSmartVoice(context, on)
+            askSmartSpoken = null
+            if (on) interpretSpoken(spoken, base)
+        }
     }
 
     if (showSchedule) {
@@ -734,4 +800,16 @@ fun ChatScreen(
     }
 
     viewing?.let { MediaViewer(it, onDismiss = { viewing = null }) }
+}
+
+/** Згода перед першим відправленням у Gemini (звуку запису або сказаного тексту). */
+@Composable
+private fun SmartConsentDialog(onAnswer: (Boolean) -> Unit) {
+    AlertDialog(
+        onDismissRequest = { onAnswer(false) },
+        title = { Text(stringResource(R.string.voice_consent_title)) },
+        text = { Text(stringResource(R.string.voice_consent_text)) },
+        confirmButton = { TextButton(onClick = { onAnswer(true) }) { Text(stringResource(R.string.voice_consent_allow)) } },
+        dismissButton = { TextButton(onClick = { onAnswer(false) }) { Text(stringResource(R.string.voice_consent_decline)) } },
+    )
 }

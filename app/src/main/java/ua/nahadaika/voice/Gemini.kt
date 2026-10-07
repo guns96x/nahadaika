@@ -25,26 +25,47 @@ sealed interface VoiceOutcome {
     data class Failed(val message: String) : VoiceOutcome
 }
 
-fun interface VoiceInterpreter {
+/** Розбирає сказане на нагадування: з готового звуку або з тексту, який уже розпізнав системний розпізнавач. */
+interface VoiceInterpreter {
     suspend fun interpret(audio: File, mime: String, context: VoiceContext): VoiceOutcome
+
+    suspend fun interpretText(text: String, context: VoiceContext): VoiceOutcome = VoiceOutcome.Failed("text is not supported")
 }
 
 /**
- * Прототип: прямий виклик Gemini Developer API з ключем (лише debug-збірка, ключ — з local.properties).
- * У продакшні його замінить Firebase AI Logic із шаблоном промпта на сервері (див. docs/ROADMAP.md, етап 3).
+ * Gemini через Firebase AI Logic: запит іде на проксі Firebase з ключем застосунку, окремого ключа Gemini в застосунку немає.
+ * [certSha1] і [packageName] додаються до запиту, щоб ключ можна було обмежити цим застосунком у консолі Google Cloud.
+ * Далі на цьому ж проксі вмикається App Check (Play Integrity) — тоді скористатись ключем зможе лише справжня Нагадайка.
  */
-class GeminiRestInterpreter(private val apiKey: String, private val model: String) : VoiceInterpreter {
-    override suspend fun interpret(audio: File, mime: String, context: VoiceContext): VoiceOutcome = withContext(Dispatchers.IO) {
-        if (audio.length() > MAX_AUDIO_BYTES) return@withContext VoiceOutcome.Failed("audio too large")
+class GeminiRestInterpreter(
+    private val projectId: String,
+    private val apiKey: String,
+    private val model: String,
+    private val packageName: String,
+    private val certSha1: String?,
+) : VoiceInterpreter {
+    override suspend fun interpret(audio: File, mime: String, context: VoiceContext): VoiceOutcome {
+        if (audio.length() > MAX_AUDIO_BYTES) return VoiceOutcome.Failed("audio too large")
+        // Файл міг зникнути (видалили запис) — це не падіння, а просто «не вдалося».
+        val data = withContext(Dispatchers.IO) { runCatching { Base64.encodeToString(audio.readBytes(), Base64.NO_WRAP) }.getOrNull() }
+            ?: return VoiceOutcome.Failed("audio unreadable")
+        return send(requestBody(listOf(JSONObject().put("inline_data", JSONObject().put("mime_type", mime).put("data", data))), context), context)
+    }
+
+    override suspend fun interpretText(text: String, context: VoiceContext): VoiceOutcome =
+        send(requestBody(listOf(JSONObject().put("text", "Voice note, transcribed by a speech recognizer (may contain mistakes): $text")), context), context)
+
+    private suspend fun send(body: String, context: VoiceContext): VoiceOutcome = withContext(Dispatchers.IO) {
         try {
-            val body = requestBody(audio, mime, context)
-            val conn = (URL("$ENDPOINT/$model:generateContent").openConnection() as HttpURLConnection).apply {
+            val conn = (URL("$ENDPOINT/projects/$projectId/models/$model:generateContent").openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 connectTimeout = 15_000
                 readTimeout = 40_000
                 doOutput = true
                 setRequestProperty("Content-Type", "application/json")
                 setRequestProperty("x-goog-api-key", apiKey)
+                setRequestProperty("X-Android-Package", packageName)
+                certSha1?.let { setRequestProperty("X-Android-Cert", it) }
             }
             conn.outputStream.use { it.write(body.toByteArray()) }
             if (conn.responseCode != HttpURLConnection.HTTP_OK) {
@@ -65,9 +86,10 @@ class GeminiRestInterpreter(private val apiKey: String, private val model: Strin
     }
 
     companion object {
-        private const val ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models"
+        private const val ENDPOINT = "https://firebasevertexai.googleapis.com/v1beta"
         private const val MAX_AUDIO_BYTES = 8_000_000L
 
+        // Той самий промпт і схема — у tools/eval_gemini.py; міняючи тут, міняйте й там і перевіряйте якість.
         internal fun prompt(context: VoiceContext): String {
             val local = Instant.ofEpochMilli(context.now).atZone(context.zone)
             val now = local.toLocalDateTime().withSecond(0).withNano(0)
@@ -80,9 +102,12 @@ class GeminiRestInterpreter(private val apiKey: String, private val model: Strin
                 "If only a day is named, use $hour:00. Weeks start on Monday.",
                 "transcript: what was said, verbatim.",
                 "reminders: one item per thing to remember. what = short text of the thing, without the time words, in the language of the speech.",
+                "Always return an item for a thing to remember, even when no time is named (then when = null).",
                 "when = local date-time yyyy-MM-ddTHH:mm in the user's time zone, or null if no time can be determined. Never answer with a time in the past.",
-                "repeat = none, daily, weekly, monthly or yearly. alarm = true only if the user asked for an alarm, a wake-up or a timer.",
-                "If the note contains no request to remind, return an empty reminders array.",
+                "A day or date named once applies to the next items of the same note until another is named (tomorrow at 9 ... and at 7 pm: both tomorrow).",
+                "repeat = none, daily, weekly, monthly or yearly; for a repeating item, when = its first upcoming occurrence.",
+                "alarm = true only if the user asked for an alarm, a wake-up or a timer.",
+                "If the note contains no request to remind or to remember anything, return an empty reminders array.",
             ).joinToString("\n")
         }
 
@@ -108,11 +133,10 @@ class GeminiRestInterpreter(private val apiKey: String, private val model: Strin
                 .put("required", JSONArray(listOf("transcript", "reminders")))
         }
 
-        internal fun requestBody(audio: File, mime: String, context: VoiceContext): String {
-            val data = Base64.encodeToString(audio.readBytes(), Base64.NO_WRAP)
-            val parts = JSONArray()
-                .put(JSONObject().put("text", prompt(context)))
-                .put(JSONObject().put("inline_data", JSONObject().put("mime_type", mime).put("data", data)))
+        /** Промпт + вміст запису (звук або текст) і вимога відповісти JSON за схемою. */
+        internal fun requestBody(content: List<JSONObject>, context: VoiceContext): String {
+            val parts = JSONArray().put(JSONObject().put("text", prompt(context)))
+            content.forEach { parts.put(it) }
             return JSONObject()
                 .put("contents", JSONArray().put(JSONObject().put("parts", parts)))
                 .put(
@@ -120,6 +144,12 @@ class GeminiRestInterpreter(private val apiKey: String, private val model: Strin
                     JSONObject().put("responseMimeType", "application/json").put("responseSchema", schema()).put("temperature", 0),
                 )
                 .toString()
+        }
+
+        /** Для тестів: тіло запиту зі звуком із файлу. */
+        internal fun requestBody(audio: File, mime: String, context: VoiceContext): String {
+            val data = Base64.encodeToString(audio.readBytes(), Base64.NO_WRAP)
+            return requestBody(listOf(JSONObject().put("inline_data", JSONObject().put("mime_type", mime).put("data", data))), context)
         }
     }
 }

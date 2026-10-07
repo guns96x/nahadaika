@@ -21,6 +21,10 @@
         <intent>
             <action android:name="android.media.action.IMAGE_CAPTURE" />
         </intent>
+        <!-- «Сказати»: розпізнавач мовлення Google, як мікрофон клавіатури. -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
     </queries>
 
     <application

@@ -6,12 +6,12 @@
     <string name="voice_nothing">Не розчув у записі, коли нагадати</string>
     <string name="voice_no_time">Почув: «%1$s» — але не зрозумів, коли нагадати</string>
     <string name="voice_consent_title">Ставити час із записів?</string>
-    <string name="voice_consent_text">Звук запису надсилається в Google Gemini лише щоб дізнатися, що й коли нагадати. Більше нічого з телефону не йде. Вимкнути можна в налаштуваннях.</string>
+    <string name="voice_consent_text">Звук запису — або, коли ви кажете в мікрофон, розпізнаний текст — надсилається в Google Gemini лише щоб дізнатися, що й коли нагадати. Більше нічого з телефону не йде. Вимкнути можна в налаштуваннях.</string>
     <string name="voice_consent_allow">Дозволити</string>
     <string name="voice_consent_decline">Не зараз</string>
     <string name="settings_section_smart">Розумний час</string>
     <string name="settings_smart_title">Час із голосових і відео</string>
-    <string name="settings_smart_subtitle">Скажіть «завтра о 9…» — нагадування ставиться саме. Звук запису надсилається в Google Gemini.</string>
+    <string name="settings_smart_subtitle">Скажіть «завтра о 9…» — нагадування ставиться саме. Звук запису або сказаний текст надсилається в Google Gemini.</string>
     <plurals name="voice_set_many">
         <item quantity="one">Поставив %1$d нагадування: %2$s</item>
         <item quantity="few">Поставив %1$d нагадування: %2$s</item>

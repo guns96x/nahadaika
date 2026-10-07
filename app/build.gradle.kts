@@ -31,9 +31,8 @@ android {
         versionName = "3.16"
         // Мови інтерфейсу; нову мову додавати і сюди, і в res/xml/locales_config.xml.
         resourceConfigurations += listOf("uk", "en")
-        // Розумний час (Gemini): ключ є лише в debug-збірці github з local.properties (див. нижче), у релізі порожній.
-        buildConfigField("String", "GEMINI_API_KEY", "\"\"")
-        buildConfigField("String", "GEMINI_MODEL", "\"gemini-2.5-flash-lite\"")
+        // Розумний час: Gemini через Firebase AI Logic (проєкт Firebase — нижче, у варіанті github). Модель можна міняти тут.
+        buildConfigField("String", "GEMINI_MODEL", "\"gemini-3.5-flash-lite\"")
         // Спільні чати (Firebase): налаштування проєкту підставляються лише у варіант github, див. нижче.
         buildConfigField("String", "FIREBASE_API_KEY", "\"\"")
         buildConfigField("String", "FIREBASE_APP_ID", "\"\"")
@@ -99,17 +98,6 @@ android {
         unitTests {
             isIncludeAndroidResources = true
             all { it.systemProperty("roborazzi.test.record", "true") }
-        }
-    }
-}
-
-// Ключ Gemini для прототипу: GEMINI_API_KEY у середовищі або gemini.api.key у local.properties (не комітити!).
-// Підставляється лише в debug-збірку github — публічний APK ключа не містить.
-val geminiKey: String = localSetting("gemini.api.key", "GEMINI_API_KEY")
-androidComponents {
-    onVariants { variant ->
-        if (variant.name == "githubDebug" && geminiKey.isNotBlank()) {
-            variant.buildConfigFields?.put("GEMINI_API_KEY", com.android.build.api.variant.BuildConfigField("String", "\"$geminiKey\"", "Gemini key (debug only)"))
         }
     }
 }
