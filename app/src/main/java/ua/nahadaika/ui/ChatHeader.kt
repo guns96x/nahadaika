@@ -124,7 +124,6 @@ internal fun ChatHeader(
             today = today,
             dotsFor = dotsFor,
             onSelect = onSelectDate,
-            haze = haze,
             modifier = Modifier.fillMaxWidth(),
         )
     }

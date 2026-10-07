@@ -1,6 +1,14 @@
 package ua.nahadaika.ui
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.Canvas
 import kotlinx.coroutines.flow.filter
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.graphicsLayer
@@ -104,15 +112,18 @@ private fun kindIcon(kind: Kind): ImageVector = when (kind) {
 private const val PAST_DAYS = 14L
 private const val FUTURE_DAYS = 120L
 
-/** Клітинка дня; під лінзою в центрі вона збільшується до [CELL_MAX_SCALE] разів. */
+/** Крок між днями на нитці й висота смужки. */
 private val CELL_WIDTH = 40.dp
-private val CELL_HEIGHT = 36.dp
-private const val CELL_MAX_SCALE = 1.4f
+private val STRIP_HEIGHT = 64.dp
 
-/** Скляна стрічка з днями й крапля-лінза над центральним днем (трохи вища за стрічку — «випукла»). */
-private val RIBBON_HEIGHT = 42.dp
-private val LENS_WIDTH = 60.dp
-private val LENS_HEIGHT = 56.dp
+/** У центрі число збільшується до [CELL_MAX_SCALE] разів — ніби під краплею-лінзою. */
+private const val CELL_MAX_SCALE = 1.35f
+
+/** Крапля-намистина над обраним днем і нитка, на яку нанизані дні (нижче за числа). */
+private val BEAD_SIZE = 58.dp
+private val THREAD_BELOW_CENTER = 11.dp
+private val DOTS_BELOW_CENTER = 16.dp
+private val WEEKDAY_ABOVE_CENTER = 13.dp
 
 /** Півширина лінзи в клітинках: далі за неї дні вже звичайного розміру. */
 private const val LENS_HALF_WIDTH = 2.6f
@@ -123,7 +134,7 @@ private fun lensBump(t: Float): Float =
 
 /**
  * Інтеграл [lensBump] від центру до [t]: на стільки клітинок зсувається день, щоб збільшені сусіди
- * не налазили один на одного й не лишали щілин — стрічка суцільна, лише опукла посередині.
+ * не налазили один на одного й не лишали щілин — нитка суцільна, лише опукла посередині.
  */
 private fun lensShift(t: Float): Float {
     val w = LENS_HALF_WIDTH
@@ -132,8 +143,9 @@ private fun lensShift(t: Float): Float {
 }
 
 /**
- * Смужка днів: обраний день завжди в центрі й збільшений, сусідні плавно зменшуються до країв.
- * Гортання прилипає до центру, і день, що став посередині, стає обраним; тап по дню — теж центрує його.
+ * Смужка днів як нитка з намистиною: числа йдуть уздовж тонкої лінії, обраний день — у скляній краплі
+ * посередині, сусіди плавно збільшуються до неї. Гортання прилипає до центру, і день посередині стає обраним;
+ * тап по дню — теж центрує його.
  */
 @Composable
 fun DayStrip(
@@ -141,7 +153,6 @@ fun DayStrip(
     today: LocalDate,
     dotsFor: (LocalDate) -> List<Color>,
     onSelect: (LocalDate) -> Unit,
-    haze: HazeState,
     modifier: Modifier = Modifier,
 ) {
     val start = today.minusDays(PAST_DAYS)
@@ -171,86 +182,120 @@ fun DayStrip(
         }
     }
 
-    // Шари: скляна стрічка → крапля-лінза → дні (текст поверх скла, щоб лишався чітким).
-    BoxWithConstraints(modifier.height(LENS_HEIGHT + 8.dp), contentAlignment = Alignment.Center) {
-            val sidePadding = (maxWidth - CELL_WIDTH) / 2
-            val density = LocalDensity.current
-            val pitchPx = with(density) { CELL_WIDTH.toPx() }
-            Box(Modifier.fillMaxWidth().height(RIBBON_HEIGHT).glassHaze(haze))
-            Box(Modifier.size(LENS_WIDTH, LENS_HEIGHT).liquidLens(RoundedCornerShape(22.dp)))
-            LazyRow(
-                state = listState,
-                flingBehavior = rememberSnapFlingBehavior(listState),
-                modifier = Modifier.fillMaxWidth().height(LENS_HEIGHT),
-                contentPadding = PaddingValues(horizontal = sidePadding),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                items(count) { i ->
-                    val day = start.plusDays(i.toLong())
-                    DayCell(
-                        day = day,
-                        selected = day == selected,
-                        today = day == today,
-                        dots = dotsFor(day),
-                        modifier = Modifier.graphicsLayer {
-                            // Лінза: розмір = 1 + (M−1)·bump, зсув = (M−1)·∫bump — дні йдуть впритул, центр опуклий.
-                            val info = listState.layoutInfo
-                            val item = info.visibleItemsInfo.firstOrNull { it.index == i } ?: return@graphicsLayer
-                            val middle = (info.viewportStartOffset + info.viewportEndOffset) / 2f
-                            val t = (item.offset + item.size / 2f - middle) / pitchPx
-                            val bump = lensBump(t)
-                            val scale = 1f + (CELL_MAX_SCALE - 1f) * bump
-                            scaleX = scale
-                            scaleY = scale
-                            val shown = t + (CELL_MAX_SCALE - 1f) * lensShift(t)
-                            // Біля країв стрічка м'яко згасає, а не обривається напівклітинкою.
-                            val half = (info.viewportEndOffset - info.viewportStartOffset) / 2f / pitchPx
-                            val edge = (half - kotlin.math.abs(shown) - 0.2f).coerceIn(0f, 1f)
-                            alpha = (0.55f + 0.45f * bump) * edge
-                            translationX = (shown - t) * pitchPx
-                        },
-                        onClick = { onSelect(day) },
-                    )
-                }
+    val thread = Glass.TextFaint
+    BoxWithConstraints(modifier.height(STRIP_HEIGHT), contentAlignment = Alignment.Center) {
+        val sidePadding = (maxWidth - CELL_WIDTH) / 2
+        val density = LocalDensity.current
+        val pitchPx = with(density) { CELL_WIDTH.toPx() }
+
+        // Відстань клітинки [i] від центру в клітинках (null — її не видно).
+        fun offsetOf(i: Int): Float? {
+            val info = listState.layoutInfo
+            val item = info.visibleItemsInfo.firstOrNull { it.index == i } ?: return null
+            val middle = (info.viewportStartOffset + info.viewportEndOffset) / 2f
+            return (item.offset + item.size / 2f - middle) / pitchPx
+        }
+
+        // Нитка: тонка лінія під числами, що згасає до країв і заходить у краплю з боків.
+        Canvas(Modifier.fillMaxSize()) {
+            val y = size.height / 2f + THREAD_BELOW_CENTER.toPx()
+            val r = BEAD_SIZE.toPx() / 2f
+            val dy = THREAD_BELOW_CENTER.toPx()
+            val gap = kotlin.math.sqrt((r * r - dy * dy).coerceAtLeast(0f))
+            val cx = size.width / 2f
+            val brush = Brush.horizontalGradient(
+                0f to Color.Transparent, 0.18f to thread, 0.82f to thread, 1f to Color.Transparent,
+            )
+            val stroke = 1.2.dp.toPx()
+            drawLine(brush, Offset(0f, y), Offset(cx - gap, y), stroke, StrokeCap.Round)
+            drawLine(brush, Offset(cx + gap, y), Offset(size.width, y), stroke, StrokeCap.Round)
+        }
+        // Крапля-намистина під центральним числом (текст лишається поверх — чіткий).
+        Box(Modifier.size(BEAD_SIZE).liquidLens(CircleShape))
+
+        LazyRow(
+            state = listState,
+            flingBehavior = rememberSnapFlingBehavior(listState),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = sidePadding),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            items(count) { i ->
+                val day = start.plusDays(i.toLong())
+                DayCell(
+                    day = day,
+                    selected = day == selected,
+                    today = day == today,
+                    dots = dotsFor(day),
+                    lens = { offsetOf(i)?.let(::lensBump) ?: 0f },
+                    modifier = Modifier.graphicsLayer {
+                        // Лінза: розмір = 1 + (M−1)·bump, зсув = (M−1)·∫bump — дні йдуть упритул, центр опуклий.
+                        val t = offsetOf(i) ?: return@graphicsLayer
+                        val bump = lensBump(t)
+                        val scale = 1f + (CELL_MAX_SCALE - 1f) * bump
+                        scaleX = scale
+                        scaleY = scale
+                        val shown = t + (CELL_MAX_SCALE - 1f) * lensShift(t)
+                        // Біля країв нитка з числами м'яко згасає, а не обривається напівклітинкою.
+                        val info = listState.layoutInfo
+                        val half = (info.viewportEndOffset - info.viewportStartOffset) / 2f / pitchPx
+                        val edge = (half - kotlin.math.abs(shown) - 0.4f).coerceIn(0f, 1f)
+                        alpha = (0.5f + 0.5f * bump) * edge
+                        translationX = (shown - t) * pitchPx
+                    },
+                    onClick = { onSelect(day) },
+                )
             }
+        }
     }
 }
 
 @Composable
-private fun DayCell(day: LocalDate, selected: Boolean, today: Boolean, dots: List<Color>, modifier: Modifier, onClick: () -> Unit) {
-    // Обраний день виділяє лінза, тож власного фону в клітинки немає — лише яскравіший текст.
-    Column(
+private fun DayCell(
+    day: LocalDate,
+    selected: Boolean,
+    today: Boolean,
+    dots: List<Color>,
+    lens: () -> Float,
+    modifier: Modifier,
+    onClick: () -> Unit,
+) {
+    Box(
         modifier
             .width(CELL_WIDTH)
-            .height(CELL_HEIGHT)
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(onClickLabel = stringResource(R.string.chat_show_day), onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+            .fillMaxHeight()
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClickLabel = stringResource(R.string.chat_show_day),
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
     ) {
+        // День тижня проступає лише під краплею — на нитці самі числа, як на рисунку.
         Text(
             day.format(DateTimeFormatter.ofPattern("EE", Locale.getDefault())).replaceFirstChar { it.uppercase() },
-            fontSize = 10.sp,
-            lineHeight = 11.sp,
-            color = when {
-                today -> Glass.Lavender
-                selected -> Glass.TextDim
-                else -> Glass.TextFaint
-            },
+            fontSize = 9.sp,
+            lineHeight = 10.sp,
+            color = if (today) Glass.Lavender else Glass.TextDim,
+            modifier = Modifier
+                .offset(y = -WEEKDAY_ABOVE_CENTER)
+                .graphicsLayer { alpha = ((lens() - 0.75f) / 0.25f).coerceIn(0f, 1f) },
         )
         Text(
             "${day.dayOfMonth}",
-            fontSize = 14.sp,
-            lineHeight = 16.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontSize = 15.sp,
+            lineHeight = 17.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
             color = when {
                 today -> Glass.Lavender
                 selected -> Glass.Text
                 else -> Glass.TextDim
             },
+            modifier = Modifier.offset(y = (-1).dp),
         )
-        Row(Modifier.height(5.dp).padding(top = 1.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            dots.take(3).forEach { Box(Modifier.size(4.dp).background(it, CircleShape)) }
+        Row(Modifier.offset(y = DOTS_BELOW_CENTER), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            dots.take(3).forEach { Box(Modifier.size(3.5.dp).background(it, CircleShape)) }
         }
     }
 }
