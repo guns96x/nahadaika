@@ -122,8 +122,10 @@ private const val CELL_MAX_SCALE = 1.35f
 
 /** Крапля-намистина над обраним днем і нитка, на яку нанизані дні (нижче за числа). */
 private val BEAD_SIZE = 58.dp
-private val THREAD_BELOW_CENTER = 11.dp
-private val DOTS_BELOW_CENTER = 16.dp
+/** Півширина розриву нитки навколо одно- й двоцифрового числа (до збільшення лінзою). */
+private val GAP_ONE_DIGIT = 9.dp
+private val GAP_TWO_DIGITS = 13.dp
+private val DOTS_BELOW_CENTER = 14.dp
 private val WEEKDAY_ABOVE_CENTER = 13.dp
 
 /** Півширина лінзи в клітинках: далі за неї дні вже звичайного розміру. */
@@ -197,19 +199,33 @@ fun DayStrip(
             return (item.offset + item.size / 2f - middle) / pitchPx
         }
 
-        // Нитка: тонка лінія під числами, що згасає до країв і заходить у краплю з боків.
+        // Нитка: тонка лінія через центри чисел, що розривається навколо кожного числа й навколо краплі
+        // та згасає до країв — числа ніби нанизані на неї.
         Canvas(Modifier.fillMaxSize()) {
-            val y = size.height / 2f + THREAD_BELOW_CENTER.toPx()
-            val r = BEAD_SIZE.toPx() / 2f
-            val dy = THREAD_BELOW_CENTER.toPx()
-            val gap = kotlin.math.sqrt((r * r - dy * dy).coerceAtLeast(0f))
+            val y = size.height / 2f
             val cx = size.width / 2f
+            val bead = BEAD_SIZE.toPx() / 2f
             val brush = Brush.horizontalGradient(
                 0f to Color.Transparent, 0.18f to thread, 0.82f to thread, 1f to Color.Transparent,
             )
             val stroke = 1.2.dp.toPx()
-            drawLine(brush, Offset(0f, y), Offset(cx - gap, y), stroke, StrokeCap.Round)
-            drawLine(brush, Offset(cx + gap, y), Offset(size.width, y), stroke, StrokeCap.Round)
+            // Розриви [від, до] по x: навколо кожного видимого числа (з урахуванням лінзи) і навколо краплі.
+            val gaps = buildList {
+                add(cx - bead to cx + bead)
+                for (item in listState.layoutInfo.visibleItemsInfo) {
+                    val t = offsetOf(item.index) ?: continue
+                    val x = cx + (t + (CELL_MAX_SCALE - 1f) * lensShift(t)) * pitchPx
+                    val digits = if (start.plusDays(item.index.toLong()).dayOfMonth >= 10) GAP_TWO_DIGITS else GAP_ONE_DIGIT
+                    val half = digits.toPx() * (1f + (CELL_MAX_SCALE - 1f) * lensBump(t))
+                    add(x - half to x + half)
+                }
+            }.sortedBy { it.first }
+            var from = 0f
+            for ((a, b) in gaps) {
+                if (a > from) drawLine(brush, Offset(from, y), Offset(a, y), stroke, StrokeCap.Round)
+                from = maxOf(from, b)
+            }
+            if (from < size.width) drawLine(brush, Offset(from, y), Offset(size.width, y), stroke, StrokeCap.Round)
         }
         // Крапля-намистина під центральним числом (текст лишається поверх — чіткий).
         Box(Modifier.size(BEAD_SIZE).liquidLens(CircleShape))
@@ -293,7 +309,6 @@ private fun DayCell(
                 selected -> Glass.Text
                 else -> Glass.TextDim
             },
-            modifier = Modifier.offset(y = (-1).dp),
         )
         Row(Modifier.offset(y = DOTS_BELOW_CENTER), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             dots.take(3).forEach { Box(Modifier.size(3.5.dp).background(it, CircleShape)) }
