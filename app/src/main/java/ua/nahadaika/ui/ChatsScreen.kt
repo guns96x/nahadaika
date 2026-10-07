@@ -307,7 +307,7 @@ private fun ChatRow(
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (chat.remoteId != null) {
+                    if (SharedChats.isShared(chat)) {
                         Icon(Icons.Default.Group, stringResource(R.string.share_shared_chat), Modifier.size(16.dp), tint = Glass.Lavender)
                         Spacer(Modifier.width(4.dp))
                     }
@@ -350,7 +350,7 @@ private fun ChatRow(
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
             if (onShare != null) {
                 DropdownMenuItem(
-                    text = { Text(stringResource(if (chat.remoteId == null) R.string.share_share else R.string.share_invite)) },
+                    text = { Text(stringResource(if (SharedChats.isShared(chat)) R.string.share_invite else R.string.share_share)) },
                     onClick = { menu = false; onShare() },
                 )
             }

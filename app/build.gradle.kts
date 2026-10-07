@@ -38,6 +38,7 @@ android {
         buildConfigField("String", "FIREBASE_API_KEY", "\"\"")
         buildConfigField("String", "FIREBASE_APP_ID", "\"\"")
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"\"")
+        buildConfigField("String", "FIREBASE_WEB_CLIENT_ID", "\"\"")
     }
 
     // github — APK зі самооновленням з GitHub Releases; play — для Google Play (без оновлень і без інтернету).
@@ -51,6 +52,8 @@ android {
             buildConfigField("String", "FIREBASE_API_KEY", "\"${localSetting("firebase.apiKey", "FIREBASE_API_KEY")}\"")
             buildConfigField("String", "FIREBASE_APP_ID", "\"${localSetting("firebase.appId", "FIREBASE_APP_ID")}\"")
             buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${localSetting("firebase.projectId", "FIREBASE_PROJECT_ID")}\"")
+            // OAuth web client (Authentication → Google) — для входу через Google.
+            buildConfigField("String", "FIREBASE_WEB_CLIENT_ID", "\"${localSetting("firebase.webClientId", "FIREBASE_WEB_CLIENT_ID")}\"")
         }
         create("play") {
             dimension = "dist"
@@ -127,6 +130,9 @@ dependencies {
     "githubImplementation"(platform("com.google.firebase:firebase-bom:33.7.0"))
     "githubImplementation"("com.google.firebase:firebase-firestore")
     "githubImplementation"("com.google.firebase:firebase-auth")
+    "githubImplementation"("androidx.credentials:credentials:1.3.0")
+    "githubImplementation"("androidx.credentials:credentials-play-services-auth:1.3.0")
+    "githubImplementation"("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     "githubImplementation"("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
     // Firebase підміняє ListenableFuture порожньою заглушкою, а CameraX без неї не збирається.
     "githubImplementation"("com.google.guava:guava:33.3.1-android")

@@ -1,6 +1,14 @@
 package ua.nahadaika.share
 
+import android.content.Context
+import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
+import androidx.credentials.GetCredentialRequest
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthUserCollisionException
+import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -10,12 +18,13 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.tasks.await
+import ua.nahadaika.BuildConfig
 import ua.nahadaika.data.Repeat
 import java.security.SecureRandom
 
 /**
- * Спільні чати на Firestore. Структура:
- * chats/{id} — назва, учасники (members, names); chats/{id}/reminders, chats/{id}/comments;
+ * Чати в хмарі на Firestore. Структура:
+ * chats/{id} — назва, учасники (members, names), код запрошення; chats/{id}/reminders, chats/{id}/comments;
  * invites/{код} — до якого чату веде запрошення. Правила доступу — firebase/firestore.rules.
  */
 class FirestoreBackend(private val auth: FirebaseAuth, private val db: FirebaseFirestore) : SharedBackend {
@@ -26,20 +35,47 @@ class FirestoreBackend(private val auth: FirebaseAuth, private val db: FirebaseF
     override suspend fun signIn(): String =
         auth.currentUser?.uid ?: checkNotNull(auth.signInAnonymously().await().user).uid
 
+    override suspend fun signInWithGoogle(activity: Context): String {
+        val option = GetGoogleIdOption.Builder()
+            .setFilterByAuthorizedAccounts(false)
+            .setServerClientId(BuildConfig.FIREBASE_WEB_CLIENT_ID)
+            .build()
+        val result = CredentialManager.create(activity)
+            .getCredential(activity, GetCredentialRequest.Builder().addCredentialOption(option).build())
+        val credential = result.credential
+        check(credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL)
+        val firebase = GoogleAuthProvider.getCredential(GoogleIdTokenCredential.createFrom(credential.data).idToken, null)
+        val current = auth.currentUser
+        val user = try {
+            // Анонімний вхід прив'язуємо до Google — ідентифікатор лишається, спільні чати не губляться.
+            if (current != null && current.isAnonymous) current.linkWithCredential(firebase).await().user
+            else auth.signInWithCredential(firebase).await().user
+        } catch (e: FirebaseAuthUserCollisionException) {
+            // Цей Google-акаунт уже є (інший телефон) — входимо в нього.
+            auth.signInWithCredential(e.updatedCredential ?: firebase).await().user
+        }
+        return checkNotNull(user).email.orEmpty()
+    }
+
+    override fun account(): String? = auth.currentUser?.takeUnless { it.isAnonymous }?.email
+
+    override fun canUseGoogle(): Boolean = BuildConfig.FIREBASE_WEB_CLIENT_ID.isNotBlank()
+
     override fun newId(): String = db.collection("chats").document().id
 
     override suspend fun createChat(name: String, me: Member): RemoteChat {
         val ref = db.collection("chats").document()
+        val code = newCode()
         ref.set(
             mapOf(
                 "name" to name,
                 "members" to listOf(me.uid),
                 "names" to mapOf(me.uid to me.name),
                 "owner" to me.uid,
+                "inviteCode" to code,
                 "createdAt" to FieldValue.serverTimestamp(),
             ),
         ).await()
-        val code = newCode()
         db.collection("invites").document(code).set(mapOf("chatId" to ref.id, "createdBy" to me.uid)).await()
         return RemoteChat(ref.id, name, code)
     }
@@ -54,13 +90,22 @@ class FirestoreBackend(private val auth: FirebaseAuth, private val db: FirebaseF
                 "joinCode" to code,
             ),
         ).await()
-        val name = chat(chatId).get().await().getString("name").orEmpty()
-        return RemoteChat(chatId, name, code)
+        return toChat(chat(chatId).get().await())?.copy(inviteCode = code)
+    }
+
+    override suspend fun myChats(): List<RemoteChat> {
+        val uid = auth.currentUser?.uid ?: return emptyList()
+        return db.collection("chats").whereArrayContains("members", uid).get().await().documents.mapNotNull(::toChat)
+    }
+
+    override suspend fun renameChat(chatId: String, name: String) {
+        chat(chatId).update("name", name)
     }
 
     override suspend fun fetch(chatId: String): ChatSnapshot = ChatSnapshot(
         reminders(chatId).get().await().documents.mapNotNull(::toReminder),
-        comments(chatId).get().await().documents.mapNotNull { toComment(it) },
+        comments(chatId).get().await().documents.mapNotNull(::toComment),
+        chat(chatId).get().await().getString("name"),
     )
 
     override fun observe(chatId: String): Flow<ChatSnapshot> {
@@ -72,11 +117,17 @@ class FirestoreBackend(private val auth: FirebaseAuth, private val db: FirebaseF
         }
         val cs = callbackFlow {
             val reg = comments(chatId).addSnapshotListener { snap, _ ->
-                if (snap != null) trySend(snap.documents.mapNotNull { toComment(it) })
+                if (snap != null) trySend(snap.documents.mapNotNull(::toComment))
             }
             awaitClose { reg.remove() }
         }
-        return combine(rs, cs) { r, c -> ChatSnapshot(r, c) }
+        val name = callbackFlow {
+            val reg = chat(chatId).addSnapshotListener { snap, _ ->
+                if (snap != null) trySend(snap.getString("name"))
+            }
+            awaitClose { reg.remove() }
+        }
+        return combine(rs, cs, name) { r, c, n -> ChatSnapshot(r, c, n) }
     }
 
     override suspend fun putReminder(chatId: String, reminder: RemoteReminder, create: Boolean) {
@@ -113,7 +164,22 @@ class FirestoreBackend(private val auth: FirebaseAuth, private val db: FirebaseF
     }
 
     override suspend fun leave(chatId: String, me: Member) {
-        chat(chatId).update(mapOf("members" to FieldValue.arrayRemove(me.uid), "names.${me.uid}" to FieldValue.delete())).await()
+        val members = chat(chatId).get().await().get("members") as? List<*>
+        if (members == listOf(me.uid)) {
+            chat(chatId).delete().await()
+        } else {
+            chat(chatId).update(mapOf("members" to FieldValue.arrayRemove(me.uid), "names.${me.uid}" to FieldValue.delete())).await()
+        }
+    }
+
+    private fun toChat(d: DocumentSnapshot): RemoteChat? {
+        if (!d.exists()) return null
+        return RemoteChat(
+            id = d.id,
+            name = d.getString("name").orEmpty(),
+            inviteCode = d.getString("inviteCode").orEmpty(),
+            members = (d.get("members") as? List<*>)?.size ?: 1,
+        )
     }
 
     private fun toReminder(d: DocumentSnapshot): RemoteReminder? {

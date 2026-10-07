@@ -18,8 +18,9 @@ import ua.nahadaika.data.Repeat
 import ua.nahadaika.data.Repo
 
 /**
- * Спільні чати: поділитися чатом, приєднатися за кодом, тримати нагадування й обговорення
- * в згоді з сервером. Без [SharedBackend] (варіант play, немає налаштувань Firebase) — вимкнено.
+ * Чати в хмарі: спільні (поділитися, приєднатися за кодом) і особисті копії всіх чатів, якщо ввімкнено
+ * «Зберігати в хмарі». Головні дані — на телефоні (Room): будильники, віджет і робота без інтернету;
+ * сервер лише зберігає копію й роздає зміни. Без [SharedBackend] (варіант play, немає налаштувань Firebase) — вимкнено.
  */
 @SuppressLint("StaticFieldLeak") // лише applicationContext
 object SharedChats {
@@ -37,7 +38,7 @@ object SharedChats {
 
     fun available(): Boolean = backend != null
 
-    /** Під'єднати сервер і почати стежити за всіма спільними чатами. */
+    /** Під'єднати сервер і почати стежити за всіма чатами в хмарі. */
     fun init(context: Context, backend: SharedBackend, watch: Boolean = true) {
         app = context.applicationContext
         this.backend = backend
@@ -51,24 +52,86 @@ object SharedChats {
         backend = null
     }
 
-    private suspend fun me(b: SharedBackend): Member {
-        val ctx = checkNotNull(app)
-        return Member(b.signIn(), Prefs.displayName(ctx).ifBlank { "?" })
+    private fun ctx(): Context = checkNotNull(app)
+
+    private suspend fun me(b: SharedBackend): Member = Member(b.signIn(), Prefs.displayName(ctx()).ifBlank { "?" })
+
+    // ---- Хмара для всіх чатів ----
+
+    fun cloudEnabled(): Boolean = backend != null && app?.let { Prefs.cloud(it) } == true
+
+    fun account(): String? = backend?.account()
+
+    /** Можна ввімкнути «Зберігати в хмарі» (Firebase і вхід через Google налаштовано). */
+    fun cloudSupported(): Boolean = backend?.canUseGoogle() == true
+
+    /** Справді спільний (є інші учасники), а не лише копія в хмарі. */
+    fun isShared(chat: Chat): Boolean = chat.remoteId?.let { id -> app?.let { Prefs.isShared(it, id) } } == true
+
+    /**
+     * Увімкнути хмару: вхід через Google, повернути чати з інших телефонів цього акаунта,
+     * а все, що досі лише на телефоні, — вивантажити. Повертає пошту акаунта.
+     */
+    suspend fun enableCloud(activity: Context): String {
+        val b = checkNotNull(backend)
+        val email = b.signInWithGoogle(activity)
+        val me = me(b)
+        // Якщо акаунт уже був на іншому телефоні, ідентифікатор змінився — повертаємося у свої чати за кодами.
+        val mine = b.myChats().mapTo(HashSet()) { it.id }
+        for (chat in Repo.sharedChats()) {
+            val remoteId = chat.remoteId ?: continue
+            if (remoteId in mine) continue
+            Prefs.inviteCode(ctx(), remoteId)?.let { b.joinChat(it, me) }
+        }
+        // Чати з інших телефонів.
+        val remote = b.myChats()
+        for (rc in remote) {
+            val chatId = Repo.chatByRemoteId(rc.id)?.id ?: Repo.createSharedChat(rc.name, rc.id)
+            if (rc.inviteCode.isNotEmpty()) Prefs.setInviteCode(ctx(), rc.id, rc.inviteCode)
+            if (rc.members > 1) Prefs.setShared(ctx(), rc.id)
+            Repo.applyRemote(chatId, b.fetch(rc.id), me.uid)
+        }
+        Prefs.setCloud(ctx(), true)
+        // Порожній чат «за замовчуванням» нового телефона не дублюємо, якщо такий уже повернувся з хмари.
+        val names = remote.mapTo(HashSet()) { it.name }
+        for (chat in Repo.allChats()) {
+            if (chat.remoteId != null) continue
+            if (chat.name in names && Repo.remindersOf(chat.id).isEmpty()) Repo.deleteChat(chat) else upload(b, chat, me)
+        }
+        Repo.sharedChats().forEach { watch(it) }
+        return email
     }
 
-    // ---- Дії користувача ----
+    /** Нові чати більше не потрапляють у хмару; наявні копії лишаються (спільні працюють і далі). */
+    fun disableCloud() {
+        app?.let { Prefs.setCloud(it, false) }
+    }
 
-    /** Зробити чат спільним; повертає код запрошення. Наявні текстові нагадування стають спільними. */
-    suspend fun share(chat: Chat): String {
-        val b = checkNotNull(backend)
-        chat.remoteId?.let { id -> Prefs.inviteCode(checkNotNull(app), id)?.let { return it } }
-        val me = me(b)
+    /** Чат лише з цього телефона — у хмару (поки без учасників). */
+    private suspend fun upload(b: SharedBackend, chat: Chat, me: Member): RemoteChat {
         val remote = b.createChat(chat.name, me)
         Repo.setChatRemoteId(chat.id, remote.id)
-        Prefs.setInviteCode(checkNotNull(app), remote.id, remote.inviteCode)
+        Prefs.setInviteCode(ctx(), remote.id, remote.inviteCode)
         Repo.remindersOf(chat.id).filter { it.kind == Kind.TEXT }.forEach { push(b, remote.id, it, me) }
         watch(chat.copy(remoteId = remote.id))
-        return remote.inviteCode
+        return remote
+    }
+
+    // ---- Спільні чати ----
+
+    /** Поділитися чатом; повертає код запрошення. Наявні текстові нагадування стають спільними. */
+    suspend fun share(chat: Chat): String {
+        val b = checkNotNull(backend)
+        val remoteId = chat.remoteId
+        val code = if (remoteId == null) {
+            val remote = upload(b, chat, me(b))
+            Prefs.setShared(ctx(), remote.id)
+            remote.inviteCode
+        } else {
+            Prefs.setShared(ctx(), remoteId)
+            Prefs.inviteCode(ctx(), remoteId) ?: b.myChats().firstOrNull { it.id == remoteId }?.inviteCode.orEmpty()
+        }
+        return code
     }
 
     /** Приєднатися за кодом; повертає локальний чат або null, якщо код не знайдено. */
@@ -77,15 +140,14 @@ object SharedChats {
         val me = me(b)
         val remote = b.joinChat(code.trim().uppercase(), me) ?: return null
         val chatId = Repo.chatByRemoteId(remote.id)?.id ?: Repo.createSharedChat(remote.name, remote.id)
-        Prefs.setInviteCode(checkNotNull(app), remote.id, remote.inviteCode)
+        Prefs.setInviteCode(ctx(), remote.id, remote.inviteCode)
+        Prefs.setShared(ctx(), remote.id)
         Repo.applyRemote(chatId, b.fetch(remote.id), me.uid)
         Repo.chatById(chatId)?.let { watch(it) }
         return chatId
     }
 
-    fun inviteCode(chat: Chat): String? = chat.remoteId?.let { id -> app?.let { Prefs.inviteCode(it, id) } }
-
-    /** Разова синхронізація всіх спільних чатів (фонова перевірка, коли застосунок закрито). */
+    /** Разова синхронізація всіх чатів у хмарі (фонова перевірка, коли застосунок закрито). */
     suspend fun syncOnce() {
         val b = backend ?: return
         val uid = b.signIn()
@@ -107,6 +169,22 @@ object SharedChats {
     }
 
     // ---- Локальні зміни → сервер (викликає Repo після дій користувача) ----
+
+    /** Новий чат — у хмару, якщо вона ввімкнена. */
+    fun onChatCreated(id: Long) {
+        val b = backend ?: return
+        if (!cloudEnabled()) return
+        send {
+            val chat = Repo.chatById(id) ?: return@send
+            if (chat.remoteId == null) upload(b, chat, me(b))
+        }
+    }
+
+    fun onChatRenamed(chat: Chat, name: String) {
+        val b = backend ?: return
+        val remoteId = chat.remoteId ?: return
+        send { b.renameChat(remoteId, name.trim()) }
+    }
 
     fun onReminderChanged(id: Long) {
         val b = backend ?: return
@@ -140,7 +218,7 @@ object SharedChats {
         }
     }
 
-    /** Вийшли з чату (видалили його в себе) — більше не учасник. */
+    /** Видалили чат у себе — виходимо з нього (останній учасник видаляє його й із хмари). */
     fun onChatDeleted(chat: Chat) {
         val b = backend ?: return
         val remoteId = chat.remoteId ?: return

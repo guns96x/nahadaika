@@ -1,5 +1,7 @@
 package ua.nahadaika.ui
 
+import ua.nahadaika.share.SharedChats
+import androidx.compose.material.icons.filled.Cloud
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
@@ -116,6 +118,9 @@ fun SettingsScreen(onBack: () -> Unit) {
     BackHandler(onBack = onBack)
 
     // Налаштування живуть у Prefs; тут — їхні копії для миттєвого перемальовування.
+    var cloud by remember { mutableStateOf(SharedChats.cloudEnabled()) }
+    var cloudBusy by remember { mutableStateOf(false) }
+    val cloudScope = rememberCoroutineScope()
     var smartVoice by remember { mutableStateOf(Prefs.smartVoice(context) == true) }
     var snooze by remember { mutableIntStateOf(Prefs.snoozeMinutes(context)) }
     var defaultHour by remember { mutableIntStateOf(Prefs.defaultHour(context)) }
@@ -167,6 +172,38 @@ fun SettingsScreen(onBack: () -> Unit) {
                 ),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
+                if (SharedChats.cloudSupported()) {
+                    item {
+                        Section(stringResource(R.string.settings_cloud_section)) {
+                            SwitchRow(
+                                Icons.Default.Cloud,
+                                stringResource(R.string.settings_cloud_title),
+                                when {
+                                    cloudBusy -> stringResource(R.string.settings_cloud_busy)
+                                    cloud -> stringResource(R.string.settings_cloud_on, SharedChats.account().orEmpty())
+                                    else -> stringResource(R.string.settings_cloud_off)
+                                },
+                                cloud,
+                                enabled = !cloudBusy,
+                            ) { on ->
+                                if (!on) {
+                                    SharedChats.disableCloud()
+                                    cloud = false
+                                } else {
+                                    cloudBusy = true
+                                    cloudScope.launch {
+                                        runCatching { SharedChats.enableCloud(context) }
+                                            .onSuccess { cloud = true }
+                                            .onFailure {
+                                                Toast.makeText(context, context.getString(R.string.settings_cloud_failed), Toast.LENGTH_LONG).show()
+                                            }
+                                        cloudBusy = false
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 if (SmartVoice.available()) {
                     item {
                         Section(stringResource(R.string.settings_section_smart)) {

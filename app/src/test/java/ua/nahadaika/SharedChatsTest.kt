@@ -2,6 +2,7 @@ package ua.nahadaika
 
 import android.app.AlarmManager
 import android.app.Application
+import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -34,7 +35,7 @@ import ua.nahadaika.share.SharedBackend
 import ua.nahadaika.share.SharedChats
 import java.util.UUID
 
-/** Сервер спільних чатів у пам'яті — як Firestore, але без мережі. */
+/** Сервер чатів у пам'яті — як Firestore, але без мережі. */
 class FakeBackend(var uid: String = "me") : SharedBackend {
     val chats = mutableMapOf<String, String>() // id → назва
     val invites = mutableMapOf<String, String>() // код → id чату
@@ -43,8 +44,21 @@ class FakeBackend(var uid: String = "me") : SharedBackend {
     val comments = mutableMapOf<String, MutableMap<String, RemoteComment>>()
     private val changes = MutableStateFlow(0)
 
+    /** Google-акаунт уже є з іншого телефона — після входу ідентифікатор стає цим. null — анонімний прив'язується. */
+    var accountUid: String? = null
+    var email: String? = null
+
     override suspend fun signIn() = uid
+    override suspend fun signInWithGoogle(activity: Context): String {
+        accountUid?.let { uid = it }
+        email = "me@gmail.com"
+        return email!!
+    }
+    override fun account() = email
+    override fun canUseGoogle() = true
     override fun newId() = UUID.randomUUID().toString()
+
+    private fun codeOf(chatId: String) = invites.entries.first { it.value == chatId }.key
 
     override suspend fun createChat(name: String, me: Member): RemoteChat {
         val id = newId()
@@ -58,12 +72,22 @@ class FakeBackend(var uid: String = "me") : SharedBackend {
     override suspend fun joinChat(code: String, me: Member): RemoteChat? {
         val id = invites[code] ?: return null
         members.getValue(id) += me.uid
-        return RemoteChat(id, chats.getValue(id), code)
+        return RemoteChat(id, chats.getValue(id), code, members.getValue(id).size)
+    }
+
+    override suspend fun myChats() = members.filterValues { uid in it }.keys
+        .filter { it in chats }
+        .map { RemoteChat(it, chats.getValue(it), codeOf(it), members.getValue(it).size) }
+
+    override suspend fun renameChat(chatId: String, name: String) {
+        chats[chatId] = name
+        changes.value++
     }
 
     override suspend fun fetch(chatId: String) = ChatSnapshot(
         reminders[chatId].orEmpty().values.toList(),
         comments[chatId].orEmpty().values.toList(),
+        chats[chatId],
     )
 
     override fun observe(chatId: String): Flow<ChatSnapshot> = changes.map { fetch(chatId) }
@@ -86,7 +110,9 @@ class FakeBackend(var uid: String = "me") : SharedBackend {
     }
 
     override suspend fun leave(chatId: String, me: Member) {
-        members[chatId]?.remove(me.uid)
+        val m = members[chatId] ?: return
+        m.remove(me.uid)
+        if (m.isEmpty()) chats.remove(chatId)
     }
 }
 
@@ -106,7 +132,7 @@ class SharedChatsTest {
     @After fun tearDown() = SharedChats.reset()
 
     /** Зміни йдуть на сервер у фоні — дочекатися, поки [check] справдиться. */
-    private suspend fun eventually(check: () -> Boolean) {
+    private suspend fun eventually(check: suspend () -> Boolean) {
         repeat(100) {
             if (check()) return
             delay(20)
@@ -221,5 +247,61 @@ class SharedChatsTest {
         assertEquals(1, all.size)
         assertNull("моє — без підпису автора", all.single().authorName)
         assertEquals(1, Repo.comments(id).first().size)
+    }
+
+    // ---- Хмара для всіх чатів ----
+
+    @Test fun cloudRestoresChatsFromAnotherPhoneAndUploadsLocalOnes() = runBlocking {
+        // На іншому телефоні цього Google-акаунта вже є два чати.
+        backend.accountUid = "acc"
+        val home = backend.createChat(Res.s(R.string.core_default_chat_name), Member("acc", "Я"))
+        backend.putReminder(home.id, remote("h1", "Оплатити світло", System.currentTimeMillis() + hour, by = "acc", name = "Я"), create = true)
+        backend.createChat("Робота", Member("acc", "Я"))
+        // Тут — порожній чат за замовчуванням і свій чат із нагадуванням.
+        Repo.ensureDefaultChat()
+        val dacha = Repo.createChat("Дача")
+        Repo.createReminder(Reminder(chatId = dacha, kind = Kind.TEXT, text = "Полити", triggerAt = System.currentTimeMillis() + hour))
+
+        assertEquals("me@gmail.com", SharedChats.enableCloud(app))
+        assertTrue(SharedChats.cloudEnabled())
+
+        val chats = Repo.allChats()
+        assertEquals("порожній чат за замовчуванням не дублюється", 1, chats.count { it.name == Res.s(R.string.core_default_chat_name) })
+        assertEquals(setOf(Res.s(R.string.core_default_chat_name), "Робота", "Дача"), chats.map { it.name }.toSet())
+        assertTrue("усі чати в хмарі", chats.all { it.remoteId != null })
+        assertTrue("це копії, а не спільні чати", chats.none { SharedChats.isShared(it) })
+        val restored = Repo.remindersOf(chats.first { it.remoteId == home.id }.id).single()
+        assertEquals("Оплатити світло", restored.text)
+        assertNull("моє — без підпису автора", restored.authorName)
+        val dachaRemote = Repo.chatById(dacha)!!.remoteId!!
+        eventually { backend.reminders[dachaRemote]?.values?.singleOrNull()?.text == "Полити" }
+        assertTrue("acc" in backend.members.getValue(dachaRemote))
+    }
+
+    @Test fun withCloudNewChatsAndRenamesGoUp() = runBlocking {
+        SharedChats.enableCloud(app)
+        val sport = Repo.createChat("Спорт")
+        eventually { Repo.chatById(sport)!!.remoteId != null }
+        val remoteId = Repo.chatById(sport)!!.remoteId!!
+        assertEquals("Спорт", backend.chats[remoteId])
+
+        Repo.renameChat(Repo.chatById(sport)!!, "Спортзал")
+        eventually { backend.chats[remoteId] == "Спортзал" }
+
+        // Перейменували на іншому телефоні — назва приходить сюди.
+        backend.renameChat(remoteId, "Басейн")
+        SharedChats.syncOnce()
+        assertEquals("Басейн", Repo.chatById(sport)!!.name)
+
+        // Видалити особистий чат — прибрати його й із хмари.
+        Repo.deleteChat(Repo.chatById(sport)!!)
+        eventually { remoteId !in backend.chats }
+    }
+
+    @Test fun withoutCloudChatsStayOnPhone() = runBlocking {
+        val id = Repo.createChat("Лише тут")
+        delay(200)
+        assertNull(Repo.chatById(id)!!.remoteId)
+        assertTrue(backend.chats.isEmpty())
     }
 }

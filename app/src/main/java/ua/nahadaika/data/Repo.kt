@@ -85,10 +85,15 @@ object Repo {
 
     suspend fun createChat(name: String): Long {
         val color = chatColors[(db.chats().count()) % chatColors.size]
-        return db.chats().insert(Chat(name = name.trim(), color = color))
+        val id = db.chats().insert(Chat(name = name.trim(), color = color))
+        SharedChats.onChatCreated(id)
+        return id
     }
 
-    suspend fun renameChat(chat: Chat, name: String) = db.chats().update(chat.copy(name = name.trim()))
+    suspend fun renameChat(chat: Chat, name: String) {
+        db.chats().update(chat.copy(name = name.trim()))
+        SharedChats.onChatRenamed(chat, name)
+    }
 
     suspend fun deleteChat(chat: Chat) {
         db.reminders().byChat(chat.id).forEach { cleanup(it) }
@@ -174,6 +179,7 @@ object Repo {
     // ---- Спільні чати ----
 
     suspend fun sharedChats(): List<Chat> = db.chats().shared()
+    suspend fun allChats(): List<Chat> = db.chats().all()
     suspend fun chatById(id: Long): Chat? = db.chats().get(id)
     suspend fun chatByRemoteId(remoteId: String): Chat? = db.chats().byRemoteId(remoteId)
     suspend fun reminder(id: Long): Reminder? = db.reminders().get(id)
@@ -198,6 +204,10 @@ object Repo {
      */
     suspend fun applyRemote(chatId: Long, snapshot: ChatSnapshot, myUid: String) = lock.withLock {
         val now = System.currentTimeMillis()
+        // Чат перейменував інший учасник (або я на іншому телефоні).
+        snapshot.name?.takeIf { it.isNotBlank() }?.let { name ->
+            db.chats().get(chatId)?.takeIf { it.name != name }?.let { db.chats().update(it.copy(name = name)) }
+        }
         for (rr in snapshot.reminders) {
             val author = if (rr.authorUid == myUid) null else rr.authorName
             val target = if (rr.repeat != Repeat.NONE && rr.triggerAt <= now) nextOccurrence(rr.triggerAt, rr.repeat, now) else rr.triggerAt

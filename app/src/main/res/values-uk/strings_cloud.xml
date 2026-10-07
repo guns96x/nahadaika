@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_cloud_section">Хмара</string>
+    <string name="settings_cloud_title">Зберігати в хмарі</string>
+    <string name="settings_cloud_off">Вхід через Google — чати на всіх ваших телефонах, нічого не загубиться при заміні</string>
+    <string name="settings_cloud_on">%1$s · текстові нагадування й обговорення</string>
+    <string name="settings_cloud_busy">Вхід…</string>
+    <string name="settings_cloud_failed">Не вдалося ввійти — перевірте інтернет</string>
+</resources>

@@ -1,6 +1,6 @@
 rules_version = '2';
 
-// Спільні чати Нагадайки. Вхід — анонімний (Firebase Auth), тож «користувач» = телефон.
+// Чати Нагадайки в хмарі: спільні й особисті копії. Вхід — анонімний або через Google (Firebase Auth).
 // Розгорнути: firebase deploy --only firestore:rules (або вставити в консолі Firebase → Firestore → Rules).
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -23,6 +23,8 @@ service cloud.firestore {
 
     match /chats/{chatId} {
       allow create: if signedIn() && request.resource.data.members == [request.auth.uid];
+      // Останній учасник, виходячи, видаляє чат (особиста копія в хмарі).
+      allow delete: if signedIn() && resource.data.members == [request.auth.uid];
       allow read: if signedIn() && request.auth.uid in resource.data.members;
       // Учасник змінює чат як завгодно; новий — лише додає себе й має чинний код запрошення.
       allow update: if signedIn() && (

@@ -52,6 +52,14 @@ object Prefs {
     fun displayName(context: Context): String = prefs(context).getString("display_name", null).orEmpty()
     fun setDisplayName(context: Context, name: String) = prefs(context).edit().putString("display_name", name.trim()).apply()
 
+    /** «Зберігати в хмарі»: усі чати мають копію у Firebase. */
+    fun cloud(context: Context): Boolean = prefs(context).getBoolean("cloud", false)
+    fun setCloud(context: Context, on: Boolean) = prefs(context).edit().putBoolean("cloud", on).apply()
+
+    /** Чат справді спільний (є інші учасники), а не лише копія в хмарі. */
+    fun isShared(context: Context, remoteChatId: String): Boolean = prefs(context).getBoolean("shared_$remoteChatId", false)
+    fun setShared(context: Context, remoteChatId: String) = prefs(context).edit().putBoolean("shared_$remoteChatId", true).apply()
+
     /** Код запрошення спільного чату (щоб показати його знову без сервера). */
     fun inviteCode(context: Context, remoteChatId: String): String? = prefs(context).getString("invite_$remoteChatId", null)
     fun setInviteCode(context: Context, remoteChatId: String, code: String) =

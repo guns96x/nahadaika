@@ -1,12 +1,13 @@
 package ua.nahadaika.share
 
+import android.content.Context
 import kotlinx.coroutines.flow.Flow
 import ua.nahadaika.data.Repeat
 
 /** Учасник спільного чату, як його бачать інші. */
 data class Member(val uid: String, val name: String)
 
-/** Нагадування на сервері. Поки спільні лише текстові нагадування (голосові й відео — наступним кроком). */
+/** Нагадування на сервері. Поки в хмарі лише текстові нагадування (голосові й відео — наступним кроком). */
 data class RemoteReminder(
     val id: String,
     val text: String,
@@ -29,18 +30,35 @@ data class RemoteComment(
     val createdAt: Long,
 )
 
-data class RemoteChat(val id: String, val name: String, val inviteCode: String)
+/** Чат на сервері; [members] > 1 — справді спільний, інакше лише копія в хмарі. */
+data class RemoteChat(val id: String, val name: String, val inviteCode: String, val members: Int = 1)
 
-/** Усе, що зараз лежить у спільному чаті на сервері. */
-data class ChatSnapshot(val reminders: List<RemoteReminder>, val comments: List<RemoteComment>)
+/** Усе, що зараз лежить у чаті на сервері; [name] = null — назву не відомо (не міняти). */
+data class ChatSnapshot(
+    val reminders: List<RemoteReminder>,
+    val comments: List<RemoteComment>,
+    val name: String? = null,
+)
 
 /**
- * Сервер спільних чатів. Реалізація — у варіанті github (Firebase); у тестах — підміна в пам'яті.
+ * Сервер чатів у хмарі. Реалізація — у варіанті github (Firebase); у тестах — підміна в пам'яті.
  * Будильники ставить кожен телефон сам, сервер лише зберігає й роздає зміни.
  */
 interface SharedBackend {
-    /** Невидимий вхід (без акаунта); повертає ідентифікатор цього телефона. */
+    /** Вхід без акаунта (анонімно) або вже наявний; повертає ідентифікатор користувача. */
     suspend fun signIn(): String
+
+    /**
+     * Вхід через Google — та сама хмара на всіх телефонах. Анонімний вхід прив'язується до акаунта,
+     * тож спільні чати не губляться. Повертає пошту акаунта.
+     */
+    suspend fun signInWithGoogle(activity: Context): String
+
+    /** Пошта, якщо ввійшли через Google; null — анонімно або ще ніяк. */
+    fun account(): String?
+
+    /** Вхід через Google налаштовано (є OAuth-клієнт) — можна вмикати хмару. */
+    fun canUseGoogle(): Boolean
 
     fun newId(): String
 
@@ -48,6 +66,11 @@ interface SharedBackend {
 
     /** null — такого коду запрошення немає. */
     suspend fun joinChat(code: String, me: Member): RemoteChat?
+
+    /** Усі чати, де я учасник (відновлення на новому телефоні). */
+    suspend fun myChats(): List<RemoteChat>
+
+    suspend fun renameChat(chatId: String, name: String)
 
     suspend fun fetch(chatId: String): ChatSnapshot
 
@@ -60,5 +83,6 @@ interface SharedBackend {
 
     suspend fun putComment(chatId: String, comment: RemoteComment)
 
+    /** Вийти з чату; якщо я був останнім — чат видаляється. */
     suspend fun leave(chatId: String, me: Member)
 }
