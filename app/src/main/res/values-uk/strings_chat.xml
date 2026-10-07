@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ChatScreen -->
+    <string name="chat_snackbar_alarm">⏰ Будильник %1$s</string>
+    <string name="chat_snackbar_reminder">Нагадаю %1$s</string>
+    <string name="chat_action_change">Змінити</string>
+    <string name="chat_default_reminder_text">Нагадування</string>
+    <string name="chat_camera_failed_save">Камера не зберегла фото</string>
+    <string name="chat_error_add_file">Не вдалося додати файл</string>
+    <string name="chat_camera_app_not_found">Не знайдено застосунок камери</string>
+    <string name="chat_permission_camera_needed">Потрібен доступ до камери</string>
+    <string name="chat_microphone_failed">Не вдалося увімкнути мікрофон</string>
+    <string name="chat_permission_camera_mic_needed">Потрібен доступ до камери й мікрофона</string>
+    <string name="chat_permission_mic_needed">Потрібен доступ до мікрофона</string>
+    <string name="chat_ready_hold_to_record">Готово! Утримуйте кнопку, щоб записати</string>
+    <string name="chat_hold_longer_to_record">Утримуйте кнопку довше, щоб записати</string>
+    <string name="chat_gesture_hint">Тап — відео ↔ голосове. Утримуйте — запис, потягніть угору — 🔒</string>
+    <string name="chat_empty_today">На сьогодні</string>
+    <string name="chat_empty_on_day">На %1$s</string>
+    <string name="chat_schedule_confirm">Запланувати</string>
+    <string name="chat_remind_again">Нагадати ще раз</string>
+    <string name="chat_save">Зберегти</string>
+
+    <!-- ChatComposer -->
+    <string name="chat_attach">Додати</string>
+    <string name="chat_menu_record_video">Записати відео</string>
+    <string name="chat_menu_take_photo">Зняти фото</string>
+    <string name="chat_menu_from_gallery">З галереї</string>
+    <string name="chat_cancel">Скасувати</string>
+    <string name="chat_slide_to_cancel">Посуньте, щоб скасувати</string>
+    <string name="chat_done">Готово</string>
+    <string name="chat_desc_video_button">Відео: тап — перемкнути, утримати — записати</string>
+    <string name="chat_desc_voice_button">Голосове: тап — перемкнути, утримати — записати</string>
+    <string name="chat_desc_lock_hint">Потягніть угору, щоб зафіксувати</string>
+    <string name="chat_desc_play">Прослухати</string>
+    <string name="chat_photo">Фото</string>
+    <string name="chat_preview_video_duration">Відео · %1$s</string>
+    <string name="chat_preview_voice_duration">Голосове · %1$s</string>
+    <string name="chat_remove_attachment">Прибрати</string>
+
+    <!-- Bubbles -->
+    <string name="chat_desc_play_voice">Відтворити</string>
+    <string name="chat_fullscreen">На весь екран</string>
+    <string name="chat_play_video">Відтворити відео</string>
+    <string name="chat_resume">Продовжити</string>
+    <string name="chat_pause">Пауза</string>
+    <string name="chat_desc_video_paused">Відео на паузі</string>
+    <string name="chat_desc_video_playing">Відео відтворюється</string>
+    <string name="chat_close">Закрити</string>
+
+    <!-- ChatHeader -->
+    <string name="chat_all_chats">Усі чати</string>
+    <string name="chat_no_scheduled">немає запланованих</string>
+    <string name="chat_search">Пошук</string>
+
+    <!-- TimelineUi -->
+    <string name="chat_today">Сьогодні</string>
+    <string name="chat_show_day">Показати день</string>
+    <string name="chat_collapse">Згорнути</string>
+    <string name="chat_expand">Розгорнути</string>
+    <string name="chat_actions">Дії</string>
+    <string name="chat_alarm">Будильник</string>
+    <string name="chat_snoozed">Відкладено</string>
+    <string name="chat_from_author">від %1$s</string>
+    <string name="chat_delivered">надіслано</string>
+    <string name="chat_repeat_suffix">" · %1$s"</string>
+    <string name="chat_comments_unread">Нові повідомлення: %1$d</string>
+    <string name="chat_comments_count">Обговорення: %1$d</string>
+    <string name="chat_now">"  зараз"</string>
+    <string name="chat_empty_day_title">%1$s нагадувань немає</string>
+    <string name="chat_empty_day_subtitle">Напишіть, запишіть голосове чи кружечок — і оберіть, коли нагадати.</string>
+
+    <!-- ReminderActions -->
+    <string name="chat_sent_at">Надіслано %1$s</string>
+    <string name="chat_change_time">Змінити час</string>
+    <string name="chat_edit_text">Редагувати текст</string>
+    <string name="chat_change_caption">Змінити підпис</string>
+    <string name="chat_send_now">Надіслати зараз</string>
+    <string name="chat_delete">Видалити</string>
+    <string name="chat_delete_reminder_title">Видалити нагадування?</string>
+    <string name="chat_reminder_text_title">Текст нагадування</string>
+    <string name="chat_caption_title">Підпис</string>
+
+    <!-- ReminderDetails -->
+    <string name="chat_again">Ще раз</string>
+    <string name="chat_time">Час</string>
+    <string name="chat_text">Текст</string>
+    <string name="chat_more_actions">Більше дій</string>
+    <string name="chat_discuss_hint">Обговорити…</string>
+    <string name="chat_reply_hint">Відповісти…</string>
+    <string name="chat_send">Надіслати</string>
+
+    <!-- VideoRecorder -->
+    <string name="chat_video_error_storage">Не вистачає місця на телефоні</string>
+    <string name="chat_video_error_encoding">Камера не змогла закодувати відео</string>
+    <string name="chat_video_error_no_data">Камера не встигла записати жодного кадру</string>
+    <string name="chat_video_error_generic">Не вдалося записати відео (помилка %1$d)</string>
+    <string name="chat_video_too_short">Відео занадто коротке</string>
+    <string name="chat_camera_front_unavailable">Фронтальна камера недоступна — пишу з основної</string>
+    <string name="chat_camera_back_unavailable">Основна камера недоступна — пишу з фронтальної</string>
+    <string name="chat_camera_failed_start">Не вдалося увімкнути камеру</string>
+    <string name="chat_switch_camera">Змінити камеру</string>
+
+    <!-- ScheduleSheet -->
+    <string name="chat_tomorrow">Завтра</string>
+    <string name="chat_preset_today_20">Сьогодні 20:00</string>
+    <string name="chat_preset_tomorrow_hour">Завтра %1$02d:00</string>
+    <string name="chat_preset_tomorrow_20">Завтра 20:00</string>
+    <string name="chat_preset_in_week">Через тиждень</string>
+    <string name="chat_preset_5m">5 хв</string>
+    <string name="chat_preset_10m">10 хв</string>
+    <string name="chat_preset_15m">15 хв</string>
+    <string name="chat_preset_30m">30 хв</string>
+    <string name="chat_preset_1h">1 год</string>
+    <string name="chat_preset_2h">2 год</string>
+    <string name="chat_schedule_title">Коли нагадати?</string>
+    <string name="chat_tab_in">Через</string>
+    <string name="chat_tab_at">Коли</string>
+    <string name="chat_as_alarm">Як будильник</string>
+    <string name="chat_schedule_error_spin_time">Накрутіть, через скільки нагадати</string>
+    <string name="chat_schedule_error_time_passed">Цей час уже минув — оберіть пізніший</string>
+    <string name="chat_schedule_button_in">%1$s %2$s</string>
+    <string name="chat_schedule_button_at">%1$s · %2$s</string>
+    <string name="chat_wheel_hours">Години</string>
+    <string name="chat_wheel_minutes">Хвилини</string>
+    <string name="chat_wheel_seconds">Секунди</string>
+    <string name="chat_repeat_format">Повторювати: %1$s</string>
+    <string name="chat_repeat_never">ніколи</string>
+</resources>

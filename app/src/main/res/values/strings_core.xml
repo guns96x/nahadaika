@@ -1,32 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- AlarmActivity & Notifier alarm -->
-    <string name="core_alarm_default_title">Будильник</string>
+    <string name="core_alarm_default_title">Alarm</string>
     <string name="core_alarm_notification_title">⏰ %1$s</string>
-    <string name="core_alarm_snooze_5min">Ще 5 хв</string>
-    <string name="core_alarm_dismiss">Вимкнути</string>
+    <string name="core_alarm_snooze_5min">Snooze 5 min</string>
+    <string name="core_alarm_dismiss">Dismiss</string>
 
     <!-- Notifier channels & actions -->
-    <string name="core_channel_reminders_name">Нагадування</string>
-    <string name="core_channel_reminders_desc">Сповіщення про заплановані нагадування</string>
-    <string name="core_channel_alarms_name">Будильники й таймери</string>
-    <string name="core_channel_alarms_desc">Гучна мелодія, поки не вимкнете</string>
-    <string name="core_action_snooze_min">+%1$d хв</string>
-    <string name="core_action_snooze_1hour">+1 год</string>
-    <string name="core_action_listen">▶ Слухати</string>
-    <string name="core_action_done">Готово</string>
+    <string name="core_channel_reminders_name">Reminders</string>
+    <string name="core_channel_reminders_desc">Notifications for scheduled reminders</string>
+    <string name="core_channel_alarms_name">Alarms and timers</string>
+    <string name="core_channel_alarms_desc">Loud ringtone until dismissed</string>
+    <string name="core_action_snooze_min">+%1$d min</string>
+    <string name="core_action_snooze_1hour">+1 h</string>
+    <string name="core_action_listen">▶ Listen</string>
+    <string name="core_action_done">Done</string>
 
     <!-- Backup errors -->
-    <string name="core_backup_error_not_nahadaika">Це не копія Нагадайки</string>
-    <string name="core_backup_error_newer_version">Копія створена новішою версією — оновіть застосунок</string>
-    <string name="core_backup_error_corrupted">Копію пошкоджено</string>
+    <string name="core_backup_error_not_nahadaika">This is not a Nahadaika backup</string>
+    <string name="core_backup_error_newer_version">Backup was created by a newer version — update the app</string>
+    <string name="core_backup_error_corrupted">Backup is corrupted</string>
 
     <!-- Repo defaults -->
-    <string name="core_default_chat_name">Нагадування</string>
-    <string name="core_chat_fallback_name">Нагадайка</string>
+    <string name="core_default_chat_name">Reminders</string>
+    <string name="core_chat_fallback_name">Nahadaika</string>
 
     <!-- Search filters -->
-    <string name="core_search_filter_all">Усі</string>
-    <string name="core_search_filter_pending">Заплановані</string>
-    <string name="core_search_filter_done">Виконані</string>
+    <string name="core_search_filter_all">All</string>
+    <string name="core_search_filter_pending">Scheduled</string>
+    <string name="core_search_filter_done">Completed</string>
 </resources>

@@ -53,6 +53,7 @@ import ua.nahadaika.ui.theme.GlassChip
 import ua.nahadaika.ui.theme.GlassSegmented
 import ua.nahadaika.ui.theme.sheetGlow
 import ua.nahadaika.Prefs
+import ua.nahadaika.localDateFormatter
 import ua.nahadaika.data.Repeat
 import ua.nahadaika.inLabel
 import ua.nahadaika.repeatLabel
@@ -91,7 +92,7 @@ private fun defaultTime(): Long {
 private fun dayWheelLabel(index: Int): String = when (index) {
     0 -> Res.s(R.string.chat_today)
     1 -> Res.s(R.string.chat_tomorrow)
-    else -> LocalDate.now().plusDays(index.toLong()).format(DateTimeFormatter.ofPattern("EE, d MMM", Locale.getDefault()))
+    else -> LocalDate.now().plusDays(index.toLong()).format(localDateFormatter("EE, d MMM", "EEEdMMM"))
 }
 
 private data class AtPreset(val label: String, val at: () -> Long)

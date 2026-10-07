@@ -243,6 +243,15 @@ fun SettingsScreen(onBack: () -> Unit) {
                                 modifier = Modifier.fillMaxWidth().height(40.dp),
                             )
                         }
+                        // Мова застосунку окремо від системної — лише з Android 13.
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            Divider()
+                            LinkRow(Icons.Default.Translate, stringResource(R.string.settings_language_title), stringResource(R.string.settings_language_subtitle)) {
+                                context.startActivitySafe(
+                                    Intent(Settings.ACTION_APP_LOCALE_SETTINGS, Uri.parse("package:${context.packageName}")),
+                                )
+                            }
+                        }
                     }
                 }
                 item {

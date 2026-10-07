@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Нагадайка</string>
-    <string name="sc_video_short">Відео</string>
-    <string name="sc_video_long">Записати відео-нагадування</string>
-    <string name="sc_voice_short">Голосове</string>
-    <string name="sc_voice_long">Записати голосове нагадування</string>
-    <string name="widget_description">Найближче нагадування й кнопки швидкого запису</string>
+    <string name="app_name">Nahadaika</string>
+    <string name="sc_video_short">Video</string>
+    <string name="sc_video_long">Record video reminder</string>
+    <string name="sc_voice_short">Voice message</string>
+    <string name="sc_voice_long">Record voice reminder</string>
+    <string name="widget_description">Next reminder and quick record buttons</string>
 </resources>

@@ -12,6 +12,8 @@ Android (Kotlin 2.0, Compose, Room, CameraX, WorkManager, Vosk). Мова інт
 
 ## Правила
 
+- Усі видимі рядки — у ресурсах: англійська в `res/values/strings_*.xml` (базова), українська в `values-uk`; github-рядки — у `src/github/res`. У Compose — `stringResource`, поза ним — `Res.s`/`Res.plural`. Нова мова: папка `values-xx`, `resourceConfigurations` у `app/build.gradle.kts` і `res/xml/locales_config.xml`. Тести біжать з локаллю `uk` (`robolectric.properties`; у `@Config(qualifiers=...)` писати `uk-…`), англійську перевіряє `LocalizationTest`.
+
 - Ключ підпису (`*.jks`, пароль) ніколи не комітити — репозиторій публічний.
 - Будь-яка зміна `VoiceParser` — з тестами у `VoiceParserTest` (фіксований «зараз»: середа 30.09.2026 10:00, Europe/Kyiv).
 - Зміна схеми Room — підняти версію в `AppDatabase` і додати міграцію (є тест міграції в `AlarmTest`).

@@ -1,5 +1,6 @@
 package ua.nahadaika
 
+import android.text.format.DateFormat
 import ua.nahadaika.data.Kind
 import ua.nahadaika.data.Reminder
 import ua.nahadaika.data.Repeat
@@ -12,6 +13,13 @@ import java.util.Locale
 // Формати будуються за поточною мовою, бо вона може змінитися без перезапуску процесу.
 private fun fmt(pattern: String): DateTimeFormatter = DateTimeFormatter.ofPattern(pattern, Locale.getDefault())
 
+/** Дата за мовою: українська — [ukPattern] (як було), решта — найкращий порядок для локалі («Oct 7» у США, «7 Oct» у Британії). */
+fun localDateFormatter(ukPattern: String, skeleton: String): DateTimeFormatter {
+    val locale = Locale.getDefault()
+    val pattern = if (locale.language == "uk") ukPattern else DateFormat.getBestDateTimePattern(locale, skeleton)
+    return DateTimeFormatter.ofPattern(pattern, locale)
+}
+
 fun Long.toLocalDate(): LocalDate = Instant.ofEpochMilli(this).atZone(ZoneId.systemDefault()).toLocalDate()
 
 fun formatTime(ms: Long): String = Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()).format(fmt("HH:mm"))
@@ -23,7 +31,7 @@ fun dayLabel(date: LocalDate): String {
         today -> Res.s(R.string.fmt_today)
         today.plusDays(1) -> Res.s(R.string.fmt_tomorrow)
         today.minusDays(1) -> Res.s(R.string.fmt_yesterday)
-        else -> date.format(fmt(if (date.year == today.year) "d MMMM" else "d MMMM yyyy"))
+        else -> date.format(if (date.year == today.year) localDateFormatter("d MMMM", "dMMMM") else localDateFormatter("d MMMM yyyy", "dMMMMy"))
     }
 }
 
@@ -51,11 +59,11 @@ fun shortWhen(ms: Long): String {
     return when (date) {
         today -> formatTime(ms)
         today.plusDays(1) -> Res.s(R.string.fmt_tomorrow_short)
-        else -> date.format(fmt("d MMM"))
+        else -> date.format(localDateFormatter("d MMM", "dMMM"))
     }
 }
 
-fun shortDate(date: LocalDate): String = date.format(fmt("EE, d MMM"))
+fun shortDate(date: LocalDate): String = date.format(localDateFormatter("EE, d MMM", "EEEdMMM"))
 
 /** «через 1 год 17 хв», «через 45 хв», «через 2 дн 3 год». */
 fun inLabel(ms: Long): String {

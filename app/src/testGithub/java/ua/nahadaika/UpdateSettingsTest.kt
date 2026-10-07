@@ -44,6 +44,7 @@ class UpdateSettingsTest {
     @Test
     fun autoUpdateToggleIsSaved() {
         show()
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(isToggleable())
         compose.onAllNodes(isToggleable())[0].assertIsOn().performClick()
         compose.onAllNodes(isToggleable())[0].assertIsOff()
         assertFalse(Prefs.autoUpdate(app))

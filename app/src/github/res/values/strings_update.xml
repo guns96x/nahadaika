@@ -1,50 +1,50 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- UpdateUi -->
-    <string name="upd_banner_available">Доступна нова версія %1$s</string>
-    <string name="upd_banner_downloading">Оновлення… %1$d%%</string>
-    <string name="upd_banner_ready">Версія %1$s завантажена</string>
-    <string name="upd_section_title">Оновлення</string>
-    <string name="upd_auto_check_title">Перевіряти автоматично</string>
-    <string name="upd_auto_check_subtitle">Раз на пів дня; про нову версію прийде сповіщення</string>
-    <string name="upd_unit_mb">МБ</string>
-    <string name="upd_version_current">Версія %1$s</string>
-    <string name="upd_subtitle_idle">Натисніть, щоб перевірити</string>
-    <string name="upd_subtitle_checking">Перевіряю…</string>
-    <string name="upd_subtitle_up_to_date">Це найновіша версія ✓</string>
-    <string name="upd_subtitle_no_releases">На GitHub ще немає опублікованих версій</string>
-    <string name="upd_available_version">Доступна версія %1$s</string>
-    <string name="upd_download_patch_vs_apk">Завантажити %1$s замість %2$s</string>
-    <string name="upd_download_apk">Завантажити %1$s</string>
-    <string name="upd_downloading_to">Оновлення до %1$s</string>
-    <string name="upd_patch">Патч</string>
-    <string name="upd_full_apk">Повний APK</string>
+    <string name="upd_banner_available">New version %1$s is available</string>
+    <string name="upd_banner_downloading">Updating… %1$d%%</string>
+    <string name="upd_banner_ready">Version %1$s downloaded</string>
+    <string name="upd_section_title">Updates</string>
+    <string name="upd_auto_check_title">Check automatically</string>
+    <string name="upd_auto_check_subtitle">Every 12 hours; you will be notified of new versions</string>
+    <string name="upd_unit_mb">MB</string>
+    <string name="upd_version_current">Version %1$s</string>
+    <string name="upd_subtitle_idle">Tap to check</string>
+    <string name="upd_subtitle_checking">Checking…</string>
+    <string name="upd_subtitle_up_to_date">This is the latest version ✓</string>
+    <string name="upd_subtitle_no_releases">No releases published on GitHub yet</string>
+    <string name="upd_available_version">Version %1$s is available</string>
+    <string name="upd_download_patch_vs_apk">Download %1$s instead of %2$s</string>
+    <string name="upd_download_apk">Download %1$s</string>
+    <string name="upd_downloading_to">Updating to %1$s</string>
+    <string name="upd_patch">Patch</string>
+    <string name="upd_full_apk">Full APK</string>
     <string name="upd_downloading_progress">%1$s · %2$d%%</string>
-    <string name="upd_ready_title">Версія %1$s готова</string>
-    <string name="upd_ready_subtitle">Дозвольте встановлення й натисніть «Встановити»</string>
-    <string name="upd_action_check">Перевірити</string>
-    <string name="upd_action_update">Оновити</string>
-    <string name="upd_action_install">Встановити</string>
-    <string name="upd_action_retry">Ще раз</string>
+    <string name="upd_ready_title">Version %1$s is ready</string>
+    <string name="upd_ready_subtitle">Allow installation and tap “Install”</string>
+    <string name="upd_action_check">Check</string>
+    <string name="upd_action_update">Update</string>
+    <string name="upd_action_install">Install</string>
+    <string name="upd_action_retry">Retry</string>
 
     <!-- Updater -->
-    <string name="upd_err_no_file_in_release">у релізі немає файлу %1$s</string>
-    <string name="upd_err_no_internet">немає інтернету</string>
-    <string name="upd_err_check_failed">Не вдалося перевірити: %1$s</string>
-    <string name="upd_err_github_status">GitHub відповів %1$d</string>
-    <string name="upd_err_download_failed">Не вдалося завантажити: %1$s</string>
-    <string name="upd_err_checksum_mismatch">контрольна сума не збіглася</string>
-    <string name="upd_err_file_corrupted">файл пошкоджено під час завантаження</string>
-    <string name="upd_err_server_status">сервер відповів %1$d</string>
-    <string name="upd_err_install_failed">Не вдалося встановити: %1$s</string>
+    <string name="upd_err_no_file_in_release">no %1$s file in release</string>
+    <string name="upd_err_no_internet">no internet connection</string>
+    <string name="upd_err_check_failed">Failed to check: %1$s</string>
+    <string name="upd_err_github_status">GitHub responded with %1$d</string>
+    <string name="upd_err_download_failed">Failed to download: %1$s</string>
+    <string name="upd_err_checksum_mismatch">checksum mismatch</string>
+    <string name="upd_err_file_corrupted">file was corrupted during download</string>
+    <string name="upd_err_server_status">server responded with %1$d</string>
+    <string name="upd_err_install_failed">Failed to install: %1$s</string>
 
     <!-- UpdateWorker -->
-    <string name="upd_notif_channel_name">Оновлення застосунку</string>
-    <string name="upd_notif_title">Доступна Нагадайка %1$s</string>
-    <string name="upd_notif_text">Натисніть, щоб оновити — завантажити %1$s МБ</string>
+    <string name="upd_notif_channel_name">App updates</string>
+    <string name="upd_notif_title">Nahadaika %1$s is available</string>
+    <string name="upd_notif_text">Tap to update — download %1$s MB</string>
 
     <!-- InstallReceiver -->
-    <string name="upd_install_status_code">код %1$d</string>
-    <string name="upd_install_failed">Не вдалося встановити: %1$s</string>
-    <string name="upd_install_toast_failed">Оновлення не встановилось: %1$s</string>
+    <string name="upd_install_status_code">code %1$d</string>
+    <string name="upd_install_failed">Failed to install: %1$s</string>
+    <string name="upd_install_toast_failed">Update failed to install: %1$s</string>
 </resources>

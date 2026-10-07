@@ -21,6 +21,8 @@ android {
         targetSdk = 35
         versionCode = 25
         versionName = "3.16"
+        // Мови інтерфейсу; нову мову додавати і сюди, і в res/xml/locales_config.xml.
+        resourceConfigurations += listOf("uk", "en")
     }
 
     // github — APK зі самооновленням з GitHub Releases; play — для Google Play (без оновлень і без інтернету).
