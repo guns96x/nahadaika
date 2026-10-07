@@ -103,11 +103,27 @@ private fun kindIcon(kind: Kind): ImageVector = when (kind) {
 private const val PAST_DAYS = 14L
 private const val FUTURE_DAYS = 120L
 
-/** Клітинка дня; у центрі смужки вона збільшується до [CELL_MAX_SCALE] разів (ефект лінзи). */
-private val CELL_WIDTH = 38.dp
-private val CELL_HEIGHT = 38.dp
-private const val CELL_MAX_SCALE = 1.4f
-private val CELL_GAP = 4.dp
+/** Клітинка дня; у центрі смужки вона збільшується до [CELL_MAX_SCALE] разів (лінза). */
+private val CELL_WIDTH = 40.dp
+private val CELL_HEIGHT = 36.dp
+private const val CELL_MAX_SCALE = 1.5f
+
+/** Півширина лінзи в клітинках: далі за неї дні вже звичайного розміру. */
+private const val LENS_HALF_WIDTH = 2.6f
+
+/** Наскільки клітинка на відстані [t] клітинок від центру збільшена: 1 у центрі, 0 за межами лінзи. */
+private fun lensBump(t: Float): Float =
+    if (kotlin.math.abs(t) >= LENS_HALF_WIDTH) 0f else (1f + kotlin.math.cos(Math.PI.toFloat() * t / LENS_HALF_WIDTH)) / 2f
+
+/**
+ * Інтеграл [lensBump] від центру до [t]: на стільки клітинок зсувається день, щоб збільшені сусіди
+ * не налазили один на одного й не лишали щілин — стрічка суцільна, лише опукла посередині.
+ */
+private fun lensShift(t: Float): Float {
+    val w = LENS_HALF_WIDTH
+    if (kotlin.math.abs(t) >= w) return kotlin.math.sign(t) * w / 2f
+    return (t + w / Math.PI.toFloat() * kotlin.math.sin(Math.PI.toFloat() * t / w)) / 2f
+}
 
 /**
  * Смужка днів: обраний день завжди в центрі й збільшений, сусідні плавно зменшуються до країв.
@@ -151,14 +167,12 @@ fun DayStrip(
     BoxWithConstraints(modifier) {
             val sidePadding = (maxWidth - CELL_WIDTH) / 2
             val density = LocalDensity.current
-            val pitchPx = with(density) { (CELL_WIDTH + CELL_GAP).toPx() }
-            val pushPx = with(density) { 7.dp.toPx() }
+            val pitchPx = with(density) { CELL_WIDTH.toPx() }
             LazyRow(
                 state = listState,
                 flingBehavior = rememberSnapFlingBehavior(listState),
                 modifier = Modifier.fillMaxWidth().height(CELL_HEIGHT * CELL_MAX_SCALE + 2.dp),
                 contentPadding = PaddingValues(horizontal = sidePadding),
-                horizontalArrangement = Arrangement.spacedBy(CELL_GAP),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 items(count) { i ->
@@ -169,18 +183,21 @@ fun DayStrip(
                         today = day == today,
                         dots = dotsFor(day),
                         modifier = Modifier.graphicsLayer {
-                            // Лінза: чим ближче до центру, тим більша й яскравіша клітинка; сусідні розсуваються.
+                            // Лінза: розмір = 1 + (M−1)·bump, зсув = (M−1)·∫bump — дні йдуть впритул, центр опуклий.
                             val info = listState.layoutInfo
                             val item = info.visibleItemsInfo.firstOrNull { it.index == i } ?: return@graphicsLayer
                             val middle = (info.viewportStartOffset + info.viewportEndOffset) / 2f
                             val t = (item.offset + item.size / 2f - middle) / pitchPx
-                            val near = (1f - kotlin.math.abs(t) / 2.4f).coerceIn(0f, 1f)
-                            val lens = near * near * (3f - 2f * near)
-                            val scale = 1f + (CELL_MAX_SCALE - 1f) * lens
+                            val bump = lensBump(t)
+                            val scale = 1f + (CELL_MAX_SCALE - 1f) * bump
                             scaleX = scale
                             scaleY = scale
-                            alpha = 0.5f + 0.5f * lens
-                            translationX = t.coerceIn(-1f, 1f) * pushPx
+                            val shown = t + (CELL_MAX_SCALE - 1f) * lensShift(t)
+                            // Біля країв стрічка м'яко згасає, а не обривається напівклітинкою.
+                            val half = (info.viewportEndOffset - info.viewportStartOffset) / 2f / pitchPx
+                            val edge = (half - kotlin.math.abs(shown) - 0.2f).coerceIn(0f, 1f)
+                            alpha = (0.55f + 0.45f * bump) * edge
+                            translationX = (shown - t) * pitchPx
                         },
                         onClick = { onSelect(day) },
                     )
