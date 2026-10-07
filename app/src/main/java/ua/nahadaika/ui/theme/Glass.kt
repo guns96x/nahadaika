@@ -30,6 +30,9 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -187,6 +190,36 @@ fun Modifier.glassHaze(state: HazeState?, shape: Shape = Glass.Pill): Modifier {
             ),
         )
         .border(0.8.dp, p.stroke, shape)
+}
+
+/**
+ * Крапля «рідкого скла» (як лінза в iOS): напівпрозоре тіло, відблиск угорі, світла кромка й м'яка тінь.
+ * Малюється під текстом, тож вміст лишається чітким, а крапля ніби збільшує його.
+ */
+@Composable
+fun Modifier.liquidLens(shape: Shape = RoundedCornerShape(22.dp)): Modifier {
+    val dark = Glass.palette.isDark
+    val body = if (dark) {
+        listOf(Color.White.copy(alpha = 0.18f), Color.White.copy(alpha = 0.06f))
+    } else {
+        listOf(Color.White.copy(alpha = 0.9f), Color.White.copy(alpha = 0.55f))
+    }
+    val rim = if (dark) {
+        listOf(Color.White.copy(alpha = 0.6f), Color.White.copy(alpha = 0.08f), Color.White.copy(alpha = 0.3f))
+    } else {
+        // На світлому склі біла крапля губиться — знизу кромка трохи темніша.
+        listOf(Color.White, Color.Black.copy(alpha = 0.05f), Color.Black.copy(alpha = 0.14f))
+    }
+    val gloss = Color.White.copy(alpha = if (dark) 0.14f else 0.5f)
+    return shadow(if (dark) 12.dp else 14.dp, shape, ambientColor = Color.Black.copy(alpha = 0.45f), spotColor = Color.Black.copy(alpha = 0.45f))
+        .clip(shape)
+        .background(Brush.verticalGradient(body))
+        .drawWithContent {
+            drawContent()
+            // Відблиск: світло зверху плавно гасне до середини краплі.
+            drawRect(Brush.verticalGradient(listOf(gloss, Color.Transparent), endY = size.height * 0.5f))
+        }
+        .border(1.dp, Brush.verticalGradient(rim), shape)
 }
 
 /** М'яке затемнення від краю екрана — замість суцільних смуг під шапкою та полем вводу. */

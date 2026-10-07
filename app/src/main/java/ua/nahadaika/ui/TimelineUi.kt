@@ -67,6 +67,7 @@ import ua.nahadaika.repeatLabel
 import ua.nahadaika.ui.theme.Glass
 import ua.nahadaika.ui.theme.glass
 import ua.nahadaika.ui.theme.glassHaze
+import ua.nahadaika.ui.theme.liquidLens
 import java.io.File
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -103,10 +104,15 @@ private fun kindIcon(kind: Kind): ImageVector = when (kind) {
 private const val PAST_DAYS = 14L
 private const val FUTURE_DAYS = 120L
 
-/** Клітинка дня; у центрі смужки вона збільшується до [CELL_MAX_SCALE] разів (лінза). */
+/** Клітинка дня; під лінзою в центрі вона збільшується до [CELL_MAX_SCALE] разів. */
 private val CELL_WIDTH = 40.dp
 private val CELL_HEIGHT = 36.dp
-private const val CELL_MAX_SCALE = 1.5f
+private const val CELL_MAX_SCALE = 1.4f
+
+/** Скляна стрічка з днями й крапля-лінза над центральним днем (трохи вища за стрічку — «випукла»). */
+private val RIBBON_HEIGHT = 42.dp
+private val LENS_WIDTH = 60.dp
+private val LENS_HEIGHT = 56.dp
 
 /** Півширина лінзи в клітинках: далі за неї дні вже звичайного розміру. */
 private const val LENS_HALF_WIDTH = 2.6f
@@ -135,6 +141,7 @@ fun DayStrip(
     today: LocalDate,
     dotsFor: (LocalDate) -> List<Color>,
     onSelect: (LocalDate) -> Unit,
+    haze: HazeState,
     modifier: Modifier = Modifier,
 ) {
     val start = today.minusDays(PAST_DAYS)
@@ -164,14 +171,17 @@ fun DayStrip(
         }
     }
 
-    BoxWithConstraints(modifier) {
+    // Шари: скляна стрічка → крапля-лінза → дні (текст поверх скла, щоб лишався чітким).
+    BoxWithConstraints(modifier.height(LENS_HEIGHT + 8.dp), contentAlignment = Alignment.Center) {
             val sidePadding = (maxWidth - CELL_WIDTH) / 2
             val density = LocalDensity.current
             val pitchPx = with(density) { CELL_WIDTH.toPx() }
+            Box(Modifier.fillMaxWidth().height(RIBBON_HEIGHT).glassHaze(haze))
+            Box(Modifier.size(LENS_WIDTH, LENS_HEIGHT).liquidLens(RoundedCornerShape(22.dp)))
             LazyRow(
                 state = listState,
                 flingBehavior = rememberSnapFlingBehavior(listState),
-                modifier = Modifier.fillMaxWidth().height(CELL_HEIGHT * CELL_MAX_SCALE + 2.dp),
+                modifier = Modifier.fillMaxWidth().height(LENS_HEIGHT),
                 contentPadding = PaddingValues(horizontal = sidePadding),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -208,14 +218,12 @@ fun DayStrip(
 
 @Composable
 private fun DayCell(day: LocalDate, selected: Boolean, today: Boolean, dots: List<Color>, modifier: Modifier, onClick: () -> Unit) {
-    val bg by animateColorAsState(if (selected) Glass.Primary else Color.Transparent, label = "day")
-    val main = if (selected) Glass.OnPrimary else Glass.Text
+    // Обраний день виділяє лінза, тож власного фону в клітинки немає — лише яскравіший текст.
     Column(
         modifier
             .width(CELL_WIDTH)
             .height(CELL_HEIGHT)
             .clip(RoundedCornerShape(12.dp))
-            .background(bg)
             .clickable(onClickLabel = stringResource(R.string.chat_show_day), onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
@@ -225,8 +233,8 @@ private fun DayCell(day: LocalDate, selected: Boolean, today: Boolean, dots: Lis
             fontSize = 10.sp,
             lineHeight = 11.sp,
             color = when {
-                selected -> Glass.OnPrimary.copy(alpha = 0.7f)
                 today -> Glass.Lavender
+                selected -> Glass.TextDim
                 else -> Glass.TextFaint
             },
         )
@@ -235,10 +243,14 @@ private fun DayCell(day: LocalDate, selected: Boolean, today: Boolean, dots: Lis
             fontSize = 14.sp,
             lineHeight = 16.sp,
             fontWeight = FontWeight.SemiBold,
-            color = if (today && !selected) Glass.Lavender else main,
+            color = when {
+                today -> Glass.Lavender
+                selected -> Glass.Text
+                else -> Glass.TextDim
+            },
         )
         Row(Modifier.height(5.dp).padding(top = 1.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            dots.take(3).forEach { Box(Modifier.size(4.dp).background(if (selected) Glass.OnPrimary else it, CircleShape)) }
+            dots.take(3).forEach { Box(Modifier.size(4.dp).background(it, CircleShape)) }
         }
     }
 }
