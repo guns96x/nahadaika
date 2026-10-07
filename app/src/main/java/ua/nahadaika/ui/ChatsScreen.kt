@@ -10,6 +10,8 @@ import dev.chrisbanes.haze.hazeSource
 import ua.nahadaika.ui.theme.PrimaryCircle
 import ua.nahadaika.ui.theme.AppBackground
 import ua.nahadaika.ui.theme.Glass
+import ua.nahadaika.ui.theme.ThemeModeButton
+import ua.nahadaika.ui.theme.card
 import ua.nahadaika.ui.theme.GlassIconButton
 import ua.nahadaika.ui.theme.edgeFade
 import ua.nahadaika.ui.theme.glass
@@ -135,6 +137,8 @@ fun ChatsScreen(onOpenChat: (Long) -> Unit, onBack: () -> Unit, onOpenSettings: 
                 Spacer(Modifier.width(8.dp))
                 GlassIconButton(Icons.Default.Search, stringResource(R.string.chats_search), onClick = onOpenSearch, size = HeaderHeight, haze = hazeState)
                 Spacer(Modifier.width(8.dp))
+                ThemeModeButton(size = HeaderHeight, haze = hazeState)
+                Spacer(Modifier.width(8.dp))
                 GlassIconButton(Icons.Default.Settings, stringResource(R.string.chats_settings), onClick = onOpenSettings, size = HeaderHeight, haze = hazeState)
             }
         },
@@ -214,9 +218,9 @@ private fun ChatRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .glass(RoundedCornerShape(18.dp))
+                .card()
                 .combinedClickable(onClick = onClick, onLongClick = { menu = true })
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Avatar(chat, size = 42)
@@ -388,7 +392,7 @@ fun PermissionBanners() {
 @Composable
 internal fun Banner(icon: ImageVector, text: String, action: String, onAction: () -> Unit, onDismiss: (() -> Unit)? = null) {
     Row(
-        Modifier.fillMaxWidth().padding(top = 4.dp).glass(RoundedCornerShape(20.dp)).padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+        Modifier.fillMaxWidth().padding(top = 4.dp).card().padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, null, tint = Glass.Lavender, modifier = Modifier.size(18.dp))

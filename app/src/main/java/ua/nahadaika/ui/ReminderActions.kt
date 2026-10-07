@@ -36,6 +36,7 @@ import ua.nahadaika.data.Kind
 import ua.nahadaika.data.Reminder
 import ua.nahadaika.data.alarmAt
 import ua.nahadaika.ui.theme.Glass
+import ua.nahadaika.ui.theme.card
 import ua.nahadaika.ui.theme.glass
 import ua.nahadaika.ui.theme.sheetGlow
 import ua.nahadaika.whenLabel
@@ -91,7 +92,7 @@ internal fun ReminderActions(
 private fun ActionItem(icon: ImageVector, label: String, danger: Boolean = false, onClick: () -> Unit) {
     val tint = if (danger) Glass.Danger else Glass.Text
     Row(
-        Modifier.fillMaxWidth().glass(RoundedCornerShape(18.dp)).clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
+        Modifier.fillMaxWidth().card().clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, null, tint = tint)

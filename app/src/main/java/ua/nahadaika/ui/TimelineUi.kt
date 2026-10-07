@@ -74,6 +74,7 @@ import ua.nahadaika.media.AudioPlayer
 import ua.nahadaika.repeatLabel
 import ua.nahadaika.ui.theme.Glass
 import ua.nahadaika.ui.theme.glass
+import ua.nahadaika.ui.theme.card
 import ua.nahadaika.ui.theme.glassHaze
 import ua.nahadaika.ui.theme.liquidLens
 import java.io.File
@@ -352,8 +353,8 @@ fun TimelineItem(
     val cardFill by animateColorAsState(
         when {
             highlighted -> Glass.Lavender.copy(alpha = 0.18f)
-            expanded -> Glass.FillStrong
-            else -> Glass.Fill
+            expanded -> Glass.CardStrong
+            else -> Glass.Card
         },
         label = "card",
     )
@@ -388,7 +389,7 @@ fun TimelineItem(
         Column(
             Modifier
                 .weight(1f)
-                .glass(RoundedCornerShape(16.dp), cardFill)
+                .card(fill = cardFill)
                 .combinedClickable(
                     onClickLabel = if (expanded) labelCollapse else labelExpand,
                     onLongClickLabel = labelActions,
@@ -396,16 +397,16 @@ fun TimelineItem(
                     onLongClick = onLongClick,
                 )
                 .animateContentSize()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             // Згорнута картка: один рядок — заголовок і значки.
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     reminderTitle(r),
                     color = if (done) Glass.TextDim else Glass.Text,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Medium,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
                     textDecoration = if (done && r.kind == Kind.TEXT) TextDecoration.LineThrough else null,
                     maxLines = if (expanded) 3 else 1,
                     overflow = TextOverflow.Ellipsis,
@@ -527,7 +528,7 @@ fun EmptyDay(label: String) {
     Column(
         Modifier
             .padding(horizontal = 44.dp)
-            .glass(RoundedCornerShape(26.dp))
+            .card(RoundedCornerShape(26.dp))
             .padding(horizontal = 24.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {

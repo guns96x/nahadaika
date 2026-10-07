@@ -75,6 +75,9 @@ data class GlassPalette(
     /** Тонування окремих скляних капсул (шапка, поле вводу). */
     val capsuleTint: Color,
     val capsuleFallback: Color,
+    /** Картки: м'яка суцільна заливка без кромки; [cardStrong] — розгорнута картка. */
+    val card: Color,
+    val cardStrong: Color,
 )
 
 /** Темна: майже чорний фон з глибоким сяйвом, тонке скло, світлі кнопки. */
@@ -99,6 +102,8 @@ val DarkGlass = GlassPalette(
     hazeFallback = Color(0xF0070709),
     capsuleTint = Color(0x9E16161C),
     capsuleFallback = Color(0xF016161C),
+    card = Color(0x14FFFFFF),
+    cardStrong = Color(0x1FFFFFFF),
 )
 
 /** Світла: світлий фон з пастельним сяйвом, біле матове скло, темні кнопки. */
@@ -123,6 +128,8 @@ val LightGlass = GlassPalette(
     hazeFallback = Color(0xEBEFF0F5),
     capsuleTint = Color(0xB8FFFFFF),
     capsuleFallback = Color(0xF5FFFFFF),
+    card = Color(0xD9FFFFFF),
+    cardStrong = Color(0xFAFFFFFF),
 )
 
 val LocalGlass = staticCompositionLocalOf { DarkGlass }
@@ -146,6 +153,11 @@ object Glass {
     val Danger: Color @Composable @ReadOnlyComposable get() = palette.danger
     val Sheet: Color @Composable @ReadOnlyComposable get() = palette.sheet
     val Scrim: Color @Composable @ReadOnlyComposable get() = palette.scrim
+    val Card: Color @Composable @ReadOnlyComposable get() = palette.card
+    val CardStrong: Color @Composable @ReadOnlyComposable get() = palette.cardStrong
+
+    /** Форма карток: великі м'які заокруглення. */
+    val CardShape = RoundedCornerShape(22.dp)
     val Stroke: Brush @Composable @ReadOnlyComposable get() = palette.stroke
     val Pill = RoundedCornerShape(percent = 50)
 
@@ -169,6 +181,10 @@ fun Modifier.glass(
 
 @Composable
 fun Modifier.glass(shape: Shape, fill: Color): Modifier = glass(shape, SolidColor(fill))
+
+/** Картка в стилі шаблону: суцільна м'яка заливка, великі заокруглення, без скляної кромки. */
+@Composable
+fun Modifier.card(shape: Shape = Glass.CardShape, fill: Color = Glass.Card): Modifier = clip(shape).background(fill, shape)
 
 /**
  * Скляна капсула, як у Telegram: розмиває лише те, що під нею (Android 12+),

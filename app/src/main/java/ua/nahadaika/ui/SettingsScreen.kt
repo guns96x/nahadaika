@@ -89,6 +89,7 @@ import ua.nahadaika.alarm.Notifier
 import ua.nahadaika.data.Kind
 import ua.nahadaika.ui.theme.AppBackground
 import ua.nahadaika.ui.theme.Glass
+import ua.nahadaika.ui.theme.card
 import ua.nahadaika.ui.theme.GlassIconButton
 import ua.nahadaika.ui.theme.GlassSegmented
 import ua.nahadaika.ui.theme.ThemeMode
@@ -331,14 +332,13 @@ fun SettingsScreen(onBack: () -> Unit) {
 internal fun Section(title: String, footer: String? = null, content: @Composable ColumnScope.() -> Unit) {
     Column(Modifier.padding(top = 8.dp)) {
         Text(
-            title.uppercase(),
-            color = Glass.TextFaint,
-            fontSize = 12.sp,
+            title,
+            color = Glass.Text,
+            fontSize = 18.sp,
             fontWeight = FontWeight.SemiBold,
-            letterSpacing = 0.6.sp,
-            modifier = Modifier.padding(start = 16.dp, bottom = 6.dp),
+            modifier = Modifier.padding(start = 6.dp, top = 6.dp, bottom = 10.dp),
         )
-        Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(18.dp)), content = content)
+        Column(Modifier.fillMaxWidth().card(), content = content)
         if (footer != null) {
             Text(footer, color = Glass.TextFaint, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp))
         }

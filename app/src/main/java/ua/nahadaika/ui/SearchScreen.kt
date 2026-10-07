@@ -75,6 +75,7 @@ import ua.nahadaika.previewText
 import ua.nahadaika.searchReminders
 import ua.nahadaika.ui.theme.AppBackground
 import ua.nahadaika.ui.theme.Glass
+import ua.nahadaika.ui.theme.card
 import ua.nahadaika.ui.theme.GlassIconButton
 import ua.nahadaika.ui.theme.edgeFade
 import ua.nahadaika.ui.theme.glass
@@ -240,9 +241,9 @@ private fun HitRow(hit: SearchHit, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .glass(RoundedCornerShape(16.dp))
+            .card()
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 7.dp),
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         hit.chat?.let { Avatar(it, size = 34) }

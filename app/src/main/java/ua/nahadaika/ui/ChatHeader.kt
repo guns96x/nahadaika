@@ -30,7 +30,6 @@ import dev.chrisbanes.haze.HazeState
 import ua.nahadaika.data.Chat
 import ua.nahadaika.ui.theme.Glass
 import ua.nahadaika.ui.theme.GlassIconButton
-import ua.nahadaika.ui.theme.ThemeModeButton
 import ua.nahadaika.ui.theme.edgeFade
 import ua.nahadaika.ui.theme.glassHaze
 import java.time.LocalDate
@@ -40,7 +39,7 @@ internal val HeaderHeight = 48.dp
 /** Кнопки праворуч трохи менші, щоб капсула з назвою чату лишалась широкою. */
 private val SideButton = 44.dp
 
-/** Окремі скляні капсули однакової висоти, як у Telegram: ☰ | чат | пошук | тема — і смужка днів під ними. */
+/** Окремі скляні капсули однакової висоти, як у Telegram: ☰ | чат | пошук — і смужка днів під ними (тема — у списку чатів). */
 @Composable
 internal fun ChatHeader(
     chat: Chat?,
@@ -116,8 +115,6 @@ internal fun ChatHeader(
             }
             Spacer(Modifier.width(6.dp))
             GlassIconButton(Icons.Default.Search, stringResource(R.string.chat_search), onClick = onOpenSearch, size = SideButton, haze = haze)
-            Spacer(Modifier.width(6.dp))
-            ThemeModeButton(size = SideButton, haze = haze)
         }
         DayStrip(
             selected = selectedDate,
