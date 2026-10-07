@@ -42,7 +42,6 @@ class WidgetTest {
     @Test fun buttonsOpenAppWithQuickActions() {
         val view = inflate(null, null)
         val expected = mapOf(
-            R.id.widget_dictate to MainActivity.ACTION_QUICK_DICTATE,
             R.id.widget_voice to MainActivity.ACTION_QUICK_VOICE,
             R.id.widget_video to MainActivity.ACTION_QUICK_VIDEO,
         )

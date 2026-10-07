@@ -4,7 +4,7 @@
 
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <!-- Одноразове завантаження офлайн-розпізнавання мовлення. -->
+    <!-- Перевірка й завантаження оновлень із GitHub. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Оновлення застосунку з GitHub Releases. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
@@ -27,13 +27,6 @@
     <queries>
         <intent>
             <action android:name="android.media.action.IMAGE_CAPTURE" />
-        </intent>
-        <intent>
-            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
-        </intent>
-        <!-- Розпізнавання у фоні (SpeechRecognizer) без вікна Google. -->
-        <intent>
-            <action android:name="android.speech.RecognitionService" />
         </intent>
     </queries>
 
@@ -107,17 +100,5 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_info" />
         </receiver>
-
-        <!-- Плитка в шторці: одразу «сказати нагадування». -->
-        <service
-            android:name=".widget.DictateTile"
-            android:exported="true"
-            android:icon="@drawable/ic_notification"
-            android:label="@string/tile_label"
-            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
-            <intent-filter>
-                <action android:name="android.service.quicksettings.action.QS_TILE" />
-            </intent-filter>
-        </service>
     </application>
 </manifest>

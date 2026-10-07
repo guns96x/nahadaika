@@ -26,14 +26,6 @@ import java.time.LocalDateTime
 @Config(sdk = [34])
 class AlarmTest {
     private val app: Application = ApplicationProvider.getApplicationContext()
-    private val now = LocalDateTime.of(2026, 9, 30, 10, 0)
-
-    @Test fun alarmAndTimerPhrasesRing() {
-        assertTrue(VoiceParser.parse("постав будильник на 7 ранку", now).alarm)
-        assertTrue(VoiceParser.parse("таймер на 10 хвилин", now).alarm)
-        assertTrue(VoiceParser.parse("розбуди мене о 6", now).alarm)
-        assertFalse(VoiceParser.parse("нагадай завтра о 9 купити хліб", now).alarm)
-    }
 
     @Test fun alarmNotificationRingsUntilStopped() {
         shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)

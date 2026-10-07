@@ -127,7 +127,7 @@ class ScreenshotTest {
     @Test
     fun schedule() {
         compose.setContent {
-            NahadaikaTheme { ScheduleSheet(initialAt = null, initialRepeat = Repeat.NONE, confirmLabel = "Запланувати", onDismiss = {}, onDictate = {}) { _, _ -> } }
+            NahadaikaTheme { ScheduleSheet(initialAt = null, initialRepeat = Repeat.NONE, confirmLabel = "Запланувати", onDismiss = {}) { _, _ -> } }
         }
         compose.waitForIdle()
         captureScreenRoboImage("build/screenshots/3_schedule_at.png")
@@ -150,7 +150,7 @@ class ScreenshotTest {
     fun scheduleLight() {
         ThemeSettings.set(app, ThemeMode.LIGHT)
         compose.setContent {
-            NahadaikaTheme { ScheduleSheet(initialAt = null, initialRepeat = Repeat.NONE, confirmLabel = "Запланувати", onDismiss = {}, onDictate = {}) { _, _ -> } }
+            NahadaikaTheme { ScheduleSheet(initialAt = null, initialRepeat = Repeat.NONE, confirmLabel = "Запланувати", onDismiss = {}) { _, _ -> } }
         }
         compose.waitForIdle()
         captureScreenRoboImage("build/screenshots/6_schedule_light.png")

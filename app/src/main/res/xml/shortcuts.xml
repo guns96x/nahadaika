@@ -22,15 +22,4 @@
             android:targetClass="ua.nahadaika.ui.MainActivity"
             android:targetPackage="ua.nahadaika" />
     </shortcut>
-    <shortcut
-        android:enabled="true"
-        android:icon="@drawable/ic_sc_dictate"
-        android:shortcutId="dictate"
-        android:shortcutLongLabel="@string/sc_dictate_long"
-        android:shortcutShortLabel="@string/sc_dictate_short">
-        <intent
-            android:action="ua.nahadaika.QUICK_DICTATE"
-            android:targetClass="ua.nahadaika.ui.MainActivity"
-            android:targetPackage="ua.nahadaika" />
-    </shortcut>
 </shortcuts>

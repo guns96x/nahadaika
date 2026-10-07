@@ -83,8 +83,6 @@ import ua.nahadaika.Prefs
 import ua.nahadaika.alarm.AlarmScheduler
 import ua.nahadaika.alarm.Notifier
 import ua.nahadaika.data.Kind
-import ua.nahadaika.media.OfflineSpeech
-import ua.nahadaika.media.SpeechPack
 import ua.nahadaika.update.UpdateWorker
 import ua.nahadaika.update.Updates
 import ua.nahadaika.ui.theme.AppBackground
@@ -107,7 +105,7 @@ import ua.nahadaika.data.BackupFormatException
 import androidx.compose.runtime.rememberCoroutineScope
 import java.time.LocalDate
 
-/** Налаштування: мовні пакети, розпізнавання, нагадування, запис, вигляд, дозволи. */
+/** Налаштування: нагадування, запис, вигляд, дозволи. */
 @SuppressLint("BatteryLife")
 @Composable
 fun SettingsScreen(onBack: () -> Unit) {
@@ -115,13 +113,10 @@ fun SettingsScreen(onBack: () -> Unit) {
     BackHandler(onBack = onBack)
 
     // Налаштування живуть у Prefs; тут — їхні копії для миттєвого перемальовування.
-    var autoSchedule by remember { mutableStateOf(Prefs.autoSchedule(context)) }
-    var voiceCaption by remember { mutableStateOf(Prefs.voiceCaption(context)) }
     var snooze by remember { mutableIntStateOf(Prefs.snoozeMinutes(context)) }
     var defaultHour by remember { mutableIntStateOf(Prefs.defaultHour(context)) }
     var recordMode by remember { mutableStateOf(Prefs.recordMode(context)) }
     var frontCamera by remember { mutableStateOf(Prefs.frontCamera(context)) }
-    var deleting by remember { mutableStateOf<SpeechPack?>(null) }
     var autoUpdate by remember { mutableStateOf(Prefs.autoUpdate(context)) }
 
     var refresh by remember { mutableIntStateOf(0) }
@@ -170,42 +165,6 @@ fun SettingsScreen(onBack: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 item {
-                    Section("Розпізнавання голосу") {
-                        SwitchRow(
-                            Icons.Default.GraphicEq,
-                            "Час із голосових і відео",
-                            "Сказали «завтра о 9…» — нагадування ставиться саме",
-                            autoSchedule,
-                        ) {
-                            autoSchedule = it
-                            Prefs.setAutoSchedule(context, it)
-                        }
-                        Divider()
-                        SwitchRow(
-                            Icons.AutoMirrored.Filled.ShortText,
-                            "Підпис із розпізнаного",
-                            "Додавати сказане текстом до запису",
-                            voiceCaption,
-                            enabled = autoSchedule,
-                        ) {
-                            voiceCaption = it
-                            Prefs.setVoiceCaption(context, it)
-                        }
-                    }
-                }
-                item {
-                    Section(
-                        "Мовний пакет",
-                        footer = "Працює без інтернету. Потрібен, якщо телефон сам не розпізнає записані голосові. " +
-                            "Розуміє й суржик та російські фрази на кшталт «напомни завтра в девять».",
-                    ) {
-                        SpeechPack.entries.forEachIndexed { i, pack ->
-                            if (i > 0) Divider()
-                            PackRow(pack, onDelete = { deleting = pack })
-                        }
-                    }
-                }
-                item {
                     Section("Нагадування") {
                         val snoozeOptions = listOf(5, 10, 15, 30)
                         ChoiceRow(Icons.Default.Snooze, "Відкласти у сповіщенні", "Друга кнопка — завжди «+1 год»") {
@@ -221,7 +180,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         }
                         Divider()
                         val hours = listOf(7, 8, 9, 10, 12)
-                        ChoiceRow(Icons.Default.Schedule, "Коли, якщо названо лише день", "«Завтра купити хліб» — о котрій нагадати") {
+                        ChoiceRow(Icons.Default.Schedule, "Час за замовчуванням", "О котрій ставити нагадування на інший день зі смужки") {
                             GlassSegmented(
                                 options = hours.map { null to "$it:00" },
                                 selected = hours.indexOf(defaultHour).coerceAtLeast(0),
@@ -346,27 +305,12 @@ fun SettingsScreen(onBack: () -> Unit) {
                         InfoRow(
                             Icons.Default.Info,
                             "Нагадайка $version",
-                            "Розпізнавання мовлення — Vosk (Apache 2.0). Шрифт — Inter (SIL OFL).",
+                            "Шрифт — Inter (SIL OFL).",
                         )
                     }
                 }
             }
         }
-    }
-
-    deleting?.let { pack ->
-        AlertDialog(
-            onDismissRequest = { deleting = null },
-            title = { Text("Видалити «${pack.title}»?") },
-            text = { Text("Звільниться ≈${OfflineSpeech.sizeMb(pack)} МБ. Пакет можна буде завантажити знову.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    OfflineSpeech.delete(pack)
-                    deleting = null
-                }) { Text("Видалити", color = Glass.Danger) }
-            },
-            dismissButton = { TextButton(onClick = { deleting = null }) { Text("Скасувати") } },
-        )
     }
 }
 
@@ -542,46 +486,6 @@ private fun StatusRow(icon: ImageVector, title: String, ok: Boolean, onFix: () -
             Icon(Icons.Default.Check, "Увімкнено", tint = Glass.Lavender, modifier = Modifier.padding(end = 8.dp).size(20.dp))
         } else {
             TextButton(onClick = onFix) { Text("Дозволити", color = Glass.Text, fontWeight = FontWeight.Medium) }
-        }
-    }
-}
-
-/** Мовний пакет: розмір, хід завантаження, «Завантажити / Скасувати / Видалити». */
-@Composable
-private fun PackRow(pack: SpeechPack, onDelete: () -> Unit) {
-    val st = OfflineSpeech.state(pack)
-    val subtitle = when (st) {
-        OfflineSpeech.State.Missing -> "${pack.downloadMb} МБ, займе ${pack.diskMb} МБ"
-        is OfflineSpeech.State.Downloading -> "Завантаження… ${(st.progress * 100).toInt()}%"
-        OfflineSpeech.State.Ready -> "Встановлено · ${remember(st) { OfflineSpeech.sizeMb(pack) }} МБ"
-        is OfflineSpeech.State.Failed -> "Не вдалося: ${st.message}"
-    }
-    Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            RowIcon(
-                if (st == OfflineSpeech.State.Ready) Icons.Default.Check else Icons.Default.Translate,
-                if (st == OfflineSpeech.State.Ready) Glass.Lavender else Glass.TextDim,
-            )
-            Spacer(Modifier.width(16.dp))
-            Titles(pack.title, subtitle, Modifier.weight(1f))
-            val (label, action) = when (st) {
-                OfflineSpeech.State.Missing -> "Завантажити" to { OfflineSpeech.download(pack) }
-                is OfflineSpeech.State.Downloading -> "Скасувати" to { OfflineSpeech.cancelDownload(pack) }
-                OfflineSpeech.State.Ready -> "Видалити" to onDelete
-                is OfflineSpeech.State.Failed -> "Ще раз" to { OfflineSpeech.download(pack) }
-            }
-            TextButton(onClick = action) {
-                Text(label, color = if (st == OfflineSpeech.State.Ready) Glass.Danger else Glass.Text, fontWeight = FontWeight.Medium)
-            }
-        }
-        if (st is OfflineSpeech.State.Downloading) {
-            LinearProgressIndicator(
-                progress = { st.progress },
-                color = Glass.Lavender,
-                trackColor = Glass.Fill,
-                strokeCap = StrokeCap.Round,
-                modifier = Modifier.padding(start = 38.dp, end = 8.dp, top = 8.dp).fillMaxWidth().height(4.dp),
-            )
         }
     }
 }

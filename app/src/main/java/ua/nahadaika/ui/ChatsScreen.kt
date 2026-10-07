@@ -93,9 +93,7 @@ import ua.nahadaika.data.Reminder
 import ua.nahadaika.data.Repeat
 import ua.nahadaika.data.Repo
 import ua.nahadaika.Prefs
-import ua.nahadaika.media.OfflineSpeech
 import ua.nahadaika.update.Updates
-import ua.nahadaika.media.SpeechPack
 import ua.nahadaika.data.alarmAt
 import ua.nahadaika.previewText
 import ua.nahadaika.shortWhen
@@ -367,7 +365,6 @@ fun PermissionBanners() {
             )
         }
         UpdateBanner()
-        SpeechBanner()
         if (!batteryOk) {
             Banner(
                 icon = Icons.Default.BatteryAlert,
@@ -411,40 +408,6 @@ private fun UpdateBanner() {
             onAction = { Updates.install(context, st.info, st.file) },
         )
         else -> Unit
-    }
-}
-
-/** Офлайн-розпізнавання голосу: хід завантаження або пропозиція завантажити. */
-@Composable
-private fun SpeechBanner() {
-    val context = LocalContext.current
-    var dismissed by remember { mutableStateOf(Prefs.speechBannerDismissed(context)) }
-    when (val st = OfflineSpeech.state) {
-        is OfflineSpeech.State.Downloading -> Banner(
-            icon = Icons.Default.Download,
-            text = "Завантажую розпізнавання голосу… ${(st.progress * 100).toInt()}%",
-            action = "Скасувати",
-            onAction = OfflineSpeech::cancelDownload,
-        )
-        is OfflineSpeech.State.Failed -> Banner(
-            icon = Icons.Default.Download,
-            text = "Не вдалося завантажити розпізнавання: ${st.message}",
-            action = "Ще раз",
-            onAction = OfflineSpeech::download,
-        )
-        OfflineSpeech.State.Missing -> if (Prefs.speechOfferShown(context) && !dismissed) {
-            Banner(
-                icon = Icons.Default.GraphicEq,
-                text = "Розпізнавати час у голосових (≈${SpeechPack.UK.downloadMb} МБ)",
-                action = "Завантажити",
-                onAction = OfflineSpeech::download,
-                onDismiss = {
-                    Prefs.setSpeechBannerDismissed(context)
-                    dismissed = true
-                },
-            )
-        }
-        OfflineSpeech.State.Ready -> Unit
     }
 }
 

@@ -34,34 +34,11 @@ object Prefs {
     fun themeMode(context: Context): String = prefs(context).getString("theme_mode", null) ?: "LIGHT"
     fun setThemeMode(context: Context, mode: String) = prefs(context).edit().putString("theme_mode", mode).apply()
 
-    /** Системний розпізнавач не вміє читати записи — не пробувати його щоразу. */
-    fun systemFileSpeechFailed(context: Context): Boolean = prefs(context).getBoolean("system_file_speech_failed", false)
-    fun setSystemFileSpeechFailed(context: Context) = prefs(context).edit().putBoolean("system_file_speech_failed", true).apply()
-
-    /** Пропозицію завантажити офлайн-розпізнавання вже показували. */
-    fun speechOfferShown(context: Context): Boolean = prefs(context).getBoolean("speech_offer_shown", false)
-    fun setSpeechOfferShown(context: Context) = prefs(context).edit().putBoolean("speech_offer_shown", true).apply()
-
-    /** Банер «завантажити розпізнавання» закрили. */
-    fun speechBannerDismissed(context: Context): Boolean = prefs(context).getBoolean("speech_banner_dismissed", false)
-    fun setSpeechBannerDismissed(context: Context) = prefs(context).edit().putBoolean("speech_banner_dismissed", true).apply()
-
-    // ---- Налаштування ----
-
-    /** Розпізнавати час у голосових і відео та ставити нагадування саме. */
-    fun autoSchedule(context: Context): Boolean = prefs(context).getBoolean("auto_schedule", true)
-    fun setAutoSchedule(context: Context, on: Boolean) = prefs(context).edit().putBoolean("auto_schedule", on).apply()
-
-    /** Додавати розпізнаний текст підписом до голосового чи відео. */
-    fun voiceCaption(context: Context): Boolean = prefs(context).getBoolean("voice_caption", true)
-    fun setVoiceCaption(context: Context, on: Boolean) = prefs(context).edit().putBoolean("voice_caption", on).apply()
-
-
     /** Перша кнопка «відкласти» у сповіщенні, хвилин. */
     fun snoozeMinutes(context: Context): Int = prefs(context).getInt("snooze_minutes", 10)
     fun setSnoozeMinutes(context: Context, minutes: Int) = prefs(context).edit().putInt("snooze_minutes", minutes).apply()
 
-    /** Година, коли нагадувати, якщо сказано лише день («завтра купити хліб»). */
+    /** Година за замовчуванням, коли на смужці обрано інший день. */
     fun defaultHour(context: Context): Int = prefs(context).getInt("default_hour", 9)
     fun setDefaultHour(context: Context, hour: Int) = prefs(context).edit().putInt("default_hour", hour).apply()
     fun defaultTime(context: Context): LocalTime = LocalTime.of(defaultHour(context), 0)

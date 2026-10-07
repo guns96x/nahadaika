@@ -31,7 +31,7 @@ import ua.nahadaika.ui.theme.isDarkTheme
 data class Focus(val chatId: Long, val reminderId: Long, val autoplay: Boolean, val nonce: Long = System.nanoTime())
 
 /** Швидка дія з ярлика на головному екрані. */
-enum class QuickAction { VIDEO, VOICE, DICTATE }
+enum class QuickAction { VIDEO, VOICE }
 data class Quick(val action: QuickAction, val nonce: Long = System.nanoTime())
 
 class MainActivity : ComponentActivity() {
@@ -76,7 +76,6 @@ class MainActivity : ComponentActivity() {
         when (intent.action) {
             ACTION_QUICK_VIDEO -> quick.value = Quick(QuickAction.VIDEO)
             ACTION_QUICK_VOICE -> quick.value = Quick(QuickAction.VOICE)
-            ACTION_QUICK_DICTATE -> quick.value = Quick(QuickAction.DICTATE)
             ACTION_OPEN_UPDATES -> openUpdates.longValue = System.nanoTime()
         }
         val chatId = intent.getLongExtra(EXTRA_CHAT_ID, -1)
@@ -93,7 +92,6 @@ class MainActivity : ComponentActivity() {
         const val EXTRA_AUTOPLAY = "autoplay"
         const val ACTION_QUICK_VIDEO = "ua.nahadaika.QUICK_VIDEO"
         const val ACTION_QUICK_VOICE = "ua.nahadaika.QUICK_VOICE"
-        const val ACTION_QUICK_DICTATE = "ua.nahadaika.QUICK_DICTATE"
         const val ACTION_OPEN_UPDATES = "ua.nahadaika.OPEN_UPDATES"
     }
 }

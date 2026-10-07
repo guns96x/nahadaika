@@ -67,9 +67,8 @@ class ReminderWidget : AppWidgetProvider() {
                 }
             }
             views.setOnClickPendingIntent(R.id.widget_open, activity(context, 0, open))
-            views.setOnClickPendingIntent(R.id.widget_dictate, quick(context, 1, MainActivity.ACTION_QUICK_DICTATE))
-            views.setOnClickPendingIntent(R.id.widget_voice, quick(context, 2, MainActivity.ACTION_QUICK_VOICE))
-            views.setOnClickPendingIntent(R.id.widget_video, quick(context, 3, MainActivity.ACTION_QUICK_VIDEO))
+            views.setOnClickPendingIntent(R.id.widget_voice, quick(context, 1, MainActivity.ACTION_QUICK_VOICE))
+            views.setOnClickPendingIntent(R.id.widget_video, quick(context, 2, MainActivity.ACTION_QUICK_VIDEO))
             return views
         }
 

@@ -51,7 +51,7 @@ class SettingsTest {
         show()
         compose.onAllNodes(isToggleable())[0].assertIsOn().performClick()
         compose.onAllNodes(isToggleable())[0].assertIsOff()
-        assertFalse(Prefs.autoSchedule(app))
+        assertFalse(Prefs.autoUpdate(app))
 
         compose.onNodeWithText("15 хв").performClick()
         assertEquals(15, Prefs.snoozeMinutes(app))
@@ -65,12 +65,9 @@ class SettingsTest {
     }
 
     @Test
-    fun showsLanguagePacks() {
+    fun showsSettingsScreenshots() {
         ThemeSettings.set(app, ThemeMode.DARK)
         show()
-        compose.onNodeWithText("Українська").assertExists()
-        assertEquals(0, compose.onAllNodesWithText("Русский").fetchSemanticsNodes().size)
-        compose.onAllNodesWithText("Завантажити").onFirst().assertExists()
         compose.onRoot().captureRoboImage("build/screenshots/11_settings_dark.png")
         ThemeSettings.set(app, ThemeMode.LIGHT)
         compose.waitForIdle()

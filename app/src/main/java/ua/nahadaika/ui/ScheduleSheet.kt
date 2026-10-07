@@ -121,7 +121,6 @@ fun ScheduleSheet(
     initialRepeat: Repeat,
     confirmLabel: String,
     onDismiss: () -> Unit,
-    onDictate: (() -> Unit)? = null,
     alarm: Boolean? = null,
     onAlarmChange: (Boolean) -> Unit = {},
     onConfirm: (at: Long, repeat: Repeat) -> Unit,
@@ -180,9 +179,6 @@ fun ScheduleSheet(
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f),
                 )
-                if (onDictate != null) {
-                    GlassChip("Сказати", onClick = onDictate, leading = Icons.Default.RecordVoiceOver)
-                }
             }
             Spacer(Modifier.height(12.dp))
 

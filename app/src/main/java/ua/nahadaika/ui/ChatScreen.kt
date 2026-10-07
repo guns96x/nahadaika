@@ -1,11 +1,8 @@
 package ua.nahadaika.ui
 
 import android.Manifest
-import android.app.Activity
 import android.content.ActivityNotFoundException
-import android.content.Intent
 import android.content.pm.PackageManager
-import android.speech.RecognizerIntent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -68,14 +65,11 @@ import dev.chrisbanes.haze.hazeSource
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ua.nahadaika.Occurrence
 import ua.nahadaika.Prefs
-import ua.nahadaika.VoiceCommand
-import ua.nahadaika.VoiceParser
 import ua.nahadaika.data.Kind
 import ua.nahadaika.data.Reminder
 import ua.nahadaika.data.Repeat
@@ -85,12 +79,7 @@ import ua.nahadaika.dayLabel
 import ua.nahadaika.inLabel
 import ua.nahadaika.media.Attachment
 import ua.nahadaika.media.AudioPlayer
-import ua.nahadaika.media.Hearing
-import ua.nahadaika.media.LiveDictation
 import ua.nahadaika.media.MediaFiles
-import ua.nahadaika.media.OfflineSpeech
-import ua.nahadaika.media.SpeechPack
-import ua.nahadaika.media.Transcriber
 import ua.nahadaika.media.VoiceRecorder
 import ua.nahadaika.occurrencesOn
 import ua.nahadaika.previewText
@@ -170,12 +159,8 @@ fun ChatScreen(
     var frontCamera by remember { mutableStateOf(Prefs.frontCamera(context)) }
     var pendingStart by remember { mutableStateOf<Pair<Kind, Boolean>?>(null) }
     var showSchedule by remember { mutableStateOf(false) }
-    // Фонове розпізнавання щойно записаного; голосова команда без вікна Google.
-    var transcription by remember { mutableStateOf<Job?>(null) }
-    var offerSpeech by remember { mutableStateOf(false) }
     // Нове нагадування — як будильник (гучно, на весь екран).
     var composeAlarm by remember { mutableStateOf(false) }
-    val dictation = remember { LiveDictation(context) }
     var rescheduling by remember { mutableStateOf<Reminder?>(null) }
     var actionsFor by remember { mutableStateOf<Reminder?>(null) }
     var editingText by remember { mutableStateOf<Reminder?>(null) }
@@ -189,7 +174,6 @@ fun ChatScreen(
         onDispose {
             recorder.cancel()
             player.stop()
-            dictation.cancel()
             currentAttachment?.file?.delete()
         }
     }
@@ -231,10 +215,6 @@ fun ChatScreen(
     fun toast(msg: String) = Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
 
     fun replaceAttachment(new: Attachment?) {
-        if (new !== attachment) {
-            transcription?.cancel()
-            transcription = null
-        }
         attachment?.file?.delete()
         attachment = new
     }
@@ -278,155 +258,10 @@ fun ChatScreen(
         schedule(reminder)
     }
 
-    /**
-     * Кілька нагадувань з однієї фрази. Якщо до них записане голосове чи відео — кожне отримує свою копію файлу
-     * (видалення одного нагадування не зачепить інші).
-     */
-    fun scheduleMany(cmds: List<VoiceCommand>, media: Attachment?) {
-        val a = media
-        if (a != null && player.currentPath == a.file.absolutePath) player.stop()
-        if (a != null && attachment === a) attachment = null
-        showSchedule = false
-        composeAlarm = false
-        val caption = a == null || Prefs.voiceCaption(context)
-        scope.launch {
-            val ids = cmds.mapIndexed { i, cmd ->
-                val file = when {
-                    a == null -> null
-                    i == 0 -> a.file
-                    else -> withContext(Dispatchers.IO) { MediaFiles.newFile(context, a.file.extension).also { a.file.copyTo(it, overwrite = true) } }
-                }
-                Repo.createReminder(
-                    Reminder(
-                        chatId = chatId,
-                        kind = a?.kind ?: Kind.TEXT,
-                        text = if (a == null) cmd.text.ifEmpty { "Нагадування" } else if (caption) cmd.text else "",
-                        mediaPath = file?.absolutePath,
-                        durationMs = a?.durationMs ?: 0,
-                        triggerAt = cmd.at!!,
-                        repeat = cmd.repeat,
-                        alarm = cmd.alarm,
-                    ),
-                )
-            }
-            selectedDate = cmds.first().at!!.toLocalDate()
-            highlightId = ids.first()
-            val n = cmds.size
-            val word = if (n % 10 in 2..4 && n % 100 !in 12..14) "нагадування" else "нагадувань"
-            snackbar.showSnackbar(
-                "Поставив $n $word: " + cmds.joinToString("; ") { c ->
-                    soonLabel(c.at!!) + if (c.text.isNotBlank()) " — ${c.text.take(24)}" else ""
-                },
-                withDismissAction = true,
-                duration = SnackbarDuration.Long,
-            )
-        }
-    }
-
-    // ---- Голосова команда: «нагадай завтра о 9 купити хліб» ----
-
-    /** Розібрати сказане: є час — одразу планувати, немає — лишити текст і відкрити вибір часу. */
-    fun applySpoken(spoken: String) {
-        val many = VoiceParser.parseMany(spoken, defaultTime = Prefs.defaultTime(context))
-        if (many.size > 1 && many.all { it.at != null }) {
-            scheduleMany(many, media = null)
-            return
-        }
-        val cmd = VoiceParser.parse(spoken, defaultTime = Prefs.defaultTime(context))
-        val combined = listOf(text.trim(), cmd.text).filter { it.isNotBlank() }.joinToString(" ")
-        if (cmd.at != null) {
-            scheduleComposed(cmd.at, cmd.repeat, combined, alarm = cmd.alarm)
-        } else {
-            text = combined
-            if (cmd.alarm) composeAlarm = true
-            showSchedule = true
-            toast("Почув: «$spoken» — але не зрозумів, коли нагадати")
-        }
-    }
-
-    // Запасний варіант — вікно Google, якщо фонового розпізнавання на телефоні немає.
-    val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val spoken = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
-        if (result.resultCode == Activity.RESULT_OK && !spoken.isNullOrBlank()) applySpoken(spoken)
-    }
-
-    fun startDictation() {
-        player.stop()
-        playingVideoId = null
-        showSchedule = false
-        if (dictation.isAvailable()) {
-            dictation.start(onResult = ::applySpoken, onError = ::toast)
-            return
-        }
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-            .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "uk-UA")
-            .putExtra(RecognizerIntent.EXTRA_PROMPT, "Наприклад: «нагадай завтра о 9 купити хліб»")
-        try {
-            speech.launch(intent)
-        } catch (_: ActivityNotFoundException) {
-            toast("На телефоні немає розпізнавання мовлення (потрібен застосунок Google)")
-        }
-    }
-
-    val dictatePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) startDictation() else toast("Потрібен доступ до мікрофона")
-    }
-
-    fun dictate() {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-            startDictation()
-        } else {
-            showSchedule = false
-            dictatePermission.launch(Manifest.permission.RECORD_AUDIO)
-        }
-    }
-
-    // ---- Записали голосове чи відео: у фоні дізнатися, коли нагадати ----
-
-    fun cancelTranscription() {
-        transcription?.cancel()
-        transcription = null
-    }
-
-    /** Прикріпити запис і розпізнати в ньому час («завтра о 9…»); не вийшло — відкрити вибір часу. */
+    /** Прикріпити запис і одразу відкрити вибір часу. */
     fun attachRecording(a: Attachment) {
-        cancelTranscription()
         replaceAttachment(a)
-        // Автоматичне розпізнавання вимкнене в налаштуваннях — одразу вибір часу.
-        if (!Prefs.autoSchedule(context)) {
-            showSchedule = true
-            return
-        }
-        transcription = scope.launch {
-            val defaultTime = Prefs.defaultTime(context)
-            val hearing = Transcriber.transcribe(context, a.file) { VoiceParser.parse(it, defaultTime = defaultTime).at != null }
-            transcription = null
-            if (attachment !== a) return@launch
-            val many = (hearing as? Hearing.Heard)?.let { VoiceParser.parseMany(it.text, defaultTime = defaultTime) }.orEmpty()
-            if (many.size > 1 && many.all { it.at != null }) {
-                scheduleMany(many, a)
-                return@launch
-            }
-            val cmd = (hearing as? Hearing.Heard)?.let { VoiceParser.parse(it.text, defaultTime = defaultTime) }
-            if (cmd?.at != null) {
-                val caption = if (Prefs.voiceCaption(context)) cmd.text else ""
-                scheduleComposed(cmd.at, cmd.repeat, listOf(text.trim(), caption).filter { it.isNotBlank() }.joinToString(" "), alarm = cmd.alarm)
-                return@launch
-            }
-            when {
-                hearing is Hearing.Heard -> toast("Почув: «${hearing.text}» — але не зрозумів, коли нагадати")
-                hearing == Hearing.Nothing -> toast("Не розчув у записі, коли нагадати")
-                OfflineSpeech.state is OfflineSpeech.State.Downloading ->
-                    toast("Розпізнавання ще завантажується — оберіть час цього разу")
-                !Prefs.speechOfferShown(context) -> {
-                    // Один раз пояснюємо, чому не розпізнало, і пропонуємо офлайн-розпізнавання.
-                    offerSpeech = true
-                    return@launch
-                }
-            }
-            showSchedule = true
-        }
+        showSchedule = true
     }
 
     // ---- Камера, галерея, мікрофон ----
@@ -474,9 +309,6 @@ fun ChatScreen(
 
     fun beginRecording(kind: Kind, locked: Boolean): Boolean {
         player.stop()
-        dictation.cancel()
-        // Поки йде запис, підвантажуємо офлайн-розпізнавач — тоді час розпізнається одразу після запису.
-        if (OfflineSpeech.isReady) scope.launch { OfflineSpeech.warmUp() }
         playingVideoId = null
         if (kind == Kind.VOICE && !recorder.start()) {
             toast("Не вдалося увімкнути мікрофон")
@@ -568,14 +400,13 @@ fun ChatScreen(
         }
     }
 
-    // Ярлик на головному екрані: одразу запис (з замком) або голосова команда.
+    // Ярлик на головному екрані: одразу запис (з замком).
     LaunchedEffect(quick) {
         val q = quick ?: return@LaunchedEffect
         onQuickConsumed()
         when (q.action) {
             QuickAction.VIDEO -> requestRecording(Kind.VIDEO, locked = true)
             QuickAction.VOICE -> requestRecording(Kind.VOICE, locked = true)
-            QuickAction.DICTATE -> dictate()
         }
     }
 
@@ -608,7 +439,7 @@ fun ChatScreen(
             ) {
                 if (rec == null) {
                     attachment?.let { a ->
-                        AttachmentPreview(a, player, hazeState, recognizing = transcription != null, onRemove = {
+                        AttachmentPreview(a, player, hazeState, onRemove = {
                             if (player.currentPath == a.file.absolutePath) player.stop()
                             replaceAttachment(null)
                         })
@@ -631,15 +462,7 @@ fun ChatScreen(
                             else -> pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
                         }
                     },
-                    onDictate = ::dictate,
-                    listening = dictation.listening,
-                    heard = dictation.partial,
-                    onDictationDone = dictation::stop,
-                    onDictationCancel = dictation::cancel,
-                    onSend = {
-                        cancelTranscription()
-                        showSchedule = true
-                    },
+                    onSend = { showSchedule = true },
                     onToggleMode = ::toggleMode,
                     onHoldStart = { requestRecording(recordMode, locked = false) },
                     onDrag = { x, y ->
@@ -748,34 +571,6 @@ fun ChatScreen(
 
     // ---- Діалоги ----
 
-    if (offerSpeech) {
-        fun close() {
-            Prefs.setSpeechOfferShown(context)
-            offerSpeech = false
-            showSchedule = true
-        }
-        AlertDialog(
-            onDismissRequest = ::close,
-            title = { Text("Розпізнавати час у голосових?") },
-            text = {
-                Text(
-                    "Цей телефон не вміє сам розпізнавати записані голосові й відео. " +
-                        "Можна один раз завантажити офлайн-розпізнавання української — " +
-                        "≈${SpeechPack.UK.downloadMb} МБ (на телефоні ≈${SpeechPack.UK.diskMb} МБ), краще через Wi-Fi.\n\n" +
-                        "Після цього «завтра о 9…» в записі ставитиметься саме, навіть без інтернету. " +
-                        "А поки що — оберіть час вручну.",
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    OfflineSpeech.download()
-                    close()
-                }) { Text("Завантажити") }
-            },
-            dismissButton = { TextButton(onClick = ::close) { Text("Не зараз") } },
-        )
-    }
-
     if (showSchedule) {
         ScheduleSheet(
             // Обрано інший день на смужці — пропонуємо саме його (о 9:00).
@@ -783,7 +578,6 @@ fun ChatScreen(
             initialRepeat = Repeat.NONE,
             confirmLabel = "Запланувати",
             onDismiss = { showSchedule = false },
-            onDictate = ::dictate,
             alarm = composeAlarm,
             onAlarmChange = { composeAlarm = it },
         ) { at, repeat -> scheduleComposed(at, repeat) }
