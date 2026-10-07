@@ -77,9 +77,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.compose.ui.res.stringResource
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import ua.nahadaika.Prefs
+import ua.nahadaika.R
+import ua.nahadaika.Res
 import ua.nahadaika.alarm.AlarmScheduler
 import ua.nahadaika.alarm.Notifier
 import ua.nahadaika.data.Kind
@@ -138,13 +141,13 @@ fun SettingsScreen(onBack: () -> Unit) {
                     .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                GlassIconButton(Icons.AutoMirrored.Filled.ArrowBack, "Назад", onClick = onBack, size = HeaderHeight, haze = hazeState)
+                GlassIconButton(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.settings_back), onClick = onBack, size = HeaderHeight, haze = hazeState)
                 Spacer(Modifier.width(8.dp))
                 Box(
                     Modifier.weight(1f).height(HeaderHeight).glassHaze(hazeState).padding(horizontal = 20.dp),
                     contentAlignment = Alignment.CenterStart,
                 ) {
-                    Text("Налаштування", color = Glass.Text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.settings_title), color = Glass.Text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         },
@@ -162,11 +165,11 @@ fun SettingsScreen(onBack: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 item {
-                    Section("Нагадування") {
+                    Section(stringResource(R.string.settings_section_reminders)) {
                         val snoozeOptions = listOf(5, 10, 15, 30)
-                        ChoiceRow(Icons.Default.Snooze, "Відкласти у сповіщенні", "Друга кнопка — завжди «+1 год»") {
+                        ChoiceRow(Icons.Default.Snooze, stringResource(R.string.settings_snooze_title), stringResource(R.string.settings_snooze_subtitle)) {
                             GlassSegmented(
-                                options = snoozeOptions.map { null to "$it хв" },
+                                options = snoozeOptions.map { null to stringResource(R.string.settings_snooze_min, it) },
                                 selected = snoozeOptions.indexOf(snooze).coerceAtLeast(0),
                                 onSelect = {
                                     snooze = snoozeOptions[it]
@@ -177,9 +180,9 @@ fun SettingsScreen(onBack: () -> Unit) {
                         }
                         Divider()
                         val hours = listOf(7, 8, 9, 10, 12)
-                        ChoiceRow(Icons.Default.Schedule, "Час за замовчуванням", "О котрій ставити нагадування на інший день зі смужки") {
+                        ChoiceRow(Icons.Default.Schedule, stringResource(R.string.settings_default_time_title), stringResource(R.string.settings_default_time_subtitle)) {
                             GlassSegmented(
-                                options = hours.map { null to "$it:00" },
+                                options = hours.map { null to stringResource(R.string.settings_hour_format, it) },
                                 selected = hours.indexOf(defaultHour).coerceAtLeast(0),
                                 onSelect = {
                                     defaultHour = hours[it]
@@ -189,7 +192,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                             )
                         }
                         Divider()
-                        LinkRow(Icons.AutoMirrored.Filled.VolumeUp, "Звук і вібрація", "Мелодія, вібрація, екран блокування") {
+                        LinkRow(Icons.AutoMirrored.Filled.VolumeUp, stringResource(R.string.settings_sound_title), stringResource(R.string.settings_sound_subtitle)) {
                             context.startActivitySafe(
                                 Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
                                     .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
@@ -199,10 +202,10 @@ fun SettingsScreen(onBack: () -> Unit) {
                     }
                 }
                 item {
-                    Section("Запис") {
-                        ChoiceRow(Icons.Default.Mic, "Кнопка запису за замовчуванням") {
+                    Section(stringResource(R.string.settings_section_record)) {
+                        ChoiceRow(Icons.Default.Mic, stringResource(R.string.settings_default_record_button)) {
                             GlassSegmented(
-                                options = listOf(Icons.Default.Videocam to "Відео", Icons.Default.Mic to "Голосове"),
+                                options = listOf(Icons.Default.Videocam to stringResource(R.string.settings_record_video), Icons.Default.Mic to stringResource(R.string.settings_record_voice)),
                                 selected = if (recordMode == Kind.VIDEO) 0 else 1,
                                 onSelect = {
                                     recordMode = if (it == 0) Kind.VIDEO else Kind.VOICE
@@ -212,9 +215,9 @@ fun SettingsScreen(onBack: () -> Unit) {
                             )
                         }
                         Divider()
-                        ChoiceRow(Icons.Default.CameraFront, "Камера для кружечків") {
+                        ChoiceRow(Icons.Default.CameraFront, stringResource(R.string.settings_camera_title)) {
                             GlassSegmented(
-                                options = listOf(null to "Фронтальна", null to "Основна"),
+                                options = listOf(null to stringResource(R.string.settings_camera_front), null to stringResource(R.string.settings_camera_back)),
                                 selected = if (frontCamera) 0 else 1,
                                 onSelect = {
                                     frontCamera = it == 0
@@ -226,14 +229,14 @@ fun SettingsScreen(onBack: () -> Unit) {
                     }
                 }
                 item {
-                    Section("Вигляд") {
+                    Section(stringResource(R.string.settings_section_appearance)) {
                         val modes = listOf(ThemeMode.DARK, ThemeMode.LIGHT, ThemeMode.AUTO)
-                        ChoiceRow(Icons.Default.DarkMode, "Тема") {
+                        ChoiceRow(Icons.Default.DarkMode, stringResource(R.string.settings_theme_title)) {
                             GlassSegmented(
                                 options = listOf(
-                                    Icons.Default.DarkMode to "Темна",
-                                    Icons.Default.LightMode to "Світла",
-                                    Icons.Default.BrightnessAuto to "Авто",
+                                    Icons.Default.DarkMode to stringResource(R.string.settings_theme_dark),
+                                    Icons.Default.LightMode to stringResource(R.string.settings_theme_light),
+                                    Icons.Default.BrightnessAuto to stringResource(R.string.settings_theme_auto),
                                 ),
                                 selected = modes.indexOf(ThemeSettings.mode),
                                 onSelect = { ThemeSettings.set(context, modes[it]) },
@@ -243,18 +246,18 @@ fun SettingsScreen(onBack: () -> Unit) {
                     }
                 }
                 item {
-                    Section("Щоб нагадування точно приходили") {
-                        StatusRow(Icons.Default.Notifications, "Сповіщення", canNotify) {
+                    Section(stringResource(R.string.settings_section_permissions)) {
+                        StatusRow(Icons.Default.Notifications, stringResource(R.string.settings_perm_notifications), canNotify) {
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                 notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                             } else {
                                 context.startActivitySafe(
                                     Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName),
-                                )
+                                    )
                             }
                         }
                         Divider()
-                        StatusRow(Icons.Default.Timer, "Точні будильники", canExact) {
+                        StatusRow(Icons.Default.Timer, stringResource(R.string.settings_perm_exact_alarms), canExact) {
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                                 context.startActivitySafe(
                                     Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}")),
@@ -263,14 +266,14 @@ fun SettingsScreen(onBack: () -> Unit) {
                         }
                         if (Build.VERSION.SDK_INT >= 34) {
                             Divider()
-                            StatusRow(Icons.Default.Alarm, "Будильник на весь екран", canFullScreen) {
+                            StatusRow(Icons.Default.Alarm, stringResource(R.string.settings_perm_fullscreen), canFullScreen) {
                                 context.startActivitySafe(
                                     Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:${context.packageName}")),
                                 )
                             }
                         }
                         Divider()
-                        StatusRow(Icons.Default.BatteryAlert, "Робота у фоні без обмежень", batteryOk) {
+                        StatusRow(Icons.Default.BatteryAlert, stringResource(R.string.settings_perm_battery), batteryOk) {
                             context.startActivitySafe(
                                 Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}")),
                             )
@@ -280,14 +283,14 @@ fun SettingsScreen(onBack: () -> Unit) {
                 item { BackupSection() }
                 item { UpdateSection() }
                 item {
-                    Section("Про застосунок") {
+                    Section(stringResource(R.string.settings_section_about)) {
                         val version = remember {
                             runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: ""
                         }
                         InfoRow(
                             Icons.Default.Info,
-                            "Нагадайка $version",
-                            "Шрифт — Inter (SIL OFL).",
+                            stringResource(R.string.settings_about_app_name, version),
+                            stringResource(R.string.settings_about_font_credit),
                         )
                     }
                 }
@@ -397,7 +400,7 @@ private fun BackupSection() {
                 runCatching { context.contentResolver.openOutputStream(uri)!!.use { Repo.exportBackup(it) } }.isSuccess
             }
             busy = false
-            toast(if (ok) "Копію збережено" else "Не вдалося зберегти копію")
+            toast(if (ok) Res.s(R.string.settings_backup_saved) else Res.s(R.string.settings_backup_save_failed))
         }
     }
     val restore = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -409,24 +412,27 @@ private fun BackupSection() {
             }
             busy = false
             result.onSuccess {
-                toast(
-                    if (it.reminders == 0 && it.chats == 0) "Нових нагадувань у копії немає"
-                    else "Відновлено: нагадувань ${it.reminders}, чатів ${it.chats}" + if (it.skipped > 0) " (вже були: ${it.skipped})" else "",
-                )
-            }.onFailure { toast((it as? BackupFormatException)?.message ?: "Не вдалося відновити копію") }
+                val msg = if (it.reminders == 0 && it.chats == 0) {
+                    Res.s(R.string.settings_backup_empty)
+                } else if (it.skipped > 0) {
+                    Res.s(R.string.settings_backup_restored_with_skipped, it.reminders, it.chats, it.skipped)
+                } else {
+                    Res.s(R.string.settings_backup_restored, it.reminders, it.chats)
+                }
+                toast(msg)
+            }.onFailure { toast((it as? BackupFormatException)?.message ?: Res.s(R.string.settings_backup_restore_failed)) }
         }
     }
 
     Section(
-        "Резервна копія",
-        footer = "Усе зберігається лише на телефоні, тож копія — єдиний спосіб перенести дані на новий. " +
-            "Відновлення додає до наявного і не створює дублів.",
+        stringResource(R.string.settings_section_backup),
+        footer = stringResource(R.string.settings_backup_footer),
     ) {
-        LinkRow(Icons.Default.Backup, "Зберегти копію", if (busy) "Зачекайте…" else "Чати, нагадування, голосові, відео й фото одним файлом") {
+        LinkRow(Icons.Default.Backup, stringResource(R.string.settings_backup_save_title), if (busy) stringResource(R.string.settings_backup_busy) else stringResource(R.string.settings_backup_save_subtitle)) {
             if (!busy) save.launch("nahadaika-${LocalDate.now()}.zip")
         }
         Divider()
-        LinkRow(Icons.Default.Restore, "Відновити з копії", "Додасть нагадування з файлу до наявних") {
+        LinkRow(Icons.Default.Restore, stringResource(R.string.settings_backup_restore_title), stringResource(R.string.settings_backup_restore_subtitle)) {
             if (!busy) restore.launch(arrayOf("application/zip", "application/octet-stream"))
         }
     }
@@ -465,9 +471,9 @@ private fun StatusRow(icon: ImageVector, title: String, ok: Boolean, onFix: () -
         Spacer(Modifier.width(16.dp))
         Text(title, color = Glass.Text, fontSize = 15.sp, modifier = Modifier.weight(1f))
         if (ok) {
-            Icon(Icons.Default.Check, "Увімкнено", tint = Glass.Lavender, modifier = Modifier.padding(end = 8.dp).size(20.dp))
+            Icon(Icons.Default.Check, stringResource(R.string.settings_perm_enabled_desc), tint = Glass.Lavender, modifier = Modifier.padding(end = 8.dp).size(20.dp))
         } else {
-            TextButton(onClick = onFix) { Text("Дозволити", color = Glass.Text, fontWeight = FontWeight.Medium) }
+            TextButton(onClick = onFix) { Text(stringResource(R.string.settings_perm_allow), color = Glass.Text, fontWeight = FontWeight.Medium) }
         }
     }
 }

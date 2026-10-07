@@ -52,6 +52,8 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import ua.nahadaika.R
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -152,11 +154,11 @@ private fun InputPill(
         verticalAlignment = Alignment.Bottom,
     ) {
         Box {
-            BarIcon(Icons.Default.AttachFile, "Додати", Glass.TextDim) { menu = true }
+            BarIcon(Icons.Default.AttachFile, stringResource(R.string.chat_attach), Glass.TextDim) { menu = true }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                MenuItem(Icons.Default.Videocam, "Записати відео") { menu = false; onAttach(Kind.VIDEO) }
-                MenuItem(Icons.Default.CameraAlt, "Зняти фото") { menu = false; onAttach(Kind.PHOTO) }
-                MenuItem(Icons.Default.PhotoLibrary, "З галереї") { menu = false; onAttach(null) }
+                MenuItem(Icons.Default.Videocam, stringResource(R.string.chat_menu_record_video)) { menu = false; onAttach(Kind.VIDEO) }
+                MenuItem(Icons.Default.CameraAlt, stringResource(R.string.chat_menu_take_photo)) { menu = false; onAttach(Kind.PHOTO) }
+                MenuItem(Icons.Default.PhotoLibrary, stringResource(R.string.chat_menu_from_gallery)) { menu = false; onAttach(null) }
             }
         }
         val style = LocalTextStyle.current.copy(color = Glass.Text, fontSize = 16.sp, lineHeight = 22.sp)
@@ -170,7 +172,7 @@ private fun InputPill(
             decorationBox = { inner ->
                 Box {
                     if (text.isEmpty()) {
-                        Text("Нагадування", style = style, color = Glass.TextFaint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(stringResource(R.string.chat_default_reminder_text), style = style, color = Glass.TextFaint, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     inner()
                 }
@@ -203,7 +205,7 @@ private fun RecordingPill(haze: HazeState, rec: Rec, elapsed: Long, dragX: Float
         )
         Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
             if (rec.locked) {
-                TextButton(onClick = onCancel) { Text("Скасувати", color = Glass.Danger, fontSize = 15.sp) }
+                TextButton(onClick = onCancel) { Text(stringResource(R.string.chat_cancel), color = Glass.Danger, fontSize = 15.sp) }
             } else {
                 val progress = (-dragX / cancelPx).coerceIn(0f, 1f)
                 Row(
@@ -213,7 +215,7 @@ private fun RecordingPill(haze: HazeState, rec: Rec, elapsed: Long, dragX: Float
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = Glass.TextFaint, modifier = Modifier.size(20.dp))
-                    Text("Посуньте, щоб скасувати", color = Glass.TextDim, fontSize = 14.sp, maxLines = 1)
+                    Text(stringResource(R.string.chat_slide_to_cancel), color = Glass.TextDim, fontSize = 14.sp, maxLines = 1)
                 }
             }
         }
@@ -335,14 +337,18 @@ private fun RecordButton(
                 (rec?.kind ?: recordMode) == Kind.VIDEO -> Icons.Default.Videocam
                 else -> Icons.Default.Mic
             }
+            val descSchedule = stringResource(R.string.chat_schedule_confirm)
+            val descDone = stringResource(R.string.chat_done)
+            val descVideo = stringResource(R.string.chat_desc_video_button)
+            val descVoice = stringResource(R.string.chat_desc_voice_button)
             Crossfade(targetState = icon, label = "icon") { current ->
                 Icon(
                     current,
                     contentDescription = when (current) {
-                        Icons.Default.AlarmAdd -> "Запланувати"
-                        Icons.Default.Check -> "Готово"
-                        Icons.Default.Videocam -> "Відео: тап — перемкнути, утримати — записати"
-                        else -> "Голосове: тап — перемкнути, утримати — записати"
+                        Icons.Default.AlarmAdd -> descSchedule
+                        Icons.Default.Check -> descDone
+                        Icons.Default.Videocam -> descVideo
+                        else -> descVoice
                     },
                     tint = Glass.OnPrimary,
                 )
@@ -364,7 +370,7 @@ private fun LockHint(progress: Float) {
     ) {
         Icon(
             if (progress > 0.85f) Icons.Default.Lock else Icons.Default.LockOpen,
-            contentDescription = "Потягніть угору, щоб зафіксувати",
+            contentDescription = stringResource(R.string.chat_desc_lock_hint),
             tint = if (progress > 0.85f) Glass.Lavender else Glass.Text,
             modifier = Modifier.size(20.dp),
         )
@@ -409,7 +415,7 @@ internal fun AttachmentPreview(attachment: Attachment, player: AudioPlayer, haze
                 ) {
                     Icon(
                         if (player.currentPath == path && player.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = "Прослухати",
+                        contentDescription = stringResource(R.string.chat_desc_play),
                         tint = Glass.OnPrimary,
                     )
                 }
@@ -420,14 +426,14 @@ internal fun AttachmentPreview(attachment: Attachment, player: AudioPlayer, haze
         Column(Modifier.weight(1f)) {
             Text(
                 when (attachment.kind) {
-                    Kind.PHOTO -> "Фото"
-                    Kind.VIDEO -> "Відео · ${formatDuration(attachment.durationMs)}"
-                    Kind.VOICE -> "Голосове · ${formatDuration(attachment.durationMs)}"
+                    Kind.PHOTO -> stringResource(R.string.chat_photo)
+                    Kind.VIDEO -> stringResource(R.string.chat_preview_video_duration, formatDuration(attachment.durationMs))
+                    Kind.VOICE -> stringResource(R.string.chat_preview_voice_duration, formatDuration(attachment.durationMs))
                     Kind.TEXT -> ""
                 },
                 color = Glass.Text,
             )
         }
-        IconButton(onClick = onRemove) { Icon(Icons.Default.Close, "Прибрати", tint = Glass.TextDim) }
+        IconButton(onClick = onRemove) { Icon(Icons.Default.Close, stringResource(R.string.chat_remove_attachment), tint = Glass.TextDim) }
     }
 }

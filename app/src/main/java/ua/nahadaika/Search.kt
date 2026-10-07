@@ -1,15 +1,19 @@
 package ua.nahadaika
 
+import androidx.annotation.StringRes
 import ua.nahadaika.data.Chat
 import ua.nahadaika.data.Kind
 import ua.nahadaika.data.Reminder
 import ua.nahadaika.data.alarmAt
 import java.util.Locale
 
-enum class SearchFilter(val label: String) {
-    ALL("Усі"),
-    PENDING("Заплановані"),
-    DONE("Виконані"),
+enum class SearchFilter(@StringRes val labelRes: Int) {
+    ALL(R.string.core_search_filter_all),
+    PENDING(R.string.core_search_filter_pending),
+    DONE(R.string.core_search_filter_done);
+
+    val label: String
+        get() = Res.s(labelRes)
 }
 
 data class SearchHit(val reminder: Reminder, val chat: Chat?)
@@ -19,9 +23,9 @@ private val uk: Locale = Locale.forLanguageTag("uk")
 /** Слова, за якими знаходяться медіа без підпису: «голосове», «відео», «фото». */
 private fun kindWords(kind: Kind) = when (kind) {
     Kind.TEXT -> ""
-    Kind.VOICE -> "голосове голосова голосовое"
-    Kind.VIDEO -> "відео відеокружечок видео"
-    Kind.PHOTO -> "фото фотографія"
+    Kind.VOICE -> "голосове голосова голосовое voice audio"
+    Kind.VIDEO -> "відео відеокружечок видео video circle"
+    Kind.PHOTO -> "фото фотографія photo picture"
 }
 
 private fun normalize(s: String) = s.lowercase(uk).replace('ё', 'е').replace('’', '\'').replace('ʼ', '\'')

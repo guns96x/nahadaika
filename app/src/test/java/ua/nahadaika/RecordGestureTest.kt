@@ -29,7 +29,7 @@ import ua.nahadaika.ui.theme.NahadaikaTheme
 /** Жести кнопки запису, як у Telegram: тап — режим, утримання — запис, угору — замок, уліво — скасувати. */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [34], qualifiers = "w400dp-h860dp-xxhdpi")
+@Config(sdk = [34], qualifiers = "uk-w400dp-h860dp-xxhdpi")
 class RecordGestureTest {
     @get:Rule
     val compose = createComposeRule()

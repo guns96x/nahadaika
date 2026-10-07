@@ -39,10 +39,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import ua.nahadaika.R
+import ua.nahadaika.Res
 import ua.nahadaika.ui.theme.GlassIconButton
 import ua.nahadaika.ui.theme.Glass
 import ua.nahadaika.data.Kind
@@ -61,10 +64,10 @@ private class Take(val file: File) {
 
 /** Що сказати людині, якщо камера не записала відео. */
 private fun finalizeMessage(error: Int): String = when (error) {
-    VideoRecordEvent.Finalize.ERROR_INSUFFICIENT_STORAGE -> "Не вистачає місця на телефоні"
-    VideoRecordEvent.Finalize.ERROR_ENCODING_FAILED -> "Камера не змогла закодувати відео"
-    VideoRecordEvent.Finalize.ERROR_NO_VALID_DATA -> "Камера не встигла записати жодного кадру"
-    else -> "Не вдалося записати відео (помилка $error)"
+    VideoRecordEvent.Finalize.ERROR_INSUFFICIENT_STORAGE -> Res.s(R.string.chat_video_error_storage)
+    VideoRecordEvent.Finalize.ERROR_ENCODING_FAILED -> Res.s(R.string.chat_video_error_encoding)
+    VideoRecordEvent.Finalize.ERROR_NO_VALID_DATA -> Res.s(R.string.chat_video_error_no_data)
+    else -> Res.s(R.string.chat_video_error_generic, error)
 }
 
 /**
@@ -133,7 +136,7 @@ fun VideoCircleRecorder(
                         !t.keep -> t.file.delete()
                         else -> {
                             t.file.delete()
-                            val message = if (errorOk || t.durationMs in 1 until 700) "Відео занадто коротке" else finalizeMessage(event.error)
+                            val message = if (errorOk || t.durationMs in 1 until 700) Res.s(R.string.chat_video_too_short) else finalizeMessage(event.error)
                             Toast.makeText(context, message, Toast.LENGTH_LONG).show()
                             currentOnResult(null)
                         }
@@ -165,7 +168,7 @@ fun VideoCircleRecorder(
                     bind(!front)
                     Toast.makeText(
                         context,
-                        if (front) "Фронтальна камера недоступна — пишу з основної" else "Основна камера недоступна — пишу з фронтальної",
+                        if (front) Res.s(R.string.chat_camera_front_unavailable) else Res.s(R.string.chat_camera_back_unavailable),
                         Toast.LENGTH_SHORT,
                     ).show()
                     currentOnFlip()
@@ -173,7 +176,7 @@ fun VideoCircleRecorder(
                 if (take == null) startTake()
             } catch (e: Exception) {
                 Log.w(TAG, "camera start failed", e)
-                Toast.makeText(context, "Не вдалося увімкнути камеру", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, Res.s(R.string.chat_camera_failed_start), Toast.LENGTH_SHORT).show()
                 currentOnResult(null)
             } finally {
                 switching = false
@@ -194,7 +197,7 @@ fun VideoCircleRecorder(
         val keep = finish ?: return@LaunchedEffect
         val t = take
         if (t == null) {
-            if (keep) Toast.makeText(context, "Утримуйте кнопку довше, щоб записати", Toast.LENGTH_SHORT).show()
+            if (keep) Toast.makeText(context, Res.s(R.string.chat_hold_longer_to_record), Toast.LENGTH_SHORT).show()
             currentOnResult(null)
             return@LaunchedEffect
         }
@@ -215,7 +218,7 @@ fun VideoCircleRecorder(
             if (locked && !switching) {
                 GlassIconButton(
                     Icons.Default.Cameraswitch,
-                    "Змінити камеру",
+                    stringResource(R.string.chat_switch_camera),
                     onClick = onFlip,
                     size = 48.dp,
                     modifier = Modifier.align(Alignment.BottomEnd),

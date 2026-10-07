@@ -12,6 +12,7 @@ import ua.nahadaika.ui.theme.ThemeSettings
 class App : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
+        Res.init(this)
         Repo.init(this)
         ThemeSettings.init(this)
         Notifier.createChannel(this)

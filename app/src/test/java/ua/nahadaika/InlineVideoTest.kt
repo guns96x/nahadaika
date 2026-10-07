@@ -30,7 +30,7 @@ import ua.nahadaika.ui.theme.NahadaikaTheme
 @RunWith(RobolectricTestRunner::class)
 // Справжня графіка: без неї Robolectric не вміє перевіряти влучання в бульбашку з різними радіусами кутів.
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [34], qualifiers = "w400dp-h900dp-xxhdpi")
+@Config(sdk = [34], qualifiers = "uk-w400dp-h900dp-xxhdpi")
 class InlineVideoTest {
     @get:Rule
     val compose = createComposeRule()

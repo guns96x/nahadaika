@@ -54,11 +54,11 @@ class ReminderWidget : AppWidgetProvider() {
         internal fun buildViews(context: Context, next: Reminder?, chatName: String?): RemoteViews {
             val views = RemoteViews(context.packageName, R.layout.widget_reminder)
             if (next == null) {
-                views.setTextViewText(R.id.widget_when, "Нагадайка")
-                views.setTextViewText(R.id.widget_text, "Немає запланованих нагадувань")
+                views.setTextViewText(R.id.widget_when, context.getString(R.string.app_widget_title))
+                views.setTextViewText(R.id.widget_text, context.getString(R.string.app_widget_no_reminders))
             } else {
                 views.setTextViewText(R.id.widget_when, listOfNotNull(whenLabel(next.alarmAt()), chatName).joinToString(" · "))
-                views.setTextViewText(R.id.widget_text, previewText(next).ifBlank { "Нагадування" })
+                views.setTextViewText(R.id.widget_text, previewText(next).ifBlank { context.getString(R.string.app_widget_default_text) })
             }
             val open = Intent(context, MainActivity::class.java).apply {
                 if (next != null) {

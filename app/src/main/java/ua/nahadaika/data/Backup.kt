@@ -4,6 +4,8 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
+import ua.nahadaika.R
+import ua.nahadaika.Res
 import ua.nahadaika.media.MediaFiles
 import java.io.File
 import java.io.IOException
@@ -53,13 +55,13 @@ object Backup {
             val data = try {
                 JSONObject(json)
             } catch (_: JSONException) {
-                throw BackupFormatException("Це не копія Нагадайки")
+                throw BackupFormatException(Res.s(R.string.core_backup_error_not_nahadaika))
             }
-            if (data.optString("app") != "nahadaika") throw BackupFormatException("Це не копія Нагадайки")
-            if (data.optInt("format") > FORMAT) throw BackupFormatException("Копія створена новішою версією — оновіть застосунок")
+            if (data.optString("app") != "nahadaika") throw BackupFormatException(Res.s(R.string.core_backup_error_not_nahadaika))
+            if (data.optInt("format") > FORMAT) throw BackupFormatException(Res.s(R.string.core_backup_error_newer_version))
             return merge(context, db, data, staging)
         } catch (e: JSONException) {
-            throw BackupFormatException("Копію пошкоджено")
+            throw BackupFormatException(Res.s(R.string.core_backup_error_corrupted))
         } finally {
             staging.deleteRecursively()
         }
@@ -78,7 +80,7 @@ object Backup {
                 }
             }
         }
-        return json ?: throw BackupFormatException("Це не копія Нагадайки")
+        return json ?: throw BackupFormatException(Res.s(R.string.core_backup_error_not_nahadaika))
     }
 
     private suspend fun merge(context: Context, db: AppDatabase, data: JSONObject, staging: File): ImportResult {

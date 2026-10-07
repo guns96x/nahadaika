@@ -9,40 +9,37 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val uk: Locale = Locale.forLanguageTag("uk")
-private val timeFmt = DateTimeFormatter.ofPattern("HH:mm", uk)
-private val dayMonthFmt = DateTimeFormatter.ofPattern("d MMMM", uk)
-private val dayMonthYearFmt = DateTimeFormatter.ofPattern("d MMMM yyyy", uk)
-private val shortDateFmt = DateTimeFormatter.ofPattern("EE, d MMM", uk)
+// Формати будуються за поточною мовою, бо вона може змінитися без перезапуску процесу.
+private fun fmt(pattern: String): DateTimeFormatter = DateTimeFormatter.ofPattern(pattern, Locale.getDefault())
 
 fun Long.toLocalDate(): LocalDate = Instant.ofEpochMilli(this).atZone(ZoneId.systemDefault()).toLocalDate()
 
-fun formatTime(ms: Long): String = Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()).format(timeFmt)
+fun formatTime(ms: Long): String = Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()).format(fmt("HH:mm"))
 
 /** "Сьогодні", "Завтра", "5 жовтня", "5 жовтня 2027". */
 fun dayLabel(date: LocalDate): String {
     val today = LocalDate.now()
     return when (date) {
-        today -> "Сьогодні"
-        today.plusDays(1) -> "Завтра"
-        today.minusDays(1) -> "Вчора"
-        else -> date.format(if (date.year == today.year) dayMonthFmt else dayMonthYearFmt)
+        today -> Res.s(R.string.fmt_today)
+        today.plusDays(1) -> Res.s(R.string.fmt_tomorrow)
+        today.minusDays(1) -> Res.s(R.string.fmt_yesterday)
+        else -> date.format(fmt(if (date.year == today.year) "d MMMM" else "d MMMM yyyy"))
     }
 }
 
 /** "сьогодні о 20:00", "5 жовтня о 09:00". */
 fun whenLabel(ms: Long): String {
-    val day = dayLabel(ms.toLocalDate()).replaceFirstChar { it.lowercase(uk) }
-    return "$day о ${formatTime(ms)}"
+    val day = dayLabel(ms.toLocalDate()).replaceFirstChar { it.lowercase(Locale.getDefault()) }
+    return Res.s(R.string.fmt_day_at, day, formatTime(ms))
 }
 
 /** Для підтвердження: «через 10 с», «через 25 хв» — якщо скоро, інакше «завтра о 9:00». */
 fun soonLabel(ms: Long, now: Long = System.currentTimeMillis()): String {
     val d = (ms - now + 500) / 1000
     return when {
-        d in 0 until 60 -> "через $d с"
-        d in 60 until 600 && d % 60 != 0L -> "через ${d / 60} хв ${d % 60} с"
-        d in 60 until 3600 -> "через ${(d + 30) / 60} хв"
+        d in 0 until 60 -> Res.s(R.string.fmt_in_sec, d)
+        d in 60 until 600 && d % 60 != 0L -> Res.s(R.string.fmt_in_min_sec, d / 60, d % 60)
+        d in 60 until 3600 -> Res.s(R.string.fmt_in_min, (d + 30) / 60)
         else -> whenLabel(ms)
     }
 }
@@ -53,12 +50,12 @@ fun shortWhen(ms: Long): String {
     val today = LocalDate.now()
     return when (date) {
         today -> formatTime(ms)
-        today.plusDays(1) -> "завтра"
-        else -> date.format(DateTimeFormatter.ofPattern("d MMM", uk))
+        today.plusDays(1) -> Res.s(R.string.fmt_tomorrow_short)
+        else -> date.format(fmt("d MMM"))
     }
 }
 
-fun shortDate(date: LocalDate): String = date.format(shortDateFmt)
+fun shortDate(date: LocalDate): String = date.format(fmt("EE, d MMM"))
 
 /** «через 1 год 17 хв», «через 45 хв», «через 2 дн 3 год». */
 fun inLabel(ms: Long): String {
@@ -67,11 +64,11 @@ fun inLabel(ms: Long): String {
     val hours = totalMin / 60 % 24
     val minutes = totalMin % 60
     val parts = buildList {
-        if (days > 0) add("$days дн")
-        if (hours > 0) add("$hours год")
-        if (minutes > 0 && days == 0L) add("$minutes хв")
+        if (days > 0) add(Res.s(R.string.fmt_unit_days, days))
+        if (hours > 0) add(Res.s(R.string.fmt_unit_hours, hours))
+        if (minutes > 0 && days == 0L) add(Res.s(R.string.fmt_unit_minutes, minutes))
     }
-    return if (parts.isEmpty()) "менш ніж за хвилину" else "через " + parts.joinToString(" ")
+    return if (parts.isEmpty()) Res.s(R.string.fmt_in_less_than_minute) else Res.s(R.string.fmt_in, parts.joinToString(" "))
 }
 
 fun formatDuration(ms: Long): String {
@@ -80,11 +77,11 @@ fun formatDuration(ms: Long): String {
 }
 
 fun repeatLabel(repeat: Repeat): String = when (repeat) {
-    Repeat.NONE -> "Не повторювати"
-    Repeat.DAILY -> "Щодня"
-    Repeat.WEEKLY -> "Щотижня"
-    Repeat.MONTHLY -> "Щомісяця"
-    Repeat.YEARLY -> "Щороку"
+    Repeat.NONE -> Res.s(R.string.fmt_repeat_none)
+    Repeat.DAILY -> Res.s(R.string.fmt_repeat_daily)
+    Repeat.WEEKLY -> Res.s(R.string.fmt_repeat_weekly)
+    Repeat.MONTHLY -> Res.s(R.string.fmt_repeat_monthly)
+    Repeat.YEARLY -> Res.s(R.string.fmt_repeat_yearly)
 }
 
 /** Опис повідомлення одним рядком — для сповіщень і списку чатів. */
@@ -92,9 +89,9 @@ fun previewText(r: Reminder): String {
     val caption = r.text.takeIf { it.isNotBlank() }
     return when (r.kind) {
         Kind.TEXT -> r.text
-        Kind.VOICE -> "🎤 Голосове (${formatDuration(r.durationMs)})" + (caption?.let { " · $it" } ?: "")
-        Kind.VIDEO -> "🎬 " + (caption ?: "Відео")
-        Kind.PHOTO -> "🖼 " + (caption ?: "Фото")
+        Kind.VOICE -> "🎤 " + Res.s(R.string.fmt_voice_paren, formatDuration(r.durationMs)) + (caption?.let { " · $it" } ?: "")
+        Kind.VIDEO -> "🎬 " + (caption ?: Res.s(R.string.fmt_video))
+        Kind.PHOTO -> "🖼 " + (caption ?: Res.s(R.string.fmt_photo))
     }
 }
 
@@ -114,10 +111,10 @@ fun reminderTitle(r: Reminder): String {
     }
     if (text.isEmpty()) {
         return when (r.kind) {
-            Kind.TEXT -> "Нагадування"
-            Kind.VOICE -> "🎤 Голосове · ${formatDuration(r.durationMs)}"
-            Kind.VIDEO -> "🎬 Кружечок · ${formatDuration(r.durationMs)}"
-            Kind.PHOTO -> "🖼 Фото"
+            Kind.TEXT -> Res.s(R.string.fmt_reminder)
+            Kind.VOICE -> "🎤 " + Res.s(R.string.fmt_voice_dur, formatDuration(r.durationMs))
+            Kind.VIDEO -> "🎬 " + Res.s(R.string.fmt_circle_dur, formatDuration(r.durationMs))
+            Kind.PHOTO -> "🖼 " + Res.s(R.string.fmt_photo)
         }
     }
     val firstLine = text.lineSequence().first().trim()

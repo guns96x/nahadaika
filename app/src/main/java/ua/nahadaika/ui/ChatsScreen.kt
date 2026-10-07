@@ -78,6 +78,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -86,6 +87,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
+import ua.nahadaika.R
 import ua.nahadaika.alarm.AlarmScheduler
 import ua.nahadaika.alarm.Notifier
 import ua.nahadaika.data.Chat
@@ -122,23 +124,23 @@ fun ChatsScreen(onOpenChat: (Long) -> Unit, onBack: () -> Unit, onOpenSettings: 
                     .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                GlassIconButton(Icons.AutoMirrored.Filled.ArrowBack, "Назад", onClick = onBack, size = HeaderHeight, haze = hazeState)
+                GlassIconButton(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.chats_back), onClick = onBack, size = HeaderHeight, haze = hazeState)
                 Spacer(Modifier.width(8.dp))
                 Box(
                     Modifier.weight(1f).height(HeaderHeight).glassHaze(hazeState).padding(horizontal = 20.dp),
                     contentAlignment = Alignment.CenterStart,
                 ) {
-                    Text("Чати", color = Glass.Text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.chats_title), color = Glass.Text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 }
                 Spacer(Modifier.width(8.dp))
-                GlassIconButton(Icons.Default.Search, "Пошук", onClick = onOpenSearch, size = HeaderHeight, haze = hazeState)
+                GlassIconButton(Icons.Default.Search, stringResource(R.string.chats_search), onClick = onOpenSearch, size = HeaderHeight, haze = hazeState)
                 Spacer(Modifier.width(8.dp))
-                GlassIconButton(Icons.Default.Settings, "Налаштування", onClick = onOpenSettings, size = HeaderHeight, haze = hazeState)
+                GlassIconButton(Icons.Default.Settings, stringResource(R.string.chats_settings), onClick = onOpenSettings, size = HeaderHeight, haze = hazeState)
             }
         },
         floatingActionButton = {
             PrimaryCircle(onClick = { creating = true }, size = 58.dp) {
-                Icon(Icons.Default.Add, contentDescription = "Новий чат")
+                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.chats_new_chat))
             }
         },
     ) { padding ->
@@ -170,13 +172,13 @@ fun ChatsScreen(onOpenChat: (Long) -> Unit, onBack: () -> Unit, onOpenSettings: 
     }
 
     if (creating) {
-        NameDialog(title = "Новий чат", initial = "", onDismiss = { creating = false }) { name ->
+        NameDialog(title = stringResource(R.string.chats_new_chat), initial = "", onDismiss = { creating = false }) { name ->
             creating = false
             scope.launch { onOpenChat(Repo.createChat(name)) }
         }
     }
     renaming?.let { chat ->
-        NameDialog(title = "Перейменувати", initial = chat.name, onDismiss = { renaming = null }) { name ->
+        NameDialog(title = stringResource(R.string.chats_rename), initial = chat.name, onDismiss = { renaming = null }) { name ->
             renaming = null
             scope.launch { Repo.renameChat(chat, name) }
         }
@@ -184,15 +186,15 @@ fun ChatsScreen(onOpenChat: (Long) -> Unit, onBack: () -> Unit, onOpenSettings: 
     deleting?.let { chat ->
         AlertDialog(
             onDismissRequest = { deleting = null },
-            title = { Text("Видалити «${chat.name}»?") },
-            text = { Text("Усі нагадування в цьому чаті буде видалено.") },
+            title = { Text(stringResource(R.string.chats_delete_dialog_title, chat.name)) },
+            text = { Text(stringResource(R.string.chats_delete_dialog_message)) },
             confirmButton = {
                 TextButton(onClick = {
                     deleting = null
                     scope.launch { Repo.deleteChat(chat) }
-                }) { Text("Видалити", color = Glass.Danger) }
+                }) { Text(stringResource(R.string.chats_delete), color = Glass.Danger) }
             },
-            dismissButton = { TextButton(onClick = { deleting = null }) { Text("Скасувати") } },
+            dismissButton = { TextButton(onClick = { deleting = null }) { Text(stringResource(R.string.chats_cancel)) } },
         )
     }
 }
@@ -241,7 +243,7 @@ private fun ChatRow(
                 Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = next?.let { previewText(it).ifBlank { "Нагадування" } } ?: "Немає запланованих",
+                        text = next?.let { previewText(it).ifBlank { stringResource(R.string.chats_default_reminder_text) } } ?: stringResource(R.string.chats_no_scheduled),
                         fontSize = 14.sp,
                         color = Glass.TextDim,
                         maxLines = 1,
@@ -258,8 +260,8 @@ private fun ChatRow(
             }
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-            DropdownMenuItem(text = { Text("Перейменувати") }, onClick = { menu = false; onRename() })
-            DropdownMenuItem(text = { Text("Видалити") }, onClick = { menu = false; onDelete() })
+            DropdownMenuItem(text = { Text(stringResource(R.string.chats_rename)) }, onClick = { menu = false; onRename() })
+            DropdownMenuItem(text = { Text(stringResource(R.string.chats_delete)) }, onClick = { menu = false; onDelete() })
         }
     }
 }
@@ -293,13 +295,13 @@ fun NameDialog(title: String, initial: String, onDismiss: () -> Unit, onConfirm:
                 value = name,
                 onValueChange = { name = it },
                 singleLine = true,
-                placeholder = { Text("Наприклад: Дім, Робота, Ліки") },
+                placeholder = { Text(stringResource(R.string.chats_name_dialog_placeholder)) },
             )
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(name) }, enabled = name.isNotBlank()) { Text("Зберегти") }
+            TextButton(onClick = { onConfirm(name) }, enabled = name.isNotBlank()) { Text(stringResource(R.string.chats_save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Скасувати") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.chats_cancel)) } },
     )
 }
 
@@ -340,8 +342,8 @@ fun PermissionBanners() {
         if (!canNotify) {
             Banner(
                 icon = Icons.Default.NotificationsOff,
-                text = "Сповіщення вимкнені",
-                action = "Увімкнути",
+                text = stringResource(R.string.chats_banner_notifications_disabled),
+                action = stringResource(R.string.chats_banner_enable),
                 onAction = {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -354,8 +356,8 @@ fun PermissionBanners() {
         if (!canExact && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             Banner(
                 icon = Icons.Default.Timer,
-                text = "Точні будильники вимкнені",
-                action = "Дозволити",
+                text = stringResource(R.string.chats_banner_exact_alarms_disabled),
+                action = stringResource(R.string.chats_banner_allow),
                 onAction = {
                     context.startActivitySafe(
                         Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}")),
@@ -367,8 +369,8 @@ fun PermissionBanners() {
         if (!batteryOk) {
             Banner(
                 icon = Icons.Default.BatteryAlert,
-                text = "Робота у фоні вимкнена",
-                action = "Дозволити",
+                text = stringResource(R.string.chats_banner_battery_disabled),
+                action = stringResource(R.string.chats_banner_allow),
                 onAction = {
                     context.startActivitySafe(
                         Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}")),
@@ -397,7 +399,7 @@ internal fun Banner(icon: ImageVector, text: String, action: String, onAction: (
         }
         if (onDismiss != null) {
             IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Default.Close, "Пізніше", tint = Glass.TextFaint, modifier = Modifier.size(16.dp))
+                Icon(Icons.Default.Close, stringResource(R.string.chats_banner_dismiss), tint = Glass.TextFaint, modifier = Modifier.size(16.dp))
             }
         }
     }

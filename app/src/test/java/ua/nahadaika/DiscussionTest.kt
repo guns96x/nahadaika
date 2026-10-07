@@ -29,7 +29,7 @@ import ua.nahadaika.ui.theme.NahadaikaTheme
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [34], qualifiers = "w400dp-h900dp-xxhdpi")
+@Config(sdk = [34], qualifiers = "uk-w400dp-h900dp-xxhdpi")
 class DiscussionTest {
     @get:Rule
     val compose = createComposeRule()

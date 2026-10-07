@@ -39,11 +39,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import ua.nahadaika.R
+import ua.nahadaika.Res
 import ua.nahadaika.ui.theme.PrimaryButton
 import ua.nahadaika.ui.theme.Glass
 import ua.nahadaika.ui.theme.GlassChip
@@ -69,8 +72,6 @@ private const val MODE_AT = 1
 private const val MAX_DAYS = 366
 private const val MAX_TIMER_SECONDS = 99 * 3600 + 59 * 60 + 59
 
-private val dayWheelFmt = DateTimeFormatter.ofPattern("EE, d MMM", Locale.forLanguageTag("uk"))
-
 private fun LocalDateTime.toMillis() = atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
 private fun Long.toLocalDateTime() = Instant.ofEpochMilli(this).atZone(ZoneId.systemDefault()).toLocalDateTime()
 
@@ -88,9 +89,9 @@ private fun defaultTime(): Long {
 }
 
 private fun dayWheelLabel(index: Int): String = when (index) {
-    0 -> "Сьогодні"
-    1 -> "Завтра"
-    else -> LocalDate.now().plusDays(index.toLong()).format(dayWheelFmt)
+    0 -> Res.s(R.string.chat_today)
+    1 -> Res.s(R.string.chat_tomorrow)
+    else -> LocalDate.now().plusDays(index.toLong()).format(DateTimeFormatter.ofPattern("EE, d MMM", Locale.getDefault()))
 }
 
 private data class AtPreset(val label: String, val at: () -> Long)
@@ -98,16 +99,23 @@ private data class AtPreset(val label: String, val at: () -> Long)
 private fun atPresets(defaultHour: Int): List<AtPreset> {
     val today = LocalDate.now()
     return buildList {
-        if (LocalTime.now() < LocalTime.of(19, 30)) add(AtPreset("Сьогодні 20:00") { today.atTime(20, 0).toMillis() })
-        add(AtPreset("Завтра %02d:00".format(defaultHour)) { today.plusDays(1).atTime(defaultHour, 0).toMillis() })
-        add(AtPreset("Завтра 20:00") { today.plusDays(1).atTime(20, 0).toMillis() })
-        add(AtPreset("Через тиждень") {
+        if (LocalTime.now() < LocalTime.of(19, 30)) add(AtPreset(Res.s(R.string.chat_preset_today_20)) { today.atTime(20, 0).toMillis() })
+        add(AtPreset(Res.s(R.string.chat_preset_tomorrow_hour, defaultHour)) { today.plusDays(1).atTime(defaultHour, 0).toMillis() })
+        add(AtPreset(Res.s(R.string.chat_preset_tomorrow_20)) { today.plusDays(1).atTime(20, 0).toMillis() })
+        add(AtPreset(Res.s(R.string.chat_preset_in_week)) {
             LocalDateTime.now().plusWeeks(1).truncatedTo(ChronoUnit.MINUTES).toMillis()
         })
     }
 }
 
-private val timerPresets = listOf("5 хв" to 5 * 60, "10 хв" to 10 * 60, "15 хв" to 15 * 60, "30 хв" to 30 * 60, "1 год" to 3600, "2 год" to 7200)
+private fun timerPresets(): List<Pair<String, Int>> = listOf(
+    Res.s(R.string.chat_preset_5m) to 5 * 60,
+    Res.s(R.string.chat_preset_10m) to 10 * 60,
+    Res.s(R.string.chat_preset_15m) to 15 * 60,
+    Res.s(R.string.chat_preset_30m) to 30 * 60,
+    Res.s(R.string.chat_preset_1h) to 3600,
+    Res.s(R.string.chat_preset_2h) to 7200,
+)
 
 /**
  * Вибір часу нагадування. Дві вкладки з одним спільним часом:
@@ -173,7 +181,7 @@ fun ScheduleSheet(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "Коли нагадати?",
+                    stringResource(R.string.chat_schedule_title),
                     color = Glass.Text,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -183,7 +191,7 @@ fun ScheduleSheet(
             Spacer(Modifier.height(12.dp))
 
             GlassSegmented(
-                options = listOf(Icons.Default.HourglassBottom to "Через", Icons.Default.CalendarMonth to "Коли"),
+                options = listOf(Icons.Default.HourglassBottom to stringResource(R.string.chat_tab_in), Icons.Default.CalendarMonth to stringResource(R.string.chat_tab_at)),
                 selected = mode,
                 onSelect = { switchMode(it) },
                 modifier = Modifier.fillMaxWidth(),
@@ -193,7 +201,7 @@ fun ScheduleSheet(
             if (mode == MODE_IN) {
                 TimerWheels(timer, onChange = { timer = it })
                 ChipsRow {
-                    timerPresets.forEach { (label, seconds) ->
+                    timerPresets().forEach { (label, seconds) ->
                         GlassChip(label, onClick = { timer = seconds })
                     }
                 }
@@ -211,7 +219,7 @@ fun ScheduleSheet(
                 RepeatChip(repeat, onChange = { repeat = it })
                 if (alarm != null) {
                     GlassChip(
-                        if (alarm) "Будильник" else "Як будильник",
+                        if (alarm) stringResource(R.string.chat_alarm) else stringResource(R.string.chat_as_alarm),
                         onClick = { onAlarmChange(!alarm) },
                         selected = alarm,
                         leading = if (alarm) Icons.Default.Alarm else Icons.Default.AlarmOff,
@@ -222,9 +230,9 @@ fun ScheduleSheet(
             Spacer(Modifier.height(12.dp))
             Text(
                 text = when {
-                    invalid && mode == MODE_IN -> "Накрутіть, через скільки нагадати"
-                    invalid -> "Цей час уже минув — оберіть пізніший"
-                    mode == MODE_IN -> "Нагадаю ${whenLabel(effectiveAt)}"
+                    invalid && mode == MODE_IN -> stringResource(R.string.chat_schedule_error_spin_time)
+                    invalid -> stringResource(R.string.chat_schedule_error_time_passed)
+                    mode == MODE_IN -> stringResource(R.string.chat_snackbar_reminder, whenLabel(effectiveAt))
                     else -> inLabel(effectiveAt - now).replaceFirstChar { it.uppercase() }
                 },
                 color = if (invalid) Glass.Danger else Glass.TextDim,
@@ -235,8 +243,8 @@ fun ScheduleSheet(
             Spacer(Modifier.height(10.dp))
             PrimaryButton(
                 text = if (invalid) confirmLabel
-                else if (mode == MODE_IN) "$confirmLabel ${inLabel(timer * 1000L)}"
-                else "$confirmLabel · ${whenLabel(at)}",
+                else if (mode == MODE_IN) stringResource(R.string.chat_schedule_button_in, confirmLabel, inLabel(timer * 1000L))
+                else stringResource(R.string.chat_schedule_button_at, confirmLabel, whenLabel(at)),
                 enabled = !invalid,
                 onClick = {
                     if (mode == MODE_IN) {
@@ -259,7 +267,11 @@ private fun TimerWheels(seconds: Int, onChange: (Int) -> Unit) {
     val s = seconds % 60
     Column {
         Row(Modifier.fillMaxWidth()) {
-            listOf("Години", "Хвилини", "Секунди").forEach {
+            listOf(
+                stringResource(R.string.chat_wheel_hours),
+                stringResource(R.string.chat_wheel_minutes),
+                stringResource(R.string.chat_wheel_seconds),
+            ).forEach {
                 Text(
                     it,
                     fontSize = 13.sp,
@@ -328,9 +340,14 @@ private fun ChipsRow(content: @Composable () -> Unit) {
 @Composable
 private fun RepeatChip(repeat: Repeat, onChange: (Repeat) -> Unit, modifier: Modifier = Modifier) {
     var open by remember { mutableStateOf(false) }
+    val repeatNever = stringResource(R.string.chat_repeat_never)
+    val repeatFormat = stringResource(
+        R.string.chat_repeat_format,
+        if (repeat == Repeat.NONE) repeatNever else repeatLabel(repeat).lowercase(),
+    )
     Box(modifier) {
         GlassChip(
-            "Повторювати: " + if (repeat == Repeat.NONE) "ніколи" else repeatLabel(repeat).lowercase(),
+            repeatFormat,
             onClick = { open = true },
             leading = Icons.Default.RepeatIcon,
             trailing = Icons.Default.ArrowDropDown,

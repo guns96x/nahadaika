@@ -60,9 +60,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.widget.Toast
+import androidx.compose.ui.res.stringResource
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
+import ua.nahadaika.R
+import ua.nahadaika.Res
 import ua.nahadaika.SearchFilter
 import ua.nahadaika.SearchHit
 import ua.nahadaika.data.Repeat
@@ -77,6 +80,13 @@ import ua.nahadaika.ui.theme.edgeFade
 import ua.nahadaika.ui.theme.glass
 import ua.nahadaika.ui.theme.glassHaze
 import ua.nahadaika.whenLabel
+
+@Composable
+private fun SearchFilter.label(): String = when (this) {
+    SearchFilter.ALL -> stringResource(R.string.search_filter_all)
+    SearchFilter.PENDING -> stringResource(R.string.search_filter_pending)
+    SearchFilter.DONE -> stringResource(R.string.search_filter_done)
+}
 
 /** Пошук по всіх чатах; фільтр «Виконані» — архів із можливістю очистити. */
 @Composable
@@ -115,7 +125,7 @@ fun SearchScreen(onBack: () -> Unit, onOpen: (chatId: Long, reminderId: Long) ->
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    GlassIconButton(Icons.AutoMirrored.Filled.ArrowBack, "Назад", onClick = onBack, size = HeaderHeight, haze = hazeState)
+                    GlassIconButton(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.search_back), onClick = onBack, size = HeaderHeight, haze = hazeState)
                     Spacer(Modifier.width(8.dp))
                     val style = LocalTextStyle.current.copy(color = Glass.Text, fontSize = 16.sp)
                     Row(
@@ -133,7 +143,7 @@ fun SearchScreen(onBack: () -> Unit, onOpen: (chatId: Long, reminderId: Long) ->
                             modifier = Modifier.weight(1f).focusRequester(focus),
                             decorationBox = { inner ->
                                 Box(contentAlignment = Alignment.CenterStart) {
-                                    if (query.isEmpty()) Text("Пошук по нагадуваннях", style = style, color = Glass.TextFaint)
+                                    if (query.isEmpty()) Text(stringResource(R.string.search_placeholder), style = style, color = Glass.TextFaint)
                                     inner()
                                 }
                             },
@@ -142,17 +152,17 @@ fun SearchScreen(onBack: () -> Unit, onOpen: (chatId: Long, reminderId: Long) ->
                             Box(
                                 Modifier.size(HeaderHeight - 8.dp).clickable { query = "" },
                                 contentAlignment = Alignment.Center,
-                            ) { Icon(Icons.Default.Close, "Очистити", tint = Glass.TextDim) }
+                            ) { Icon(Icons.Default.Close, stringResource(R.string.search_clear), tint = Glass.TextDim) }
                         }
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     SearchFilter.entries.forEach { f ->
-                        FilterChip(f.label, selected = f == filter) { filter = f }
+                        FilterChip(f.label(), selected = f == filter) { filter = f }
                     }
                     Spacer(Modifier.weight(1f))
                     if (filter == SearchFilter.DONE && doneCount > 0) {
-                        GlassIconButton(Icons.Default.DeleteSweep, "Очистити виконані", onClick = { confirmClear = true }, haze = hazeState)
+                        GlassIconButton(Icons.Default.DeleteSweep, stringResource(R.string.search_clear_done), onClick = { confirmClear = true }, haze = hazeState)
                     }
                 }
             }
@@ -163,7 +173,7 @@ fun SearchScreen(onBack: () -> Unit, onOpen: (chatId: Long, reminderId: Long) ->
             if (hits.isEmpty()) {
                 Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                     Text(
-                        if (query.isBlank()) "Тут з'являтимуться нагадування" else "Нічого не знайдено",
+                        if (query.isBlank()) stringResource(R.string.search_empty_prompt) else stringResource(R.string.search_not_found),
                         color = Glass.TextDim,
                         fontSize = 15.sp,
                     )
@@ -190,18 +200,18 @@ fun SearchScreen(onBack: () -> Unit, onOpen: (chatId: Long, reminderId: Long) ->
     if (confirmClear) {
         AlertDialog(
             onDismissRequest = { confirmClear = false },
-            title = { Text("Очистити виконані?") },
-            text = { Text("Буде видалено $doneCount виконаних нагадувань разом із записами. Це не можна скасувати.") },
+            title = { Text(stringResource(R.string.search_clear_dialog_title)) },
+            text = { Text(stringResource(R.string.search_clear_dialog_message, doneCount)) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmClear = false
                     scope.launch {
                         val n = Repo.clearDone()
-                        Toast.makeText(context, "Видалено: $n", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, Res.s(R.string.search_deleted_count, n), Toast.LENGTH_SHORT).show()
                     }
-                }) { Text("Очистити", color = Glass.Danger) }
+                }) { Text(stringResource(R.string.search_clear), color = Glass.Danger) }
             },
-            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Скасувати") } },
+            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text(stringResource(R.string.search_cancel)) } },
         )
     }
 }
@@ -239,7 +249,7 @@ private fun HitRow(hit: SearchHit, onClick: () -> Unit) {
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(
-                previewText(r).ifBlank { "Нагадування" },
+                previewText(r).ifBlank { stringResource(R.string.search_default_title) },
                 color = Glass.Text,
                 fontSize = 15.sp,
                 maxLines = 2,
@@ -254,7 +264,7 @@ private fun HitRow(hit: SearchHit, onClick: () -> Unit) {
                 Text(
                     listOfNotNull(
                         hit.chat?.name,
-                        if (r.fired) "виконано ${whenLabel(r.lastFiredAt ?: r.triggerAt)}" else whenLabel(r.alarmAt()),
+                        if (r.fired) stringResource(R.string.search_status_done, whenLabel(r.lastFiredAt ?: r.triggerAt)) else whenLabel(r.alarmAt()),
                     ).joinToString(" · "),
                     color = Glass.TextDim,
                     fontSize = 13.sp,

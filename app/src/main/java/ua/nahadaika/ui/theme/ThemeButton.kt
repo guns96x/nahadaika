@@ -18,9 +18,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
+import ua.nahadaika.R
 
 private fun ThemeMode.icon(): ImageVector = when (this) {
     ThemeMode.AUTO -> Icons.Default.BrightnessAuto
@@ -28,10 +30,11 @@ private fun ThemeMode.icon(): ImageVector = when (this) {
     ThemeMode.LIGHT -> Icons.Default.LightMode
 }
 
+@Composable
 private fun ThemeMode.label(): String = when (this) {
-    ThemeMode.AUTO -> "Авто (як у системі)"
-    ThemeMode.DARK -> "Темна"
-    ThemeMode.LIGHT -> "Світла"
+    ThemeMode.AUTO -> stringResource(R.string.app_theme_mode_auto)
+    ThemeMode.DARK -> stringResource(R.string.app_theme_mode_dark)
+    ThemeMode.LIGHT -> stringResource(R.string.app_theme_mode_light)
 }
 
 /** Кнопка вибору теми: темна, світла або як у системі. */
@@ -40,7 +43,7 @@ fun ThemeModeButton(modifier: Modifier = Modifier, size: Dp = 42.dp, haze: HazeS
     val context = LocalContext.current
     var open by remember { mutableStateOf(false) }
     Box(modifier) {
-        GlassIconButton(ThemeSettings.mode.icon(), "Тема", onClick = { open = true }, size = size, haze = haze)
+        GlassIconButton(ThemeSettings.mode.icon(), stringResource(R.string.app_theme_desc), onClick = { open = true }, size = size, haze = haze)
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             listOf(ThemeMode.DARK, ThemeMode.LIGHT, ThemeMode.AUTO).forEach { mode ->
                 DropdownMenuItem(

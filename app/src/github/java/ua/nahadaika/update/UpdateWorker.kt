@@ -16,6 +16,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import ua.nahadaika.Prefs
 import ua.nahadaika.R
+import ua.nahadaika.Res
 import ua.nahadaika.alarm.Notifier
 import ua.nahadaika.ui.MainActivity
 import java.util.concurrent.TimeUnit
@@ -52,7 +53,7 @@ class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         private fun notify(context: Context, info: UpdateInfo) {
             if (!Notifier.canNotify(context)) return
             context.getSystemService(NotificationManager::class.java).createNotificationChannel(
-                NotificationChannel(CHANNEL, "Оновлення застосунку", NotificationManager.IMPORTANCE_DEFAULT),
+                NotificationChannel(CHANNEL, Res.s(R.string.upd_notif_channel_name), NotificationManager.IMPORTANCE_DEFAULT),
             )
             val open = PendingIntent.getActivity(
                 context, NOTIFICATION_ID,
@@ -63,8 +64,8 @@ class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             val size = "%.1f".format(info.downloadSize / 1048576f).replace('.', ',')
             val n = NotificationCompat.Builder(context, CHANNEL)
                 .setSmallIcon(R.drawable.ic_notification)
-                .setContentTitle("Доступна Нагадайка ${info.versionName}")
-                .setContentText("Натисніть, щоб оновити — завантажити $size МБ")
+                .setContentTitle(Res.s(R.string.upd_notif_title, info.versionName))
+                .setContentText(Res.s(R.string.upd_notif_text, size))
                 .setContentIntent(open)
                 .setAutoCancel(true)
                 .build()

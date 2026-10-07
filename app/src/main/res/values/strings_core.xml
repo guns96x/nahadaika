@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- AlarmActivity & Notifier alarm -->
+    <string name="core_alarm_default_title">Будильник</string>
+    <string name="core_alarm_notification_title">⏰ %1$s</string>
+    <string name="core_alarm_snooze_5min">Ще 5 хв</string>
+    <string name="core_alarm_dismiss">Вимкнути</string>
+
+    <!-- Notifier channels & actions -->
+    <string name="core_channel_reminders_name">Нагадування</string>
+    <string name="core_channel_reminders_desc">Сповіщення про заплановані нагадування</string>
+    <string name="core_channel_alarms_name">Будильники й таймери</string>
+    <string name="core_channel_alarms_desc">Гучна мелодія, поки не вимкнете</string>
+    <string name="core_action_snooze_min">+%1$d хв</string>
+    <string name="core_action_snooze_1hour">+1 год</string>
+    <string name="core_action_listen">▶ Слухати</string>
+    <string name="core_action_done">Готово</string>
+
+    <!-- Backup errors -->
+    <string name="core_backup_error_not_nahadaika">Це не копія Нагадайки</string>
+    <string name="core_backup_error_newer_version">Копія створена новішою версією — оновіть застосунок</string>
+    <string name="core_backup_error_corrupted">Копію пошкоджено</string>
+
+    <!-- Repo defaults -->
+    <string name="core_default_chat_name">Нагадування</string>
+    <string name="core_chat_fallback_name">Нагадайка</string>
+
+    <!-- Search filters -->
+    <string name="core_search_filter_all">Усі</string>
+    <string name="core_search_filter_pending">Заплановані</string>
+    <string name="core_search_filter_done">Виконані</string>
+</resources>

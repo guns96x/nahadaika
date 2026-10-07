@@ -4,9 +4,14 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import ua.nahadaika.data.Kind
 import ua.nahadaika.data.Reminder
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class TitleTest {
     private fun r(text: String, kind: Kind = Kind.TEXT, durationMs: Long = 0) =
         Reminder(chatId = 1, kind = kind, text = text, durationMs = durationMs, triggerAt = 0)

@@ -42,12 +42,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import ua.nahadaika.R
+import ua.nahadaika.Res
 import ua.nahadaika.data.Repo
 import ua.nahadaika.formatTime
 import ua.nahadaika.ui.theme.AppBackground
@@ -69,7 +72,7 @@ class AlarmActivity : ComponentActivity() {
         enableEdgeToEdge()
         Repo.init(this)
         val id = intent.getLongExtra(EXTRA_ID, -1)
-        val title = intent.getStringExtra(EXTRA_TITLE) ?: "Будильник"
+        val title = intent.getStringExtra(EXTRA_TITLE) ?: Res.s(R.string.core_alarm_default_title)
         val chat = intent.getStringExtra(EXTRA_CHAT) ?: ""
         setContent {
             NahadaikaTheme {
@@ -136,8 +139,8 @@ fun AlarmScreen(title: String, chat: String, onSnooze: () -> Unit, onStop: () ->
             }
             Spacer(Modifier.weight(1.3f))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                AlarmButton("Ще 5 хв", primary = false, onClick = onSnooze, modifier = Modifier.weight(1f))
-                AlarmButton("Вимкнути", primary = true, onClick = onStop, modifier = Modifier.weight(1f))
+                AlarmButton(stringResource(R.string.core_alarm_snooze_5min), primary = false, onClick = onSnooze, modifier = Modifier.weight(1f))
+                AlarmButton(stringResource(R.string.core_alarm_dismiss), primary = true, onClick = onStop, modifier = Modifier.weight(1f))
             }
         }
     }

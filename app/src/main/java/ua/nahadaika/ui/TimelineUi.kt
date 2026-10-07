@@ -71,13 +71,11 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.res.stringResource
+import ua.nahadaika.R
 import ua.nahadaika.data.CommentStat
 import ua.nahadaika.hasMoreThanTitle
 import ua.nahadaika.reminderTitle
-
-private val uk = Locale.forLanguageTag("uk")
-private val monthFmt = DateTimeFormatter.ofPattern("LLLL yyyy", uk)
-private val weekdayFmt = DateTimeFormatter.ofPattern("EE", uk)
 
 /** Колір типу нагадування на лінії — однаковий у темній і світлій темі. */
 fun kindColor(kind: Kind): Color = when (kind) {
@@ -122,7 +120,7 @@ fun DayStrip(
     Column(modifier.glassHaze(haze, RoundedCornerShape(22.dp)).padding(top = 6.dp, bottom = 4.dp)) {
         Row(Modifier.fillMaxWidth().height(24.dp).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
-                selected.format(monthFmt).replaceFirstChar { it.uppercase() },
+                selected.format(DateTimeFormatter.ofPattern("LLLL yyyy", Locale.getDefault())).replaceFirstChar { it.uppercase() },
                 color = Glass.Text,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -130,7 +128,7 @@ fun DayStrip(
             )
             if (selected != today) {
                 Text(
-                    "Сьогодні",
+                    stringResource(R.string.chat_today),
                     color = Glass.Lavender,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
@@ -163,12 +161,12 @@ private fun DayCell(day: LocalDate, selected: Boolean, today: Boolean, dots: Lis
             .width(42.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(bg)
-            .clickable(onClickLabel = "Показати день", onClick = onClick)
+            .clickable(onClickLabel = stringResource(R.string.chat_show_day), onClick = onClick)
             .padding(vertical = 5.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            day.format(weekdayFmt).replaceFirstChar { it.uppercase() },
+            day.format(DateTimeFormatter.ofPattern("EE", Locale.getDefault())).replaceFirstChar { it.uppercase() },
             fontSize = 11.sp,
             color = when {
                 selected -> Glass.OnPrimary.copy(alpha = 0.7f)
@@ -265,13 +263,16 @@ fun TimelineItem(
                 Icon(if (done) Icons.Default.Check else kindIcon(r.kind), null, tint = Color.White, modifier = Modifier.size(15.dp))
             }
         }
+        val labelCollapse = stringResource(R.string.chat_collapse)
+        val labelExpand = stringResource(R.string.chat_expand)
+        val labelActions = stringResource(R.string.chat_actions)
         Column(
             Modifier
                 .weight(1f)
                 .glass(RoundedCornerShape(16.dp), cardFill)
                 .combinedClickable(
-                    onClickLabel = if (expanded) "Згорнути" else "Розгорнути",
-                    onLongClickLabel = "Дії",
+                    onClickLabel = if (expanded) labelCollapse else labelExpand,
+                    onLongClickLabel = labelActions,
                     onClick = onClick,
                     onLongClick = onLongClick,
                 )
@@ -291,13 +292,13 @@ fun TimelineItem(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                if (r.alarm) MiniIcon(Icons.Default.Alarm, "Будильник")
-                if (r.snoozedUntil != null && !done) MiniIcon(Icons.Default.Snooze, "Відкладено")
+                if (r.alarm) MiniIcon(Icons.Default.Alarm, stringResource(R.string.chat_alarm))
+                if (r.snoozedUntil != null && !done) MiniIcon(Icons.Default.Snooze, stringResource(R.string.chat_snoozed))
                 if (r.repeat != Repeat.NONE) MiniIcon(Icons.Default.Repeat, repeatLabel(r.repeat))
                 if (stat != null && stat.count > 0) CommentBadge(stat)
             }
             if (expanded) {
-                r.authorName?.let { Text("від $it", fontSize = 12.sp, color = Glass.TextFaint) }
+                r.authorName?.let { Text(stringResource(R.string.chat_from_author, it), fontSize = 12.sp, color = Glass.TextFaint) }
                 if (hasMoreThanTitle(r)) {
                     Text(r.text, color = Glass.Text, fontSize = 15.sp, lineHeight = 20.sp)
                 }
@@ -313,7 +314,7 @@ fun TimelineItem(
                     )
                     Kind.PHOTO -> AsyncImage(
                         model = r.mediaPath?.let(::File),
-                        contentDescription = "Фото",
+                        contentDescription = stringResource(R.string.chat_photo),
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -328,12 +329,12 @@ fun TimelineItem(
                     if (done) {
                         Icon(Icons.Default.Check, null, Modifier.size(14.dp), tint = Glass.TextFaint)
                         Spacer(Modifier.width(4.dp))
-                        Text("надіслано", fontSize = 12.sp, color = Glass.TextFaint)
+                        Text(stringResource(R.string.chat_delivered), fontSize = 12.sp, color = Glass.TextFaint)
                     } else {
                         Text(inLabel(occurrence.at - now), fontSize = 12.sp, color = Glass.Lavender, fontWeight = FontWeight.Medium)
                     }
                     if (r.repeat != Repeat.NONE) {
-                        Text(" · ${repeatLabel(r.repeat).lowercase()}", fontSize = 12.sp, color = Glass.TextFaint)
+                        Text(stringResource(R.string.chat_repeat_suffix, repeatLabel(r.repeat).lowercase()), fontSize = 12.sp, color = Glass.TextFaint)
                     }
                 }
                 expandedContent()
@@ -351,6 +352,8 @@ private fun MiniIcon(icon: ImageVector, description: String) {
 @Composable
 private fun CommentBadge(stat: CommentStat) {
     val unread = stat.unread > 0
+    val descUnread = stringResource(R.string.chat_comments_unread, stat.unread)
+    val descCount = stringResource(R.string.chat_comments_count, stat.count)
     Row(
         Modifier
             .padding(start = 8.dp)
@@ -358,7 +361,7 @@ private fun CommentBadge(stat: CommentStat) {
             .background(if (unread) Glass.Lavender.copy(alpha = 0.22f) else Glass.FillStrong)
             .padding(horizontal = 7.dp, vertical = 2.dp)
             .semantics(mergeDescendants = true) {
-                contentDescription = if (unread) "Нові повідомлення: ${stat.unread}" else "Обговорення: ${stat.count}"
+                contentDescription = if (unread) descUnread else descCount
             },
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -395,7 +398,7 @@ fun NowLine(now: Long, isFirst: Boolean, isLast: Boolean) {
             Box(Modifier.size(10.dp).background(Glass.Danger, CircleShape))
         }
         Box(Modifier.weight(1f).height(2.dp).background(Glass.Danger, Glass.Pill))
-        Text("  зараз", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Glass.Danger)
+        Text(stringResource(R.string.chat_now), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Glass.Danger)
     }
 }
 
@@ -410,7 +413,7 @@ fun EmptyDay(label: String) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            "$label нагадувань немає",
+            stringResource(R.string.chat_empty_day_title, label),
             color = Glass.Text,
             fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold,
@@ -418,7 +421,7 @@ fun EmptyDay(label: String) {
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            "Напишіть, скажіть або запишіть відео — і оберіть, коли нагадати.",
+            stringResource(R.string.chat_empty_day_subtitle),
             textAlign = TextAlign.Center,
             color = Glass.TextDim,
             fontSize = 14.sp,

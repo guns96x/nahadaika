@@ -41,6 +41,9 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import ua.nahadaika.R
+import ua.nahadaika.Res
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableFloatStateOf
@@ -226,10 +229,12 @@ fun ChatScreen(
             val id = Repo.createReminder(reminder)
             highlightId = id
             val label = previewText(reminder).take(40)
+            val prefix = if (reminder.alarm) Res.s(R.string.chat_snackbar_alarm, soonLabel(reminder.triggerAt))
+            else Res.s(R.string.chat_snackbar_reminder, soonLabel(reminder.triggerAt))
             val result = snackbar.showSnackbar(
-                message = (if (reminder.alarm) "⏰ Будильник ${soonLabel(reminder.triggerAt)}" else "Нагадаю ${soonLabel(reminder.triggerAt)}") +
-                    if (label.isNotBlank() && label != "Будильник" && label != "Таймер") ": $label" else "",
-                actionLabel = "Змінити",
+                message = prefix +
+                    if (label.isNotBlank()) ": $label" else "",
+                actionLabel = Res.s(R.string.chat_action_change),
                 withDismissAction = true,
                 duration = SnackbarDuration.Long,
             )
@@ -243,7 +248,7 @@ fun ChatScreen(
         val reminder = Reminder(
             chatId = chatId,
             kind = a?.kind ?: Kind.TEXT,
-            text = if (a == null) body.ifEmpty { "Нагадування" } else body,
+            text = if (a == null) body.ifEmpty { Res.s(R.string.chat_default_reminder_text) } else body,
             mediaPath = a?.file?.absolutePath,
             durationMs = a?.durationMs ?: 0,
             triggerAt = at,
@@ -274,14 +279,14 @@ fun ChatScreen(
             replaceAttachment(p)
         } else {
             p?.file?.delete()
-            if (ok) toast("Камера не зберегла фото")
+            if (ok) toast(Res.s(R.string.chat_camera_failed_save))
         }
     }
     val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) {
             scope.launch {
                 val imported = withContext(Dispatchers.IO) { MediaFiles.importFromUri(context, uri) }
-                if (imported != null) replaceAttachment(imported) else toast("Не вдалося додати файл")
+                if (imported != null) replaceAttachment(imported) else toast(Res.s(R.string.chat_error_add_file))
             }
         }
     }
@@ -294,11 +299,11 @@ fun ChatScreen(
         } catch (_: ActivityNotFoundException) {
             pendingPhoto = null
             file.delete()
-            toast("Не знайдено застосунок камери")
+            toast(Res.s(R.string.chat_camera_app_not_found))
         }
     }
     val photoPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) launchPhoto() else toast("Потрібен доступ до камери")
+        if (granted) launchPhoto() else toast(Res.s(R.string.chat_permission_camera_needed))
     }
 
     fun granted(permission: String) =
@@ -311,7 +316,7 @@ fun ChatScreen(
         player.stop()
         playingVideoId = null
         if (kind == Kind.VOICE && !recorder.start()) {
-            toast("Не вдалося увімкнути мікрофон")
+            toast(Res.s(R.string.chat_microphone_failed))
             return false
         }
         videoFinish = null
@@ -327,9 +332,9 @@ fun ChatScreen(
         pendingStart = null
         when {
             !hasRecordPermissions(kind) ->
-                toast(if (kind == Kind.VIDEO) "Потрібен доступ до камери й мікрофона" else "Потрібен доступ до мікрофона")
+                toast(if (kind == Kind.VIDEO) Res.s(R.string.chat_permission_camera_mic_needed) else Res.s(R.string.chat_permission_mic_needed))
             locked -> beginRecording(kind, locked = true)
-            else -> toast("Готово! Утримуйте кнопку, щоб записати")
+            else -> toast(Res.s(R.string.chat_ready_hold_to_record))
         }
     }
 
@@ -361,7 +366,7 @@ fun ChatScreen(
             attachRecording(voice)
         } else {
             voice?.file?.delete()
-            toast("Утримуйте кнопку довше, щоб записати")
+            toast(Res.s(R.string.chat_hold_longer_to_record))
         }
     }
 
@@ -394,7 +399,7 @@ fun ChatScreen(
             Prefs.setGestureHintShown(context)
             delay(800)
             snackbar.showSnackbar(
-                "Тап — відео ↔ голосове. Утримуйте — запис, потягніть угору — 🔒",
+                Res.s(R.string.chat_gesture_hint),
                 duration = SnackbarDuration.Long,
             )
         }
@@ -490,7 +495,7 @@ fun ChatScreen(
                 if (entries.none { it is Entry.Item }) {
                     item(key = "empty") {
                         Box(Modifier.fillParentMaxHeight(0.6f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            EmptyDay(if (selectedDate == today) "На сьогодні" else "На ${dayLabel(selectedDate).replaceFirstChar { it.lowercase() }}")
+                            EmptyDay(if (selectedDate == today) stringResource(R.string.chat_empty_today) else stringResource(R.string.chat_empty_on_day, dayLabel(selectedDate).replaceFirstChar { it.lowercase() }))
                         }
                     }
                 } else {
@@ -576,7 +581,7 @@ fun ChatScreen(
             // Обрано інший день на смужці — пропонуємо саме його (о 9:00).
             initialAt = if (selectedDate != today) selectedDate.atTime(Prefs.defaultTime(context)).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli() else null,
             initialRepeat = Repeat.NONE,
-            confirmLabel = "Запланувати",
+            confirmLabel = stringResource(R.string.chat_schedule_confirm),
             onDismiss = { showSchedule = false },
             alarm = composeAlarm,
             onAlarmChange = { composeAlarm = it },
@@ -587,7 +592,7 @@ fun ChatScreen(
         ScheduleSheet(
             initialAt = if (r.fired) null else r.triggerAt,
             initialRepeat = r.repeat,
-            confirmLabel = if (r.fired) "Нагадати ще раз" else "Зберегти",
+            confirmLabel = if (r.fired) stringResource(R.string.chat_remind_again) else stringResource(R.string.chat_save),
             onDismiss = { rescheduling = null },
         ) { at, repeat ->
             rescheduling = null
@@ -595,7 +600,7 @@ fun ChatScreen(
             scope.launch {
                 Repo.reschedule(r, at, repeat)
                 highlightId = r.id
-                snackbar.showSnackbar("Нагадаю ${soonLabel(at)}")
+                snackbar.showSnackbar(Res.s(R.string.chat_snackbar_reminder, soonLabel(at)))
             }
         }
     }

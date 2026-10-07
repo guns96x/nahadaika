@@ -29,7 +29,7 @@ import ua.nahadaika.update.Updates
 /** Розділ «Оновлення» в налаштуваннях — лише варіант github. */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [34], qualifiers = "w400dp-h1400dp-xxhdpi")
+@Config(sdk = [34], qualifiers = "uk-w400dp-h1400dp-xxhdpi")
 class UpdateSettingsTest {
     @get:Rule
     val compose = createComposeRule()

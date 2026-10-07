@@ -15,6 +15,8 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import ua.nahadaika.R
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -58,7 +60,7 @@ internal fun ChatHeader(
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            GlassIconButton(Icons.Default.Menu, "Усі чати", onClick = onOpenChats, size = HeaderHeight, haze = haze)
+            GlassIconButton(Icons.Default.Menu, stringResource(R.string.chat_all_chats), onClick = onOpenChats, size = HeaderHeight, haze = haze)
             Spacer(Modifier.width(8.dp))
             Row(
                 Modifier
@@ -82,7 +84,7 @@ internal fun ChatHeader(
                             overflow = TextOverflow.Ellipsis,
                         )
                         Text(
-                            nextIn ?: "немає запланованих",
+                            nextIn ?: stringResource(R.string.chat_no_scheduled),
                             color = Glass.TextDim,
                             fontSize = 12.sp,
                             maxLines = 1,
@@ -92,7 +94,7 @@ internal fun ChatHeader(
                 }
             }
             Spacer(Modifier.width(6.dp))
-            GlassIconButton(Icons.Default.Search, "Пошук", onClick = onOpenSearch, size = SideButton, haze = haze)
+            GlassIconButton(Icons.Default.Search, stringResource(R.string.chat_search), onClick = onOpenSearch, size = SideButton, haze = haze)
             Spacer(Modifier.width(6.dp))
             ThemeModeButton(size = SideButton, haze = haze)
         }

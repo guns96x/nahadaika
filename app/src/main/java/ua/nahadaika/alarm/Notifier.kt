@@ -19,6 +19,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import ua.nahadaika.R
+import ua.nahadaika.Res
 import ua.nahadaika.data.Kind
 import ua.nahadaika.data.Reminder
 import ua.nahadaika.previewText
@@ -28,8 +29,8 @@ object Notifier {
     const val CHANNEL_ID = "reminders"
 
     fun createChannel(context: Context) {
-        val channel = NotificationChannel(CHANNEL_ID, "Нагадування", NotificationManager.IMPORTANCE_HIGH).apply {
-            description = "Сповіщення про заплановані нагадування"
+        val channel = NotificationChannel(CHANNEL_ID, Res.s(R.string.core_channel_reminders_name), NotificationManager.IMPORTANCE_HIGH).apply {
+            description = Res.s(R.string.core_channel_reminders_desc)
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 300, 200, 300)
             setSound(
@@ -44,8 +45,8 @@ object Notifier {
     const val ALARM_CHANNEL_ID = "alarms"
 
     private fun createAlarmChannel(context: Context) {
-        val channel = NotificationChannel(ALARM_CHANNEL_ID, "Будильники й таймери", NotificationManager.IMPORTANCE_HIGH).apply {
-            description = "Гучна мелодія, поки не вимкнете"
+        val channel = NotificationChannel(ALARM_CHANNEL_ID, Res.s(R.string.core_channel_alarms_name), NotificationManager.IMPORTANCE_HIGH).apply {
+            description = Res.s(R.string.core_channel_alarms_desc)
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 800, 400, 800, 400, 800)
             setSound(
@@ -66,19 +67,20 @@ object Notifier {
     private fun showAlarm(context: Context, reminder: Reminder, chatName: String, body: String) {
         createAlarmChannel(context)
         val id = reminder.id.toInt()
+        val alarmTitle = body.ifBlank { Res.s(R.string.core_alarm_default_title) }
         val screen = PendingIntent.getActivity(
             context, id * 4,
             Intent(context, AlarmActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_USER_ACTION)
                 .putExtra(AlarmActivity.EXTRA_ID, reminder.id)
-                .putExtra(AlarmActivity.EXTRA_TITLE, body.ifBlank { "Будильник" })
+                .putExtra(AlarmActivity.EXTRA_TITLE, alarmTitle)
                 .putExtra(AlarmActivity.EXTRA_CHAT, chatName),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val n = NotificationCompat.Builder(context, ALARM_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setColor(0xFFB4A8FF.toInt())
-            .setContentTitle("⏰ ${body.ifBlank { "Будильник" }}")
+            .setContentTitle(Res.s(R.string.core_alarm_notification_title, alarmTitle))
             .setContentText(chatName)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setPriority(NotificationCompat.PRIORITY_MAX)
@@ -88,8 +90,8 @@ object Notifier {
             .setTimeoutAfter(10 * 60_000L)
             .setContentIntent(screen)
             .setFullScreenIntent(screen, true)
-            .addAction(0, "Ще 5 хв", snoozeIntent(context, reminder.id, 5, id * 4 + 1))
-            .addAction(0, "Вимкнути", doneIntent(context, reminder.id, id * 4 + 2))
+            .addAction(0, Res.s(R.string.core_alarm_snooze_5min), snoozeIntent(context, reminder.id, 5, id * 4 + 1))
+            .addAction(0, Res.s(R.string.core_alarm_dismiss), doneIntent(context, reminder.id, id * 4 + 2))
             .build()
             .apply { flags = flags or android.app.Notification.FLAG_INSISTENT }
         try {
@@ -130,13 +132,13 @@ object Notifier {
             .setAutoCancel(true)
             .setWhen(System.currentTimeMillis())
             .setContentIntent(openIntent(context, reminder, autoplay = false, requestCode = id * 4))
-            .addAction(0, "+$snooze хв", snoozeIntent(context, reminder.id, snooze.toLong(), id * 4 + 1))
-            .addAction(0, "+1 год", snoozeIntent(context, reminder.id, 60, id * 4 + 2))
+            .addAction(0, Res.s(R.string.core_action_snooze_min, snooze), snoozeIntent(context, reminder.id, snooze.toLong(), id * 4 + 1))
+            .addAction(0, Res.s(R.string.core_action_snooze_1hour), snoozeIntent(context, reminder.id, 60, id * 4 + 2))
 
         if (reminder.kind == Kind.VOICE) {
-            builder.addAction(0, "▶ Слухати", openIntent(context, reminder, autoplay = true, requestCode = id * 4 + 3))
+            builder.addAction(0, Res.s(R.string.core_action_listen), openIntent(context, reminder, autoplay = true, requestCode = id * 4 + 3))
         } else {
-            builder.addAction(0, "Готово", doneIntent(context, reminder.id, id * 4 + 3))
+            builder.addAction(0, Res.s(R.string.core_action_done), doneIntent(context, reminder.id, id * 4 + 3))
         }
 
         val picture = when (reminder.kind) {

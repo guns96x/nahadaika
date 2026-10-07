@@ -29,6 +29,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import ua.nahadaika.R
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -64,19 +66,20 @@ internal fun ReminderExpanded(
     onEditText: () -> Unit,
     onMore: () -> Unit,
 ) {
+    val moreLabel = stringResource(R.string.chat_more_actions)
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         if (reminder.fired) {
-            ActionChip(Icons.Default.Replay, "Ще раз", onReschedule)
+            ActionChip(Icons.Default.Replay, stringResource(R.string.chat_again), onReschedule)
         } else {
-            ActionChip(Icons.Default.Check, "Готово", onDone)
-            ActionChip(Icons.Default.Schedule, "Час", onReschedule)
+            ActionChip(Icons.Default.Check, stringResource(R.string.chat_done), onDone)
+            ActionChip(Icons.Default.Schedule, stringResource(R.string.chat_time), onReschedule)
         }
-        ActionChip(Icons.Default.Edit, "Текст", onEditText)
+        ActionChip(Icons.Default.Edit, stringResource(R.string.chat_text), onEditText)
         Spacer(Modifier.weight(1f))
         Box(
-            Modifier.size(32.dp).clip(CircleShape).clickable(onClickLabel = "Більше дій", onClick = onMore),
+            Modifier.size(32.dp).clip(CircleShape).clickable(onClickLabel = moreLabel, onClick = onMore),
             contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Default.MoreHoriz, "Більше дій", tint = Glass.TextDim, modifier = Modifier.size(20.dp)) }
+        ) { Icon(Icons.Default.MoreHoriz, moreLabel, tint = Glass.TextDim, modifier = Modifier.size(20.dp)) }
     }
     Discussion(reminder.id)
 }
@@ -116,6 +119,7 @@ private fun Discussion(reminderId: Long) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         comments.forEach { CommentBubble(it) }
         val style = LocalTextStyle.current.copy(color = Glass.Text, fontSize = 14.sp)
+        val sendLabel = stringResource(R.string.chat_send)
         Row(
             Modifier.fillMaxWidth().padding(top = 2.dp).clip(RoundedCornerShape(14.dp)).background(Glass.Fill),
             verticalAlignment = Alignment.CenterVertically,
@@ -132,19 +136,19 @@ private fun Discussion(reminderId: Long) {
                 decorationBox = { inner ->
                     Box {
                         if (draft.isEmpty()) {
-                            Text(if (comments.isEmpty()) "Обговорити…" else "Відповісти…", style = style, color = Glass.TextFaint)
+                            Text(if (comments.isEmpty()) stringResource(R.string.chat_discuss_hint) else stringResource(R.string.chat_reply_hint), style = style, color = Glass.TextFaint)
                         }
                         inner()
                     }
                 },
             )
             Box(
-                Modifier.size(36.dp).clip(CircleShape).clickable(enabled = draft.isNotBlank(), onClickLabel = "Надіслати", onClick = ::send),
+                Modifier.size(36.dp).clip(CircleShape).clickable(enabled = draft.isNotBlank(), onClickLabel = sendLabel, onClick = ::send),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     Icons.AutoMirrored.Filled.Send,
-                    "Надіслати",
+                    sendLabel,
                     tint = if (draft.isNotBlank()) Glass.Lavender else Glass.TextFaint,
                     modifier = Modifier.size(18.dp),
                 )

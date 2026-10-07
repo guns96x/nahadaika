@@ -24,10 +24,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ua.nahadaika.Prefs
+import ua.nahadaika.R
+import ua.nahadaika.Res
 import ua.nahadaika.ui.theme.Glass
 import ua.nahadaika.update.UpdateWorker
 import ua.nahadaika.update.Updates
@@ -41,20 +44,20 @@ fun UpdateBanner() {
     when (val st = Updates.state) {
         is Updates.State.Available -> Banner(
             icon = Icons.Default.SystemUpdate,
-            text = "Доступна нова версія ${st.info.versionName}",
-            action = "Оновити",
+            text = stringResource(R.string.upd_banner_available, st.info.versionName),
+            action = stringResource(R.string.upd_action_update),
             onAction = { Updates.download(context, st.info) },
         )
         is Updates.State.Downloading -> Banner(
             icon = Icons.Default.SystemUpdate,
-            text = "Оновлення… ${(st.progress * 100).toInt()}%",
+            text = stringResource(R.string.upd_banner_downloading, (st.progress * 100).toInt()),
             action = "",
             onAction = {},
         )
         is Updates.State.ReadyToInstall -> Banner(
             icon = Icons.Default.SystemUpdate,
-            text = "Версія ${st.info.versionName} завантажена",
-            action = "Встановити",
+            text = stringResource(R.string.upd_banner_ready, st.info.versionName),
+            action = stringResource(R.string.upd_action_install),
             onAction = { Updates.install(context, st.info, st.file) },
         )
         else -> Unit
@@ -66,13 +69,13 @@ fun UpdateBanner() {
 fun UpdateSection() {
     val context = LocalContext.current
     var autoUpdate by remember { mutableStateOf(Prefs.autoUpdate(context)) }
-    Section("Оновлення") {
+    Section(stringResource(R.string.upd_section_title)) {
         UpdateRow()
         Divider()
         SwitchRow(
             Icons.Default.Autorenew,
-            "Перевіряти автоматично",
-            "Раз на пів дня; про нову версію прийде сповіщення",
+            stringResource(R.string.upd_auto_check_title),
+            stringResource(R.string.upd_auto_check_subtitle),
             autoUpdate,
         ) {
             autoUpdate = it
@@ -82,7 +85,7 @@ fun UpdateSection() {
     }
 }
 
-private fun mb(bytes: Long) = "%.1f".format(bytes / 1048576f).replace('.', ',') + " МБ"
+private fun mb(bytes: Long) = "%.1f".format(bytes / 1048576f).replace('.', ',') + " " + Res.s(R.string.upd_unit_mb)
 
 /** Поточна версія, кнопка «Перевірити оновлення» і хід оновлення. */
 @Composable
@@ -90,30 +93,36 @@ private fun UpdateRow() {
     val context = LocalContext.current
     val current = remember { Updates.currentVersionName(context) }
     val st = Updates.state
+    val currentVersion = stringResource(R.string.upd_version_current, current)
     Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             RowIcon(Icons.Default.SystemUpdate, if (st is Updates.State.Available) Glass.Lavender else Glass.TextDim)
             Spacer(Modifier.width(16.dp))
             val (title, subtitle) = when (st) {
-                Updates.State.Idle -> "Версія $current" to "Натисніть, щоб перевірити"
-                Updates.State.Checking -> "Версія $current" to "Перевіряю…"
-                Updates.State.UpToDate -> "Версія $current" to "Це найновіша версія ✓"
-                Updates.State.NoReleases -> "Версія $current" to "На GitHub ще немає опублікованих версій"
-                is Updates.State.Available -> "Доступна версія ${st.info.versionName}" to
-                    if (st.info.patch != null) "Завантажити ${mb(st.info.downloadSize)} замість ${mb(st.info.apk.size)}"
-                    else "Завантажити ${mb(st.info.apk.size)}"
-                is Updates.State.Downloading -> "Оновлення до ${st.info.versionName}" to
-                    "${if (st.patch) "Патч" else "Повний APK"} · ${(st.progress * 100).toInt()}%"
-                is Updates.State.ReadyToInstall -> "Версія ${st.info.versionName} готова" to "Дозвольте встановлення й натисніть «Встановити»"
-                is Updates.State.Failed -> "Версія $current" to st.message
+                Updates.State.Idle -> currentVersion to stringResource(R.string.upd_subtitle_idle)
+                Updates.State.Checking -> currentVersion to stringResource(R.string.upd_subtitle_checking)
+                Updates.State.UpToDate -> currentVersion to stringResource(R.string.upd_subtitle_up_to_date)
+                Updates.State.NoReleases -> currentVersion to stringResource(R.string.upd_subtitle_no_releases)
+                is Updates.State.Available -> stringResource(R.string.upd_available_version, st.info.versionName) to
+                    if (st.info.patch != null) stringResource(R.string.upd_download_patch_vs_apk, mb(st.info.downloadSize), mb(st.info.apk.size))
+                    else stringResource(R.string.upd_download_apk, mb(st.info.apk.size))
+                is Updates.State.Downloading -> stringResource(R.string.upd_downloading_to, st.info.versionName) to
+                    stringResource(
+                        R.string.upd_downloading_progress,
+                        if (st.patch) stringResource(R.string.upd_patch) else stringResource(R.string.upd_full_apk),
+                        (st.progress * 100).toInt(),
+                    )
+                is Updates.State.ReadyToInstall -> stringResource(R.string.upd_ready_title, st.info.versionName) to
+                    stringResource(R.string.upd_ready_subtitle)
+                is Updates.State.Failed -> currentVersion to st.message
             }
             Titles(title, subtitle, Modifier.weight(1f))
             val (label, action) = when (st) {
-                Updates.State.Idle, Updates.State.UpToDate, Updates.State.NoReleases -> "Перевірити" to { Updates.check(context) }
+                Updates.State.Idle, Updates.State.UpToDate, Updates.State.NoReleases -> stringResource(R.string.upd_action_check) to { Updates.check(context) }
                 Updates.State.Checking, is Updates.State.Downloading -> null to {}
-                is Updates.State.Available -> "Оновити" to { Updates.download(context, st.info) }
-                is Updates.State.ReadyToInstall -> "Встановити" to { Updates.install(context, st.info, st.file) }
-                is Updates.State.Failed -> "Ще раз" to {
+                is Updates.State.Available -> stringResource(R.string.upd_action_update) to { Updates.download(context, st.info) }
+                is Updates.State.ReadyToInstall -> stringResource(R.string.upd_action_install) to { Updates.install(context, st.info, st.file) }
+                is Updates.State.Failed -> stringResource(R.string.upd_action_retry) to {
                     if (st.info != null) Updates.download(context, st.info) else Updates.check(context)
                 }
             }

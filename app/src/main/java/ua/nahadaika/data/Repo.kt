@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import ua.nahadaika.R
+import ua.nahadaika.Res
 import ua.nahadaika.alarm.AlarmScheduler
 import ua.nahadaika.alarm.Notifier
 import ua.nahadaika.widget.ReminderWidget
@@ -76,7 +78,7 @@ object Repo {
     fun reminders(chatId: Long): Flow<List<Reminder>> = db.reminders().observeByChat(chatId)
 
     suspend fun ensureDefaultChat() {
-        if (db.chats().count() == 0) createChat("Нагадування")
+        if (db.chats().count() == 0) createChat(Res.s(R.string.core_default_chat_name))
     }
 
     suspend fun createChat(name: String): Long {
@@ -197,7 +199,7 @@ object Repo {
             return@withLock
         }
 
-        val chatName = db.chats().get(r.chatId)?.name ?: "Нагадайка"
+        val chatName = db.chats().get(r.chatId)?.name ?: Res.s(R.string.core_chat_fallback_name)
         Notifier.show(app, r, chatName)
 
         val updated = when {

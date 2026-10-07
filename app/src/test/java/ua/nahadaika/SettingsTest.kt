@@ -31,7 +31,7 @@ import ua.nahadaika.ui.theme.ThemeSettings
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [34], qualifiers = "w400dp-h1400dp-xxhdpi")
+@Config(sdk = [34], qualifiers = "uk-w400dp-h1400dp-xxhdpi")
 class SettingsTest {
     @get:Rule
     val compose = createComposeRule()

@@ -46,7 +46,7 @@ import java.time.ZoneId
 /** Знімки екранів для перевірки вигляду (пишуться в app/build/screenshots). */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [30], qualifiers = "w400dp-h860dp-xxhdpi")
+@Config(sdk = [30], qualifiers = "uk-w400dp-h860dp-xxhdpi")
 class ScreenshotTest {
     @get:Rule
     val compose = createComposeRule()

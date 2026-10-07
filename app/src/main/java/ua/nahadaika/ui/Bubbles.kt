@@ -43,6 +43,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import ua.nahadaika.R
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -83,7 +85,7 @@ internal fun VoicePlayer(reminder: Reminder, player: AudioPlayer, modifier: Modi
         ) {
             Icon(
                 if (active && player.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                contentDescription = "Відтворити",
+                contentDescription = stringResource(R.string.chat_desc_play_voice),
                 tint = Glass.OnPrimary,
             )
         }
@@ -115,6 +117,7 @@ internal fun VideoMedia(
     onFullscreen: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val fullscreenLabel = stringResource(R.string.chat_fullscreen)
     Box(modifier) {
         VideoCircle(reminder, playing, onPlay, onEnded)
         Box(
@@ -122,9 +125,9 @@ internal fun VideoMedia(
                 .align(Alignment.BottomEnd)
                 .size(34.dp)
                 .glass(CircleShape, Color.Black.copy(alpha = 0.45f))
-                .clickable(onClickLabel = "На весь екран", onClick = onFullscreen),
+                .clickable(onClickLabel = fullscreenLabel, onClick = onFullscreen),
             contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Default.Fullscreen, "На весь екран", tint = Color.White, modifier = Modifier.size(20.dp)) }
+        ) { Icon(Icons.Default.Fullscreen, fullscreenLabel, tint = Color.White, modifier = Modifier.size(20.dp)) }
     }
 }
 
@@ -142,11 +145,12 @@ private fun VideoCircle(reminder: Reminder, playing: Boolean, onPlay: () -> Unit
         if (playing && path != null) {
             InlineVideo(path, reminder.durationMs, onEnded = onEnded, modifier = Modifier.fillMaxSize())
         } else {
-            Box(Modifier.fillMaxSize().clickable(onClickLabel = "Відтворити відео", onClick = onPlay)) {
+            val playVideoLabel = stringResource(R.string.chat_play_video)
+            Box(Modifier.fillMaxSize().clickable(onClickLabel = playVideoLabel, onClick = onPlay)) {
                 Box(
                     Modifier.align(Alignment.Center).size(46.dp).glass(CircleShape, Color.Black.copy(alpha = 0.35f)),
                     contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Default.PlayArrow, "Відтворити відео", tint = Color.White, modifier = Modifier.size(28.dp)) }
+                ) { Icon(Icons.Default.PlayArrow, playVideoLabel, tint = Color.White, modifier = Modifier.size(28.dp)) }
                 VideoLabel(formatDuration(reminder.durationMs), Modifier.align(Alignment.BottomCenter))
             }
         }
@@ -190,14 +194,19 @@ private fun InlineVideo(path: String, durationMs: Long, onEnded: () -> Unit, mod
         }
     }
 
+    val labelResume = stringResource(R.string.chat_resume)
+    val labelPause = stringResource(R.string.chat_pause)
+    val descVideoPaused = stringResource(R.string.chat_desc_video_paused)
+    val descVideoPlaying = stringResource(R.string.chat_desc_video_playing)
+
     Box(
         modifier
-            .clickable(onClickLabel = if (paused) "Продовжити" else "Пауза") {
+            .clickable(onClickLabel = if (paused) labelResume else labelPause) {
                 if (!prepared) return@clickable
                 paused = !paused
                 if (paused) player.pause() else player.start()
             }
-            .semantics { contentDescription = if (paused) "Відео на паузі" else "Відео відтворюється" },
+            .semantics { contentDescription = if (paused) descVideoPaused else descVideoPlaying },
     ) {
         AndroidView(
             factory = { ctx ->
@@ -319,6 +328,7 @@ fun MediaViewer(reminder: Reminder, onDismiss: () -> Unit) {
                 else -> Unit
             }
             if (video) {
+                val closeLabel = stringResource(R.string.chat_close)
                 Box(
                     Modifier
                         .align(Alignment.TopEnd)
@@ -326,9 +336,9 @@ fun MediaViewer(reminder: Reminder, onDismiss: () -> Unit) {
                         .padding(12.dp)
                         .size(44.dp)
                         .glass(CircleShape, Color.Black.copy(alpha = 0.45f))
-                        .clickable(onClickLabel = "Закрити", onClick = onDismiss),
+                        .clickable(onClickLabel = closeLabel, onClick = onDismiss),
                     contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Default.Close, "Закрити", tint = Color.White) }
+                ) { Icon(Icons.Default.Close, closeLabel, tint = Color.White) }
             }
             if (reminder.text.isNotBlank()) {
                 Text(

@@ -21,6 +21,8 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import ua.nahadaika.BuildConfig
 import ua.nahadaika.Prefs
+import ua.nahadaika.R
+import ua.nahadaika.Res
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -59,7 +61,7 @@ data class UpdateInfo(
         fun parse(json: String, urls: Map<String, String>, currentCode: Long): UpdateInfo {
             val o = JSONObject(json)
             fun asset(a: JSONObject) = UpdateAsset(
-                url = urls[a.getString("name")] ?: error("у релізі немає файлу ${a.getString("name")}"),
+                url = urls[a.getString("name")] ?: error(Res.s(R.string.upd_err_no_file_in_release, a.getString("name"))),
                 size = a.getLong("size"),
                 sha256 = a.getString("sha256").lowercase(),
             )
@@ -121,7 +123,7 @@ object Updates {
             } catch (_: NoReleasesException) {
                 if (silent) state else State.NoReleases
             } catch (e: Exception) {
-                if (silent) state else State.Failed("Не вдалося перевірити: ${e.message ?: "немає інтернету"}")
+                if (silent) state else State.Failed(Res.s(R.string.upd_err_check_failed, e.message ?: Res.s(R.string.upd_err_no_internet)))
             }
         }
     }
@@ -136,7 +138,7 @@ object Updates {
     suspend fun fetch(context: Context): UpdateInfo? = withContext(Dispatchers.IO) {
         val conn = open("https://github.com/${BuildConfig.UPDATE_REPO}/releases/latest/download/update.json")
         if (conn.responseCode == HttpURLConnection.HTTP_NOT_FOUND) throw NoReleasesException()
-        if (conn.responseCode != HttpURLConnection.HTTP_OK) error("GitHub відповів ${conn.responseCode}")
+        if (conn.responseCode != HttpURLConnection.HTTP_OK) error(Res.s(R.string.upd_err_github_status, conn.responseCode))
         val text = conn.inputStream.bufferedReader().readText()
         val current = currentVersionCode(context)
         UpdateInfo.parse(text, UpdateInfo.releaseUrls(text, BuildConfig.UPDATE_REPO), current).takeIf { it.versionCode > current }
@@ -152,7 +154,7 @@ object Updates {
                 state = State.ReadyToInstall(info, file)
                 install(app, info, file)
             } catch (e: Exception) {
-                state = State.Failed("Не вдалося завантажити: ${e.message ?: "немає інтернету"}", info)
+                state = State.Failed(Res.s(R.string.upd_err_download_failed, e.message ?: Res.s(R.string.upd_err_no_internet)), info)
             }
         }
     }
@@ -169,7 +171,7 @@ object Updates {
                     state = State.Downloading(info, 0f, patch = true)
                     val bytes = get(patch, File(dir, "update.patch")) { state = State.Downloading(info, it, patch = true) }.readBytes()
                     val result = BsPatch.apply(installed.readBytes(), bytes)
-                    check(sha256(result) == info.apk.sha256) { "контрольна сума не збіглася" }
+                    check(sha256(result) == info.apk.sha256) { Res.s(R.string.upd_err_checksum_mismatch) }
                     target.writeBytes(result)
                     return target
                 }
@@ -178,13 +180,13 @@ object Updates {
         }
         state = State.Downloading(info, 0f, patch = false)
         get(info.apk, target) { state = State.Downloading(info, it, patch = false) }
-        check(sha256(target) == info.apk.sha256) { "файл пошкоджено під час завантаження" }
+        check(sha256(target) == info.apk.sha256) { Res.s(R.string.upd_err_file_corrupted) }
         return target
     }
 
     private suspend fun get(asset: UpdateAsset, file: File, progress: (Float) -> Unit): File = withContext(Dispatchers.IO) {
         val conn = open(asset.url)
-        if (conn.responseCode != HttpURLConnection.HTTP_OK) error("сервер відповів ${conn.responseCode}")
+        if (conn.responseCode != HttpURLConnection.HTTP_OK) error(Res.s(R.string.upd_err_server_status, conn.responseCode))
         val total = conn.contentLengthLong.takeIf { it > 0 } ?: asset.size
         var read = 0L
         var shown = -1
@@ -237,7 +239,7 @@ object Updates {
                 session.commit(pi.intentSender)
             }
         } catch (e: Exception) {
-            state = State.Failed("Не вдалося встановити: ${e.message}", info)
+            state = State.Failed(Res.s(R.string.upd_err_install_failed, e.message ?: ""), info)
         }
     }
 

@@ -6,6 +6,8 @@ import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.os.Build
 import android.widget.Toast
+import ua.nahadaika.R
+import ua.nahadaika.Res
 
 /** Відповідь системного встановлювача: попросити підтвердження або показати помилку. */
 class InstallReceiver : BroadcastReceiver() {
@@ -22,11 +24,12 @@ class InstallReceiver : BroadcastReceiver() {
             }
             PackageInstaller.STATUS_SUCCESS -> Unit // застосунок перезапуститься вже новим
             else -> {
-                val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "код $status"
+                val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
+                    ?: Res.s(R.string.upd_install_status_code, status)
                 val info = (Updates.state as? Updates.State.ReadyToInstall)?.info
                 if (status != PackageInstaller.STATUS_FAILURE_ABORTED) {
-                    Updates.state = Updates.State.Failed("Не вдалося встановити: $message", info)
-                    Toast.makeText(context, "Оновлення не встановилось: $message", Toast.LENGTH_LONG).show()
+                    Updates.state = Updates.State.Failed(Res.s(R.string.upd_install_failed, message), info)
+                    Toast.makeText(context, Res.s(R.string.upd_install_toast_failed, message), Toast.LENGTH_LONG).show()
                 }
             }
         }
