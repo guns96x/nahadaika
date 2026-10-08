@@ -61,13 +61,15 @@ object SharedChats {
     /** Запрошення мені на пошту Google-акаунта (показуємо в застосунку, поки не прийняті чи відхилені). */
     val inbox: StateFlow<List<MailInvite>> = inboxNow
 
-    /** Запросити людину за її Google-поштою; чат за потреби стає спільним. Повертає код (для посилання-запасу). */
-    suspend fun inviteByEmail(chat: Chat, email: String): String {
+    /**
+     * Запросити людину за її Google-поштою; чат за потреби стає спільним.
+     * Повертає true, якщо сервер надіслав і лист із посиланням; інакше лист варто запропонувати надіслати вручну.
+     */
+    suspend fun inviteByEmail(chat: Chat, email: String): Boolean {
         val b = checkNotNull(backend)
         val code = share(chat)
         val remoteId = checkNotNull(Repo.chatById(chat.id)?.remoteId)
-        b.inviteByEmail(remoteId, chat.name, code, email.trim().lowercase(), Prefs.displayName(ctx()))
-        return code
+        return b.inviteByEmail(remoteId, chat.name, code, email.trim().lowercase(), Prefs.displayName(ctx()))
     }
 
     /** Перечитати запрошення мені; без входу через Google їх не буває. */

@@ -39,11 +39,18 @@ class MailInviteTest {
 
     @Test fun sendingStoresInviteForLowercasedEmail() = runBlocking {
         val chat = Repo.chatById(Repo.createChat("Сім'я"))!!
-        SharedChats.inviteByEmail(chat, "  Tato@Gmail.com ")
+        assertTrue(SharedChats.inviteByEmail(chat, "  Tato@Gmail.com "))
         val (email, invite) = server.mailbox.values.single()
         assertEquals("tato@gmail.com", email)
         assertEquals("Сім'я", invite.chatName)
         assertEquals("Мама", invite.fromName)
+    }
+
+    @Test fun reportsWhenServerCouldNotMail() = runBlocking {
+        server.mailServerWorks = false
+        val chat = Repo.chatById(Repo.createChat("Сім'я"))!!
+        assertTrue(!SharedChats.inviteByEmail(chat, "tato@gmail.com"))
+        assertEquals(1, server.mailbox.size) // запрошення в застосунку все одно є
     }
 
     @Test fun invitedPersonSeesInviteAndAcceptsIt() = runBlocking {

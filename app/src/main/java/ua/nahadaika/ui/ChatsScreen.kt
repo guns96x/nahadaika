@@ -454,6 +454,7 @@ private fun InviteDialog(chat: Chat, code: String, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val message = stringResource(R.string.share_invite_message, chat.name, SharedChats.inviteLink(code), code)
+    val mailSubject = stringResource(R.string.share_invite_email_subject, chat.name)
     var email by remember { mutableStateOf("") }
     var invalid by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
@@ -478,11 +479,19 @@ private fun InviteDialog(chat: Chat, code: String, onDismiss: () -> Unit) {
         failed = false
         scope.launch {
             runCatching { SharedChats.inviteByEmail(chat, to) }
-                .onSuccess {
+                .onSuccess { mailed ->
                     Contacts.add(context, to)
                     saved = Contacts.list(context)
                     sentTo = to
                     email = ""
+                    // Лист із посиланням шле сервер; не вийшло — відкриваємо готовий лист у поштовому застосунку.
+                    if (!mailed) runCatching {
+                        context.startActivity(
+                            Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:${Uri.encode(to)}"))
+                                .putExtra(Intent.EXTRA_SUBJECT, mailSubject)
+                                .putExtra(Intent.EXTRA_TEXT, message),
+                        )
+                    }
                 }
                 .onFailure { failed = true }
             busy = false

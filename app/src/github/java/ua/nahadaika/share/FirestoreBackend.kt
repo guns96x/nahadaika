@@ -118,15 +118,18 @@ class FirestoreBackend(
 
     private fun mailInviteId(chatId: String, email: String) = "${chatId}_$email"
 
-    override suspend fun inviteByEmail(chatId: String, chatName: String, code: String, email: String, fromName: String) {
-        val uid = auth.currentUser?.uid ?: return
+    override suspend fun inviteByEmail(chatId: String, chatName: String, code: String, email: String, fromName: String): Boolean {
+        val uid = auth.currentUser?.uid ?: return false
         val clean = email.trim().lowercase()
-        db.collection("mailInvites").document(mailInviteId(chatId, clean)).set(
+        val id = mailInviteId(chatId, clean)
+        db.collection("mailInvites").document(id).set(
             mapOf(
                 "email" to clean, "chatId" to chatId, "chatName" to chatName, "code" to code,
                 "fromName" to fromName, "createdBy" to uid, "createdAt" to FieldValue.serverTimestamp(),
             ),
         ).confirmed()
+        // Лист із посиланням шле сервер (Supabase invite-mail); не вдалось — запрошення в застосунку все одно є.
+        return runCatching { push.sendInviteMail(id) }.getOrDefault(false)
     }
 
     override suspend fun myMailInvites(): List<MailInvite> {

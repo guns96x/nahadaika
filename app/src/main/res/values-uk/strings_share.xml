@@ -30,8 +30,9 @@
     <string name="share_stale_send">Надіслати</string>
     <string name="share_stale_message">Оновіть, будь ласка, Нагадайку — спільні чати працюють краще з останньою версією: %1$s</string>
     <string name="share_invite_google_hint">Пошта Google-акаунта</string>
+    <string name="share_invite_email_subject">Запрошення в «%1$s» у Нагадайці</string>
     <string name="share_invite_google_send">Запросити</string>
-    <string name="share_invite_google_note">Людина побачить запрошення в Нагадайці, коли увійде цим Google-акаунтом.</string>
+    <string name="share_invite_google_note">Людина побачить запрошення в Нагадайці, коли увійде цим Google-акаунтом. Їм також прийде лист із посиланням на встановлення чи оновлення.</string>
     <string name="share_invite_sent">Запрошення надіслано: %1$s</string>
     <string name="share_invite_or_link">Або надішліть посилання</string>
     <string name="share_invite_close">Закрити</string>

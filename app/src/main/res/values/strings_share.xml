@@ -30,8 +30,9 @@
     <string name="share_stale_send">Send</string>
     <string name="share_stale_message">Please update Nahadaika — shared chats work better with the latest version: %1$s</string>
     <string name="share_invite_google_hint">Google account email</string>
+    <string name="share_invite_email_subject">Invitation to “%1$s” in Nahadaika</string>
     <string name="share_invite_google_send">Invite</string>
-    <string name="share_invite_google_note">They\'ll see the invitation in Nahadaika after signing in with this Google account.</string>
+    <string name="share_invite_google_note">They\'ll see the invitation in Nahadaika after signing in with this Google account. They\'ll also get an email with a link to install or update.</string>
     <string name="share_invite_sent">Invitation sent to %1$s</string>
     <string name="share_invite_or_link">Or send a link</string>
     <string name="share_invite_close">Close</string>

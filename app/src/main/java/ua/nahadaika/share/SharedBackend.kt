@@ -134,8 +134,11 @@ interface SharedBackend {
      */
     suspend fun staleMembers(chatId: String): List<String> = emptyList()
 
-    /** Запросити людину за поштою її Google-акаунта: запрошення чекатиме на неї в застосунку. */
-    suspend fun inviteByEmail(chatId: String, chatName: String, code: String, email: String, fromName: String) = Unit
+    /**
+     * Запросити людину за поштою її Google-акаунта: запрошення чекатиме на неї в застосунку.
+     * Повертає true, якщо сервер ще й надіслав їй лист із посиланням на встановлення.
+     */
+    suspend fun inviteByEmail(chatId: String, chatName: String, code: String, email: String, fromName: String): Boolean = false
 
     /** Запрошення, адресовані пошті мого Google-акаунта (порожньо, якщо не ввійшов). */
     suspend fun myMailInvites(): List<MailInvite> = emptyList()

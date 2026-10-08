@@ -76,6 +76,28 @@ internal class PushLink(context: Context, private val auth: FirebaseAuth, privat
         doc(chatId, uid).delete().confirmed()
     }
 
+    /** Попросити сервер надіслати лист за запрошенням mailInvites/{id}; true — сервер відповів 200. */
+    suspend fun sendInviteMail(inviteId: String): Boolean {
+        if (BuildConfig.PUSH_URL.isBlank()) return false
+        val idToken = auth.currentUser?.getIdToken(false)?.confirmed()?.token ?: return false
+        val body = JSONObject().put("invite", inviteId).toString()
+        return withContext(Dispatchers.IO) {
+            val conn = URL(BuildConfig.PUSH_URL.replace("/notify", "/invite-mail")).openConnection() as HttpURLConnection
+            try {
+                conn.requestMethod = "POST"
+                conn.connectTimeout = 10_000
+                conn.readTimeout = 30_000
+                conn.doOutput = true
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.setRequestProperty("Authorization", "Bearer $idToken")
+                conn.outputStream.use { it.write(body.toByteArray()) }
+                conn.responseCode == 200
+            } finally {
+                conn.disconnect()
+            }
+        }
+    }
+
     suspend fun notify(chatId: String, urgent: Boolean) {
         if (BuildConfig.PUSH_URL.isBlank()) return
         val idToken = auth.currentUser?.getIdToken(false)?.confirmed()?.token ?: return

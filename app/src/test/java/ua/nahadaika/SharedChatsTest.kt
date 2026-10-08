@@ -74,9 +74,11 @@ class FakeBackend(var uid: String = "me") : SharedBackend {
     override suspend fun mediaReceived(chatId: String, mediaRef: String) { received += mediaRef }
     override suspend fun registerPush(chatId: String) { pushChats += chatId }
     val mailbox = mutableMapOf<String, Pair<String, ua.nahadaika.share.MailInvite>>() // id → (пошта, запрошення)
-    override suspend fun inviteByEmail(chatId: String, chatName: String, code: String, email: String, fromName: String) {
+    var mailServerWorks = true
+    override suspend fun inviteByEmail(chatId: String, chatName: String, code: String, email: String, fromName: String): Boolean {
         val id = "${chatId}_$email"
         mailbox[id] = email to ua.nahadaika.share.MailInvite(id, chatId, chatName, code, fromName)
+        return mailServerWorks
     }
     override suspend fun myMailInvites() = mailbox.values.filter { it.first == account()?.lowercase() }.map { it.second }
     override suspend fun dismissMailInvite(id: String) { mailbox.remove(id) }
