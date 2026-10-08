@@ -180,7 +180,10 @@ fun SettingsScreen(onBack: () -> Unit) {
                                 stringResource(R.string.settings_cloud_title),
                                 when {
                                     cloudBusy -> stringResource(R.string.settings_cloud_busy)
-                                    cloud -> stringResource(R.string.settings_cloud_on, SharedChats.account().orEmpty())
+                                    cloud -> stringResource(
+                                        if (ua.nahadaika.BuildConfig.FIREBASE_STORAGE_BUCKET.isNotBlank()) R.string.settings_cloud_on_media else R.string.settings_cloud_on,
+                                        SharedChats.account().orEmpty(),
+                                    )
                                     else -> stringResource(R.string.settings_cloud_off)
                                 },
                                 cloud,

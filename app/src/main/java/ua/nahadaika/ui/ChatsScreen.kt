@@ -423,7 +423,11 @@ private fun InviteDialog(chat: Chat, code: String, onDismiss: () -> Unit) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 Text(code, color = Glass.Text, fontSize = 32.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 6.sp)
                 Spacer(Modifier.height(12.dp))
-                Text(stringResource(R.string.share_invite_note), color = Glass.TextDim, fontSize = 14.sp)
+                Text(
+                    stringResource(if (ua.nahadaika.BuildConfig.FIREBASE_STORAGE_BUCKET.isNotBlank()) R.string.share_invite_note_media else R.string.share_invite_note),
+                    color = Glass.TextDim,
+                    fontSize = 14.sp,
+                )
             }
         },
         confirmButton = {

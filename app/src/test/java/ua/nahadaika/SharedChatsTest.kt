@@ -37,6 +37,9 @@ import java.util.UUID
 
 /** Сервер чатів у пам'яті — як Firestore, але без мережі. */
 class FakeBackend(var uid: String = "me") : SharedBackend {
+    var failWrites = false
+    var loseNextReminderAcknowledgement = false
+    var writeAttempts = 0
     val chats = mutableMapOf<String, String>() // id → назва
     val invites = mutableMapOf<String, String>() // код → id чату
     val members = mutableMapOf<String, MutableSet<String>>()
@@ -47,6 +50,10 @@ class FakeBackend(var uid: String = "me") : SharedBackend {
     /** Google-акаунт уже є з іншого телефона — після входу ідентифікатор стає цим. null — анонімний прив'язується. */
     var accountUid: String? = null
     var email: String? = null
+    var storageEnabled: Boolean = false
+    val mediaStore = mutableMapOf<String, ByteArray>()
+    var failNextUpload: Boolean = false
+    var uploads = 0
 
     override suspend fun signIn() = uid
     override suspend fun signInWithGoogle(activity: Context): String {
@@ -56,6 +63,26 @@ class FakeBackend(var uid: String = "me") : SharedBackend {
     }
     override fun account() = email
     override fun canUseGoogle() = true
+    override fun storageAvailable() = storageEnabled
+    override suspend fun uploadMedia(chatId: String, reminderId: String, file: java.io.File, mime: String): String? {
+        if (!storageEnabled) return null
+        if (failNextUpload) {
+            failNextUpload = false
+            throw java.io.IOException("Мережевий збій завантаження медіа")
+        }
+        uploads++
+        val ext = file.extension.ifEmpty { "bin" }
+        val ref = "chats/$chatId/media/$reminderId.$ext"
+        mediaStore[ref] = file.readBytes()
+        return ref
+    }
+    override suspend fun downloadMedia(mediaRef: String, target: java.io.File): Boolean {
+        if (!storageEnabled) return false
+        val bytes = mediaStore[mediaRef] ?: return false
+        target.parentFile?.mkdirs()
+        target.writeBytes(bytes)
+        return true
+    }
     override fun newId() = UUID.randomUUID().toString()
 
     private fun codeOf(chatId: String) = invites.entries.first { it.value == chatId }.key
@@ -93,18 +120,33 @@ class FakeBackend(var uid: String = "me") : SharedBackend {
     override fun observe(chatId: String): Flow<ChatSnapshot> = changes.map { fetch(chatId) }
 
     override suspend fun putReminder(chatId: String, reminder: RemoteReminder, create: Boolean) {
+        writeAttempts++
+        if (failWrites) error("offline")
         val map = reminders.getOrPut(chatId) { mutableMapOf() }
         val old = map[reminder.id]
-        map[reminder.id] = if (create || old == null) reminder else reminder.copy(authorUid = old.authorUid, authorName = old.authorName, createdAt = old.createdAt)
+        if (!create && old == null) throw ua.nahadaika.share.RemoteGone()
+        // Як update у Firestore: поля, яких немає в запиті (автор, медіа), лишаються.
+        map[reminder.id] = if (create || old == null) reminder else reminder.copy(
+            authorUid = old.authorUid, authorName = old.authorName, createdAt = old.createdAt,
+            mediaRef = reminder.mediaRef ?: old.mediaRef,
+            mediaSize = if (reminder.mediaRef != null) reminder.mediaSize else old.mediaSize,
+            mediaMime = reminder.mediaMime ?: old.mediaMime,
+        )
         changes.value++
+        if (loseNextReminderAcknowledgement) {
+            loseNextReminderAcknowledgement = false
+            error("lost acknowledgement")
+        }
     }
 
     override suspend fun deleteReminder(chatId: String, reminderId: String) {
+        if (failWrites) error("offline")
         reminders[chatId]?.remove(reminderId)
         changes.value++
     }
 
     override suspend fun putComment(chatId: String, comment: RemoteComment) {
+        if (failWrites) error("offline")
         comments.getOrPut(chatId) { mutableMapOf() }[comment.id] = comment
         changes.value++
     }
@@ -125,11 +167,15 @@ class SharedChatsTest {
 
     @Before fun setUp() {
         Repo.init(app)
+        ua.nahadaika.share.SyncQueue.clear(app)
         Prefs.setDisplayName(app, "Я")
         SharedChats.init(app, backend, watch = false)
     }
 
-    @After fun tearDown() = SharedChats.reset()
+    @After fun tearDown() {
+        ua.nahadaika.share.SyncQueue.clear(app)
+        SharedChats.reset()
+    }
 
     /** Зміни йдуть на сервер у фоні — дочекатися, поки [check] справдиться. */
     private suspend fun eventually(check: suspend () -> Boolean) {

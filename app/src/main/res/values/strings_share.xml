@@ -7,6 +7,7 @@
     <string name="share_name_hint">Members will see it next to your reminders</string>
     <string name="share_invite_title">Invite to “%1$s”</string>
     <string name="share_invite_note">Send the code or the link. For now only text reminders and discussions are shared.</string>
+    <string name="share_invite_note_media">Send the code or the link. Reminders, voice notes, videos and photos sync when connected.</string>
     <string name="share_invite_send">Send</string>
     <string name="share_invite_message">Join “%1$s” in Nahadaika: open %2$s or enter the code %3$s</string>
     <string name="share_done">Done</string>

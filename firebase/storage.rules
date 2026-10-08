@@ -1,0 +1,33 @@
+rules_version = '2';
+
+// Сховище медіафайлів спільних чатів Нагадайки (голосові, відеокружечки, фото).
+// Доступ лише авторизованим учасникам чату з перевіркою членства через Firestore.
+// Розгорнути: firebase deploy --only storage:rules
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isMember(chatId) {
+      return signedIn()
+        && request.auth.uid in firestore.get(/databases/(default)/documents/chats/$(chatId)).data.members;
+    }
+
+    function isValidMedia() {
+      return request.resource.size > 0 && request.resource.size <= 25 * 1024 * 1024
+        && (
+          request.resource.contentType.matches('audio/.*')
+          || request.resource.contentType.matches('video/.*')
+          || request.resource.contentType.matches('image/.*')
+        );
+    }
+
+    // Приватні детерміновані шляхи чату: chats/{chatId}/media/{fileName}
+    match /chats/{chatId}/media/{fileName} {
+      allow read: if isMember(chatId);
+      allow create, update: if isMember(chatId) && isValidMedia();
+      allow delete: if isMember(chatId);
+    }
+  }
+}

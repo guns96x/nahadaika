@@ -111,27 +111,29 @@ object Repo {
     }
 
     suspend fun reschedule(reminder: Reminder, at: Long, repeat: Repeat) = lock.withLock {
-        val updated = reminder.copy(triggerAt = at, repeat = repeat, snoozedUntil = null, fired = false)
+        val current = db.reminders().get(reminder.id) ?: return@withLock
+        val updated = current.copy(triggerAt = at, repeat = repeat, snoozedUntil = null, fired = false)
         db.reminders().update(updated)
         AlarmScheduler.schedule(app, updated)
         SharedChats.onReminderChanged(updated.id)
     }
 
-    suspend fun editText(reminder: Reminder, text: String) {
+    suspend fun editText(reminder: Reminder, text: String) = lock.withLock {
         db.reminders().get(reminder.id)?.let { db.reminders().update(it.copy(text = text.trim())) }
         SharedChats.onReminderChanged(reminder.id)
     }
 
-    suspend fun deleteReminder(reminder: Reminder) {
+    suspend fun deleteReminder(reminder: Reminder) = lock.withLock {
         val current = db.reminders().get(reminder.id) ?: reminder
+        SharedChats.onReminderDeleted(current, db.chats().get(current.chatId)?.remoteId)
         cleanup(current)
         db.reminders().delete(current)
-        SharedChats.onReminderDeleted(current)
     }
 
     // ---- Обговорення ----
 
     fun comments(reminderId: Long): Flow<List<Comment>> = db.comments().observeByReminder(reminderId)
+    suspend fun commentsOf(reminderId: Long): List<Comment> = db.comments().byReminder(reminderId)
     fun commentStats(chatId: Long): Flow<List<CommentStat>> = db.comments().observeStats(chatId)
 
     suspend fun addComment(reminderId: Long, text: String) {
@@ -147,7 +149,7 @@ object Repo {
     }
 
     /** Обговорення переглянуто — позначка «нове» зникає. */
-    suspend fun markCommentsRead(reminderId: Long) {
+    suspend fun markCommentsRead(reminderId: Long) = lock.withLock {
         db.reminders().get(reminderId)?.let { db.reminders().update(it.copy(commentsReadAt = System.currentTimeMillis())) }
     }
 
@@ -183,6 +185,7 @@ object Repo {
     suspend fun chatById(id: Long): Chat? = db.chats().get(id)
     suspend fun chatByRemoteId(remoteId: String): Chat? = db.chats().byRemoteId(remoteId)
     suspend fun reminder(id: Long): Reminder? = db.reminders().get(id)
+    suspend fun reminderByRemoteId(remoteId: String): Reminder? = db.reminders().byRemoteId(remoteId)
     suspend fun remindersOf(chatId: Long): List<Reminder> = db.reminders().byChat(chatId)
 
     suspend fun setChatRemoteId(chatId: Long, remoteId: String) {
@@ -190,7 +193,18 @@ object Repo {
     }
 
     suspend fun setReminderRemoteId(id: Long, remoteId: String) = db.reminders().setRemoteId(id, remoteId)
+    suspend fun updateReminderMediaPath(id: Long, mediaPath: String) = lock.withLock {
+        db.reminders().get(id)?.let { db.reminders().update(it.copy(mediaPath = mediaPath)) }
+    }
     suspend fun setCommentRemoteId(id: Long, remoteId: String) = db.comments().setRemoteId(id, remoteId)
+
+    /** Нагадування зникло з сервера — прибрати й тут, без відправки видалення назад. */
+    suspend fun forgetRemote(id: Long) = lock.withLock {
+        db.reminders().get(id)?.let {
+            cleanup(it, isRemote = true)
+            db.reminders().delete(it)
+        }
+    }
 
     suspend fun createSharedChat(name: String, remoteId: String): Long {
         val color = chatColors[(db.chats().count()) % chatColors.size]
@@ -204,19 +218,37 @@ object Repo {
      */
     suspend fun applyRemote(chatId: Long, snapshot: ChatSnapshot, myUid: String) = lock.withLock {
         val now = System.currentTimeMillis()
+        val chat = db.chats().get(chatId)
+        val chatRemoteId = chat?.remoteId.orEmpty()
         // Чат перейменував інший учасник (або я на іншому телефоні).
         snapshot.name?.takeIf { it.isNotBlank() }?.let { name ->
-            db.chats().get(chatId)?.takeIf { it.name != name }?.let { db.chats().update(it.copy(name = name)) }
+            chat?.takeIf { it.name != name }?.let { db.chats().update(it.copy(name = name)) }
         }
         for (rr in snapshot.reminders) {
+            // Якщо нагадування було видалено локально офлайн — не воскрешаємо його
+            if (chatRemoteId.isNotEmpty() && ua.nahadaika.share.SyncQueue.isPendingDeletion(app, chatRemoteId, rr.id)) {
+                continue
+            }
             val author = if (rr.authorUid == myUid) null else rr.authorName
             val target = if (rr.repeat != Repeat.NONE && rr.triggerAt <= now) nextOccurrence(rr.triggerAt, rr.repeat, now) else rr.triggerAt
             val local = db.reminders().byRemoteId(rr.id)
+                ?: if (rr.authorUid == myUid) {
+                    db.reminders().byChat(chatId).firstOrNull {
+                        it.remoteId == null && ua.nahadaika.share.SyncQueue.pendingRemoteId(app, it.id) == rr.id
+                    }?.let { candidate ->
+                        db.reminders().setRemoteId(candidate.id, rr.id)
+                        candidate.copy(remoteId = rr.id)
+                    }
+                } else null
+
+            if (local != null && ua.nahadaika.share.SyncQueue.isPendingUpdate(app, local.id)) continue
+
             if (local == null) {
                 val fired = rr.done || (rr.repeat == Repeat.NONE && rr.triggerAt <= now)
                 val created = Reminder(
-                    chatId = chatId, kind = Kind.TEXT, text = rr.text, triggerAt = target, repeat = rr.repeat,
+                    chatId = chatId, kind = rr.kind, text = rr.text, triggerAt = target, repeat = rr.repeat,
                     alarm = rr.alarm, fired = fired, createdAt = rr.createdAt, authorName = author, remoteId = rr.id,
+                    durationMs = rr.durationMs,
                 )
                 val id = db.reminders().insert(created)
                 if (!fired) AlarmScheduler.schedule(app, created.copy(id = id))
@@ -237,6 +269,9 @@ object Repo {
                 fired = fired,
                 snoozedUntil = if (moved || fired) null else local.snoozedUntil,
                 authorName = author,
+                mediaPath = local.mediaPath,
+                durationMs = if (local.durationMs > 0) local.durationMs else rr.durationMs,
+                kind = if (local.kind != Kind.TEXT) local.kind else rr.kind,
             )
             if (updated == local) continue
             db.reminders().update(updated)
@@ -248,13 +283,23 @@ object Repo {
             }
         }
         val remoteIds = snapshot.reminders.mapTo(HashSet()) { it.id }
-        db.reminders().byChat(chatId).filter { it.remoteId != null && it.remoteId !in remoteIds }.forEach {
-            cleanup(it)
+        db.reminders().byChat(chatId).filter {
+            it.remoteId != null && it.remoteId !in remoteIds && !ua.nahadaika.share.SyncQueue.isPendingUpdate(app, it.id)
+        }.forEach {
+            cleanup(it, isRemote = true)
             db.reminders().delete(it)
         }
         for (rc in snapshot.comments) {
             if (db.comments().byRemoteId(rc.id) != null) continue
             val reminder = db.reminders().byRemoteId(rc.reminderId) ?: continue
+            val pending = db.comments().byReminder(reminder.id).firstOrNull {
+                it.remoteId == null && ua.nahadaika.share.SyncQueue.pendingCommentId(app, it.id) == rc.id
+            }
+            if (pending != null) {
+                db.comments().setRemoteId(pending.id, rc.id)
+                ua.nahadaika.share.SyncQueue.clearReservation(app, "comment", pending.id)
+                continue
+            }
             db.comments().insert(
                 Comment(
                     reminderId = reminder.id, text = rc.text, createdAt = rc.createdAt, remoteId = rc.id,
@@ -275,10 +320,12 @@ object Repo {
         return result
     }
 
-    private fun cleanup(reminder: Reminder) {
+    private fun cleanup(reminder: Reminder, isRemote: Boolean = false) {
         AlarmScheduler.cancel(app, reminder.id)
         Notifier.cancel(app, reminder.id)
-        reminder.mediaPath?.let { File(it).delete() }
+        if (!isRemote || reminder.authorName != null) {
+            reminder.mediaPath?.let { File(it).delete() }
+        }
     }
 
     /** Відкласти вже показане нагадування. */

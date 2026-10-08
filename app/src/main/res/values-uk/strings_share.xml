@@ -7,6 +7,7 @@
     <string name="share_name_hint">Учасники бачитимуть це ім\'я біля ваших нагадувань</string>
     <string name="share_invite_title">Запросити в «%1$s»</string>
     <string name="share_invite_note">Надішліть код або посилання. Поки спільні лише текстові нагадування й обговорення.</string>
+    <string name="share_invite_note_media">Надішліть код або посилання. Нагадування, голосові, відео й фото синхронізуються за наявності інтернету.</string>
     <string name="share_invite_send">Надіслати</string>
     <string name="share_invite_message">Приєднуйся до «%1$s» у Нагадайці: відкрий %2$s або введи код %3$s</string>
     <string name="share_done">Готово</string>

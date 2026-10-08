@@ -1,9 +1,14 @@
 """Перевірка правил Firestore на живому проєкті трьома анонімними користувачами (без виводу ключів і токенів).
 
 Запуск: python tools/firebase_rules_test.py  (ключ і проєкт — з local.properties). Після змін у firebase/firestore.rules.
-У базі лишається один тестовий документ у invites (правила забороняють видаляти запрошення) — його можна прибрати в консолі.
+Для деплою зі знімком правил, відкатом при помилці й очищенням синтетичних даних:
+node tools/verify_deploy_firestore.cjs --apply (FIREBASE_TOOLS_ROOT — каталог firebase-tools).
+Прямий запуск цього Python-файлу не очищає запрошення й тестові акаунти.
 """
 import json
+import os
+import sys
+import uuid
 import urllib.error
 import urllib.request
 
@@ -64,8 +69,12 @@ a_tok, a = sign_up()
 b_tok, b = sign_up()
 c_tok, c = sign_up()  # стороння людина без запрошення
 
-chat_id = "test" + a[:10]
-code = "TST" + a[:3].upper()
+chat_id = "codexrules_" + uuid.uuid4().hex
+code = uuid.uuid4().hex[:6].upper()
+if os.getenv("FIREBASE_TEST_MANIFEST"):
+    with open(os.environ["FIREBASE_TEST_MANIFEST"], "w", encoding="utf-8") as manifest:
+        json.dump({"project": PROJECT, "chat": chat_id, "invite": code,
+                   "users": [a, b, c], "fakeChat": "fake" + c[:6]}, manifest)
 
 # Власник створює чат і запрошення.
 s, _ = call("PATCH", f"{BASE}/chats/{chat_id}", a_tok, fields({"name": "Тест", "members": [a], "names": {a: "Я"}, "owner": a, "inviteCode": code}))
@@ -82,14 +91,30 @@ check("створити чат із чужими учасниками не мо�
 # Другий учасник приєднується за кодом.
 check("запрошення читається за кодом", call("GET", f"{BASE}/invites/{code}", b_tok)[0], 200)
 mask = "updateMask.fieldPaths=members&updateMask.fieldPaths=names.%%60%s%%60&updateMask.fieldPaths=joinCode" % b
+s, _ = call("PATCH", f"{BASE}/chats/{chat_id}?{mask}&updateMask.fieldPaths=name", b_tok,
+            fields({"members": [a, b], "names": {b: "Оля"}, "joinCode": code, "name": "Підміна"}))
+check("код не дозволяє підмінити назву при вході", s, 403)
+s, _ = call("PATCH", f"{BASE}/chats/{chat_id}?{mask}&updateMask.fieldPaths=names.%60{a}%60", b_tok,
+            fields({"members": [a, b], "names": {a: "Підміна", b: "Оля"}, "joinCode": code}))
+check("код не дозволяє підмінити ім'я іншого учасника", s, 403)
 s, _ = call("PATCH", f"{BASE}/chats/{chat_id}?{mask}", b_tok, fields({"members": [a, b], "names": {b: "Оля"}, "joinCode": code}))
 check("учасник приєднується за кодом", s, 200)
+check("учасник не додає сторонню людину", call("PATCH", f"{BASE}/chats/{chat_id}?updateMask.fieldPaths=members", a_tok,
+      fields({"members": [a, b, c]}))[0], 403)
+check("учасник не видаляє іншого", call("PATCH", f"{BASE}/chats/{chat_id}?updateMask.fieldPaths=members", b_tok,
+      fields({"members": [b]}))[0], 403)
+check("учасник не підміняє власника", call("PATCH", f"{BASE}/chats/{chat_id}?updateMask.fieldPaths=owner", b_tok,
+      fields({"owner": b}))[0], 403)
 s, _ = call("PATCH", f"{BASE}/chats/{chat_id}?updateMask.fieldPaths=members&updateMask.fieldPaths=joinCode", c_tok, fields({"members": [a, c], "joinCode": "WRONG1"}))
 check("з неправильним кодом приєднатись не можна", s, 403)
 
 # Нагадування й коментарі.
 s, _ = call("PATCH", f"{BASE}/chats/{chat_id}/reminders/r1", b_tok, fields({"text": "Хліб", "triggerAt": 1893456000000, "repeat": "NONE", "alarm": False, "done": False, "authorUid": b, "authorName": "Оля"}))
 check("учасник додає нагадування", s, 200)
+check("нагадування від чужого імені заборонено", call("PATCH", f"{BASE}/chats/{chat_id}/reminders/spoof", b_tok,
+      fields({"text": "Підміна", "triggerAt": 1893456000000, "authorUid": a}))[0], 403)
+check("автора нагадування не можна підмінити", call("PATCH", f"{BASE}/chats/{chat_id}/reminders/r1?updateMask.fieldPaths=authorUid", a_tok,
+      fields({"authorUid": a}))[0], 403)
 s, j = call("GET", f"{BASE}/chats/{chat_id}/reminders", a_tok)
 check("власник бачить нагадування Олі", len(j.get("documents", [])), 1)
 s, _ = call("PATCH", f"{BASE}/chats/{chat_id}/reminders/r1?updateMask.fieldPaths=done", a_tok, fields({"done": True}))
@@ -116,3 +141,4 @@ check("вийшовший більше не читає", call("GET", f"{BASE}/ch
 check("останній учасник видаляє чат", call("DELETE", f"{BASE}/chats/{chat_id}", a_tok)[0], 200)
 
 print(f"\nпройшло {sum(results)} з {len(results)}")
+sys.exit(0 if all(results) else 1)

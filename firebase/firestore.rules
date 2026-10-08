@@ -12,6 +12,33 @@ service cloud.firestore {
       return signedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.members;
     }
 
+    // Код запрошення дозволяє додати лише себе, а не підмінити назву чи інших учасників.
+    function joining(chatId) {
+      return !(request.auth.uid in resource.data.members)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'names', 'joinCode'])
+        && request.resource.data.members.hasAll(resource.data.members)
+        && request.resource.data.members.removeAll(resource.data.members) == [request.auth.uid]
+        && request.resource.data.members.size() == resource.data.members.size() + 1
+        && request.resource.data.names.diff(resource.data.names).affectedKeys().hasOnly([request.auth.uid])
+        && request.resource.data.names[request.auth.uid] is string
+        && request.resource.data.joinCode == resource.data.inviteCode
+        && get(/databases/$(database)/documents/invites/$(request.resource.data.joinCode)).data.chatId == chatId;
+    }
+
+    function memberUpdate() {
+      return request.auth.uid in resource.data.members
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'members', 'names', 'joinCode'])
+        && request.resource.data.names.diff(resource.data.names).affectedKeys().hasOnly([request.auth.uid])
+        && (
+          request.resource.data.members == resource.data.members
+          || (
+            request.resource.data.members.removeAll(resource.data.members).size() == 0
+            && resource.data.members.removeAll(request.resource.data.members) == [request.auth.uid]
+            && request.resource.data.members.size() == resource.data.members.size() - 1
+          )
+        );
+    }
+
     // Запрошення: прочитати можна лише за точним кодом (без переліку), створює — учасник чату.
     match /invites/{code} {
       allow get: if signedIn();
@@ -22,22 +49,20 @@ service cloud.firestore {
     }
 
     match /chats/{chatId} {
-      allow create: if signedIn() && request.resource.data.members == [request.auth.uid];
+      allow create: if signedIn() && request.resource.data.members == [request.auth.uid]
+        && request.resource.data.owner == request.auth.uid
+        && request.resource.data.names.keys().hasOnly([request.auth.uid])
+        && request.resource.data.names[request.auth.uid] is string;
       // Останній учасник, виходячи, видаляє чат (особиста копія в хмарі).
       allow delete: if signedIn() && resource.data.members == [request.auth.uid];
       allow read: if signedIn() && request.auth.uid in resource.data.members;
-      // Учасник змінює чат як завгодно; новий — лише додає себе й має чинний код запрошення.
-      allow update: if signedIn() && (
-        request.auth.uid in resource.data.members
-        || (
-          request.resource.data.members.removeAll(resource.data.members) == [request.auth.uid]
-          && request.resource.data.members.hasAll(resource.data.members)
-          && get(/databases/$(database)/documents/invites/$(request.resource.data.joinCode)).data.chatId == chatId
-        )
-      );
+      // Учасник може перейменувати чат і вийти, але не додати сторонніх чи переписати чужі імена.
+      allow update: if signedIn() && (memberUpdate() || joining(chatId));
 
       match /reminders/{reminderId} {
-        allow read, write: if isMember(chatId);
+        allow read, delete: if isMember(chatId);
+        allow create: if isMember(chatId) && request.resource.data.authorUid == request.auth.uid;
+        allow update: if isMember(chatId) && request.resource.data.authorUid == resource.data.authorUid;
       }
 
       // Повідомлення пише лише сам автор і більше не змінює.

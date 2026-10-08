@@ -4,6 +4,7 @@
     <string name="settings_cloud_title">Keep in the cloud</string>
     <string name="settings_cloud_off">Sign in with Google — your chats on every phone, nothing lost when you switch</string>
     <string name="settings_cloud_on">%1$s · text reminders and discussions</string>
+    <string name="settings_cloud_on_media">%1$s · reminders, discussions and media</string>
     <string name="settings_cloud_busy">Signing in…</string>
     <string name="settings_cloud_failed">Couldn\'t sign in — check the internet</string>
 </resources>

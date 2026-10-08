@@ -27,8 +27,8 @@ android {
         applicationId = "ua.nahadaika"
         minSdk = 26
         targetSdk = 35
-        versionCode = 25
-        versionName = "3.16"
+        versionCode = 26
+        versionName = "3.17"
         // Мови інтерфейсу; нову мову додавати і сюди, і в res/xml/locales_config.xml.
         resourceConfigurations += listOf("uk", "en")
         // Розумний час: Gemini через Firebase AI Logic (проєкт Firebase — нижче, у варіанті github). Модель можна міняти тут.
@@ -38,6 +38,7 @@ android {
         buildConfigField("String", "FIREBASE_APP_ID", "\"\"")
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"\"")
         buildConfigField("String", "FIREBASE_WEB_CLIENT_ID", "\"\"")
+        buildConfigField("String", "FIREBASE_STORAGE_BUCKET", "\"\"")
     }
 
     // github — APK зі самооновленням з GitHub Releases; play — для Google Play (без оновлень і без інтернету).
@@ -53,6 +54,8 @@ android {
             buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${localSetting("firebase.projectId", "FIREBASE_PROJECT_ID")}\"")
             // OAuth web client (Authentication → Google) — для входу через Google.
             buildConfigField("String", "FIREBASE_WEB_CLIENT_ID", "\"${localSetting("firebase.webClientId", "FIREBASE_WEB_CLIENT_ID")}\"")
+            // Firebase Storage bucket для медіафайлів (голосові, відео, фото).
+            buildConfigField("String", "FIREBASE_STORAGE_BUCKET", "\"${localSetting("firebase.storageBucket", "FIREBASE_STORAGE_BUCKET")}\"")
         }
         create("play") {
             dimension = "dist"
@@ -117,6 +120,7 @@ dependencies {
     // Спільні чати — лише у варіанті github (у Play-збірці поки немає інтернету).
     "githubImplementation"(platform("com.google.firebase:firebase-bom:33.7.0"))
     "githubImplementation"("com.google.firebase:firebase-firestore")
+    "githubImplementation"("com.google.firebase:firebase-storage")
     "githubImplementation"("com.google.firebase:firebase-auth")
     "githubImplementation"("androidx.credentials:credentials:1.3.0")
     "githubImplementation"("androidx.credentials:credentials-play-services-auth:1.3.0")

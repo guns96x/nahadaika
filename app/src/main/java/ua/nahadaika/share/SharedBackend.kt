@@ -2,12 +2,14 @@ package ua.nahadaika.share
 
 import android.content.Context
 import kotlinx.coroutines.flow.Flow
+import ua.nahadaika.data.Kind
 import ua.nahadaika.data.Repeat
+import java.io.File
 
 /** Учасник спільного чату, як його бачать інші. */
 data class Member(val uid: String, val name: String)
 
-/** Нагадування на сервері. Поки в хмарі лише текстові нагадування (голосові й відео — наступним кроком). */
+/** Нагадування на сервері: текст або медіа (голосові, відео, фото). */
 data class RemoteReminder(
     val id: String,
     val text: String,
@@ -18,7 +20,16 @@ data class RemoteReminder(
     val authorUid: String,
     val authorName: String,
     val createdAt: Long,
+    val kind: Kind = Kind.TEXT,
+    /** Приватний детермінований шлях у Storage (наприклад, chats/{chatId}/media/{id}.ext). */
+    val mediaRef: String? = null,
+    val durationMs: Long = 0,
+    val mediaSize: Long = 0,
+    val mediaMime: String? = null,
 )
+
+/** Оновлювали нагадування, якого на сервері вже немає (видалив інший учасник). */
+class RemoteGone : Exception()
 
 /** Повідомлення в обговоренні нагадування [reminderId]. */
 data class RemoteComment(
@@ -85,4 +96,19 @@ interface SharedBackend {
 
     /** Вийти з чату; якщо я був останнім — чат видаляється. */
     suspend fun leave(chatId: String, me: Member)
+
+    /** Чи налаштовано й доступне хмарне сховище Firebase Storage для медіафайлів. */
+    fun storageAvailable(): Boolean = false
+
+    /**
+     * Завантажити медіафайл до приватного автентифікованого сховища Storage.
+     * Повертає відносний шлях у сховищі (mediaRef) або null, якщо сховище недоступне.
+     */
+    suspend fun uploadMedia(chatId: String, reminderId: String, file: File, mime: String): String? = null
+
+    /**
+     * Завантажити медіафайл зі сховища за приватним [mediaRef] у локальний файл [target].
+     * Повертає true у разі успіху.
+     */
+    suspend fun downloadMedia(mediaRef: String, target: File): Boolean = false
 }
