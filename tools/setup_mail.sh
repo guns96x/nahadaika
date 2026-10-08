@@ -12,5 +12,7 @@ echo
 ENV_FILE=$(mktemp)
 trap 'rm -f "$ENV_FILE"' EXIT
 { printf "GMAIL_USER='%s'\n" "$GMAIL_USER"; printf "GMAIL_APP_PASSWORD='%s'\n" "$(printf %s "$GMAIL_APP_PASSWORD" | tr -d ' \r\n')"; } > "$ENV_FILE"
-npx --yes supabase secrets set --project-ref "$SUPABASE_REF" --env-file "$ENV_FILE" >/dev/null
+# Node (Windows) не бачить MSYS-шляху /tmp/…: передаємо шлях у форматі Windows.
+ENV_ARG=$(cygpath -m "$ENV_FILE" 2>/dev/null || echo "$ENV_FILE")
+npx --yes supabase secrets set --project-ref "$SUPABASE_REF" --env-file "$ENV_ARG" >/dev/null
 echo "Готово: секрети GMAIL_USER і GMAIL_APP_PASSWORD задано. Функція invite-mail шле листи від $GMAIL_USER."
