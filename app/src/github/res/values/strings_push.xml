@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="push_sync_channel">Shared chat sync</string>
+    <string name="push_sync_title">Syncing shared chats</string>
+</resources>

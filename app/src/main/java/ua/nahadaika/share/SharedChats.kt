@@ -1,6 +1,7 @@
 package ua.nahadaika.share
 
 import android.annotation.SuppressLint
+import android.app.ActivityManager
 import android.content.Context
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -11,11 +12,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import ua.nahadaika.Prefs
+import ua.nahadaika.alarm.Notifier
 import ua.nahadaika.data.Chat
 import ua.nahadaika.data.Comment
 import ua.nahadaika.data.Kind
 import ua.nahadaika.data.Reminder
 import ua.nahadaika.data.Repeat
+import ua.nahadaika.data.RemoteNews
 import ua.nahadaika.data.Repo
 import java.io.File
 
@@ -31,6 +34,9 @@ object SharedChats {
     private var scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val watching = mutableMapOf<String, Job>()
 
+    /** Чати, чий слухач уже отримав дані з сервера, — отже, на зв'язку й побачить нове сам. */
+    private val live = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+
     /** Зміни йдуть на сервер строго по черзі: коментар — лише після того, як його нагадування отримало ідентифікатор. */
     private val outgoing = Mutex()
 
@@ -39,6 +45,12 @@ object SharedChats {
     }
 
     fun available(): Boolean = backend != null
+
+    /** Застосунок перед очима — нове й так видно в чаті, сповіщення зайве. Підміна в тестах. */
+    var appVisible: () -> Boolean = {
+        ActivityManager.RunningAppProcessInfo().also(ActivityManager::getMyMemoryState).importance ==
+            ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
+    }
 
     /** Під'єднати сервер і почати стежити за всіма чатами в хмарі. */
     fun init(context: Context, backend: SharedBackend, watch: Boolean = true) {
@@ -53,6 +65,7 @@ object SharedChats {
         scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         watching.values.forEach { it.cancel() }
         watching.clear()
+        live.clear()
         backend = null
     }
 
@@ -84,6 +97,7 @@ object SharedChats {
         // Скидаємо попередні слухачі, щоб вони не працювали зі застарілим UID
         watching.values.forEach { it.cancel() }
         watching.clear()
+        live.clear()
 
         // Якщо акаунт уже був на іншому телефоні, ідентифікатор змінився — повертаємося у свої чати за кодами.
         val mine = b.myChats().mapTo(HashSet()) { it.id }
@@ -118,12 +132,13 @@ object SharedChats {
         app?.let { Prefs.setCloud(it, false) }
     }
 
-    /** Чат лише з цього телефона — у хмару (поки без учасників). */
-    private suspend fun upload(b: SharedBackend, chat: Chat, me: Member): RemoteChat {
+    /** Чат лише з цього телефона — у хмару (поки без учасників). [shared] — ним діляться: медіа теж їде. */
+    private suspend fun upload(b: SharedBackend, chat: Chat, me: Member, shared: Boolean = false): RemoteChat {
         val remote = b.createChat(chat.name, me)
         Repo.setChatRemoteId(chat.id, remote.id)
         Prefs.setInviteCode(ctx(), remote.id, remote.inviteCode)
-        Repo.remindersOf(chat.id).forEach { push(b, remote.id, it, me) }
+        if (shared) Prefs.setShared(ctx(), remote.id)
+        Repo.remindersOf(chat.id).forEach { push(b, remote.id, it, me, notify = false) }
         watch(chat.copy(remoteId = remote.id))
         return remote
     }
@@ -135,13 +150,14 @@ object SharedChats {
         val b = checkNotNull(backend)
         val remoteId = chat.remoteId
         val code = if (remoteId == null) {
-            val remote = upload(b, chat, me(b))
-            Prefs.setShared(ctx(), remote.id)
-            remote.inviteCode
+            upload(b, chat, me(b), shared = true).inviteCode
         } else {
             Prefs.setShared(ctx(), remoteId)
+            // Медіа особистої копії в хмару не їхало (кур'єр лише доставляє) — тепер є кому.
+            send { Repo.remindersOf(chat.id).filter { it.remoteId == null }.forEach { runCatching { push(b, remoteId, it, me(b)) } } }
             Prefs.inviteCode(ctx(), remoteId) ?: b.myChats().firstOrNull { it.id == remoteId }?.inviteCode.orEmpty()
         }
+        Repo.chatById(chat.id)?.remoteId?.let { id -> send { b.registerPush(id) } }
         code
     }
 
@@ -200,10 +216,48 @@ object SharedChats {
         for (chat in Repo.sharedChats()) {
             val remoteChatId = chat.remoteId ?: continue
             val snapshot = b.fetch(remoteChatId)
-            Repo.applyRemote(chat.id, snapshot, me.uid)
+            announce(chat.id, Repo.applyRemote(chat.id, snapshot, me.uid))
             syncMedia(b, chat.id, snapshot)
+            if (Prefs.isShared(context, remoteChatId)) {
+                runCatching { b.registerPush(remoteChatId) }
+                runCatching { b.cleanupMedia(remoteChatId) }
+            }
             watch(chat)
         }
+    }
+
+    /** Прийшло push-сповіщення: забрати нове з одного чату й показати його. */
+    suspend fun syncChat(remoteId: String) = outgoing.withLock {
+        val b = backend ?: return@withLock
+        // Застосунок живий і слухач чату на зв'язку — зміни прийдуть і так, без зайвого читання всього чату.
+        if (remoteId in live && watching[remoteId]?.isActive == true) return@withLock
+        val chat = Repo.chatByRemoteId(remoteId) ?: return@withLock
+        val snapshot = b.fetch(remoteId)
+        announce(chat.id, Repo.applyRemote(chat.id, snapshot, b.signIn()))
+        syncMedia(b, chat.id, snapshot)
+    }
+
+    /** Новий токен FCM — перереєструвати телефон у всіх спільних чатах. */
+    fun onPushToken() {
+        val b = backend ?: return
+        send {
+            for (chat in Repo.sharedChats()) {
+                val id = chat.remoteId ?: continue
+                if (Prefs.isShared(ctx(), id)) runCatching { b.registerPush(id) }
+            }
+        }
+    }
+
+    /** Нове від інших учасників — сповіщенням, якщо застосунок не перед очима. */
+    private suspend fun announce(chatId: Long, news: RemoteNews) {
+        if (news.isEmpty() || appVisible()) return
+        val chat = Repo.chatById(chatId) ?: return
+        Notifier.showIncoming(
+            ctx(),
+            chat,
+            news.reminders.mapNotNull { Repo.reminder(it) },
+            news.comments.mapNotNull { id -> Repo.comment(id)?.let { it to Repo.reminder(it.reminderId) } },
+        )
     }
 
     private fun watch(chat: Chat) {
@@ -213,14 +267,17 @@ object SharedChats {
         watching[remoteId] = scope.launch {
             runCatching {
                 b.observe(remoteId).collect { snapshot ->
+                    live += remoteId
                     outgoing.withLock {
                         val currentUid = b.signIn()
                         val localChat = Repo.chatByRemoteId(remoteId) ?: return@withLock
-                        Repo.applyRemote(localChat.id, snapshot, currentUid)
+                        announce(localChat.id, Repo.applyRemote(localChat.id, snapshot, currentUid))
                         syncMedia(b, localChat.id, snapshot)
                     }
                 }
             }
+            // Слухач упав (немає мережі, вийшли з чату) — далі покладаємося на push і фонову синхронізацію.
+            live -= remoteId
         }
     }
 
@@ -237,6 +294,7 @@ object SharedChats {
             val downloadedPath = downloadMedia(b, rr.mediaRef, rr.id)
             if (downloadedPath != null) {
                 Repo.updateReminderMediaPath(local.id, downloadedPath)
+                runCatching { b.mediaReceived(remoteChat, rr.mediaRef) }
             }
         }
     }
@@ -306,6 +364,7 @@ object SharedChats {
         send {
             b.deleteReminder(remoteChat, remoteId)
             SyncQueue.removePendingDeletion(context, remoteChat, remoteId)
+            wake(b, remoteChat, urgent = false)
         }
     }
 
@@ -325,6 +384,13 @@ object SharedChats {
         b.putComment(remoteChat, RemoteComment(id, remoteReminder, comment.text, me.uid, me.name, comment.createdAt))
         Repo.setCommentRemoteId(comment.id, id)
         SyncQueue.clearReservation(ctx(), "comment", comment.id)
+        wake(b, remoteChat, urgent = true)
+    }
+
+    /** Розбудити інших учасників окремо від черги: повільний сервер сповіщень не гальмує відправку. */
+    private fun wake(b: SharedBackend, remoteChat: String, urgent: Boolean) {
+        if (!Prefs.isShared(ctx(), remoteChat)) return
+        scope.launch { runCatching { b.notifyMembers(remoteChat, urgent) } }
     }
 
     /** Видалили чат у себе — виходимо з нього (останній учасник видаляє його й із хмари). */
@@ -335,25 +401,33 @@ object SharedChats {
         send { b.leave(remoteId, me(b)) }
     }
 
-    private suspend fun push(b: SharedBackend, remoteChat: String, r: Reminder, me: Member) {
+    /** [notify] = false — масове вивантаження чату: не будити інших на кожне нагадування. */
+    private suspend fun push(b: SharedBackend, remoteChat: String, r: Reminder, me: Member, notify: Boolean = true) {
         val revision = SyncQueue.revision(ctx(), r.id)
         val create = r.remoteId == null
         // Файл вивантажуємо лише разом зі створенням: правки часу чи тексту не женуть відео вдруге,
         // а чуже медіа, яке ще не докачалося, все одно можна перенести.
         val file = if (create && r.kind != Kind.TEXT) {
             val f = r.mediaPath?.let(::File)
-            val ok = b.storageAvailable() && f != null && MediaSync.isLocalMedia(ctx(), f) &&
-                f.length() in 1..MediaSync.MAX_MEDIA_SIZE_BYTES
+            // Кур'єр лише доставляє: у чат без інших учасників медіа не везе.
+            val ok = b.storageAvailable() && (!b.mediaIsTemporary() || Prefs.isShared(ctx(), remoteChat)) &&
+                f != null && MediaSync.isLocalMedia(ctx(), f) && f.length() > 0 && !SyncQueue.isLocalOnly(ctx(), r.id)
             if (!ok) {
-                // Без Storage (чи без файлу) медіа лишається лише на цьому телефоні.
+                // Без сховища (чи без файлу) медіа лишається лише на цьому телефоні.
                 SyncQueue.removePendingUpdate(ctx(), r.id)
                 return
             }
             f
         } else null
         val id = r.remoteId ?: SyncQueue.reserveId(ctx(), "reminder", r.id, b::newId)
-        val mime = file?.let { MediaSync.mimeFor(r.kind, it.extension) }
-        val mediaRef = file?.let { b.uploadMedia(remoteChat, id, it, mime!!) ?: return }
+        val media = file?.let {
+            b.uploadMedia(remoteChat, id, it, MediaSync.mimeFor(r.kind, it.extension)) ?: run {
+                // Сервер такого не прийме (завеликий файл) — не намагатися знову при кожній синхронізації.
+                SyncQueue.markLocalOnly(ctx(), r.id)
+                SyncQueue.removePendingUpdate(ctx(), r.id)
+                return
+            }
+        }
 
         try {
             b.putReminder(
@@ -369,10 +443,10 @@ object SharedChats {
                     authorName = me.name,
                     createdAt = r.createdAt,
                     kind = r.kind,
-                    mediaRef = mediaRef,
+                    mediaRef = media?.ref,
                     durationMs = r.durationMs,
-                    mediaSize = file?.length() ?: 0,
-                    mediaMime = mime,
+                    mediaSize = media?.size ?: 0,
+                    mediaMime = media?.mime,
                 ),
                 create,
             )
@@ -386,5 +460,6 @@ object SharedChats {
         Repo.setReminderRemoteId(r.id, id)
         SyncQueue.removePendingUpdate(ctx(), r.id, revision)
         SyncQueue.clearReservation(ctx(), "reminder", r.id)
+        if (notify) wake(b, remoteChat, urgent = create)
     }
 }

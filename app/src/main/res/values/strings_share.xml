@@ -17,4 +17,9 @@
     <string name="share_join_button">Join</string>
     <string name="share_failed">Couldn\'t connect — check the internet</string>
     <string name="share_code_not_found">No chat with this code</string>
+    <string name="share_channel_name">Shared chats</string>
+    <string name="share_channel_desc">New reminders and messages from other members</string>
+    <string name="share_new_reminder">%1$s: %2$s</string>
+    <string name="share_new_comment">%1$s about “%2$s”: %3$s</string>
+    <string name="share_news_count">New in the chat: %1$d</string>
 </resources>

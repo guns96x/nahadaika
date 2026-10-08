@@ -1,14 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Самооновлення з GitHub Releases (у варіанті play цього немає: Play забороняє оновлення в обхід магазину). -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Точні будильники без запиту: ця збірка не з Play і не проходить його перевірку цього дозволу. -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- Синхронізація після push до Android 12 іде як короткий foreground-сервіс WorkManager. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <application>
         <receiver android:name=".update.InstallReceiver" android:exported="false" />
+
+        <!-- Миттєві сповіщення спільних чатів (FCM). -->
+        <service android:name=".share.PushService" android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
 
         <!-- Запрошення в спільний чат: nahadaika://join/КОД -->
         <activity android:name=".ui.MainActivity" android:exported="true">

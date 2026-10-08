@@ -91,6 +91,13 @@ object SyncQueue {
         prefs(context).edit().remove("${type}_$localId").commit()
     }
 
+    /** Медіа, яке сервер не прийняв (завелике): лишається на телефоні, повторно не відправляється. */
+    fun markLocalOnly(context: Context, reminderId: Long) {
+        prefs(context).edit().putBoolean("local_only_$reminderId", true).commit()
+    }
+
+    fun isLocalOnly(context: Context, reminderId: Long): Boolean = prefs(context).getBoolean("local_only_$reminderId", false)
+
     @Synchronized
     fun clear(context: Context) {
         prefs(context).edit().clear().commit()

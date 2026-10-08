@@ -17,4 +17,9 @@
     <string name="share_join_button">Приєднатися</string>
     <string name="share_failed">Не вдалося з\'єднатися — перевірте інтернет</string>
     <string name="share_code_not_found">Чату з таким кодом немає</string>
+    <string name="share_channel_name">Спільні чати</string>
+    <string name="share_channel_desc">Нові нагадування й повідомлення від інших учасників</string>
+    <string name="share_new_reminder">%1$s: %2$s</string>
+    <string name="share_new_comment">%1$s про «%2$s»: %3$s</string>
+    <string name="share_news_count">Нового в чаті: %1$d</string>
 </resources>

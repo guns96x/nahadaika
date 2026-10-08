@@ -1,0 +1,8 @@
+# Supabase-проєкт сервера сповіщень Нагадайки (nahadaika-push). Деплой функції:
+#   npx supabase functions deploy notify --project-ref lqspxwvyikuarfbfgnqf
+project_id = "lqspxwvyikuarfbfgnqf"
+
+# Функція сама перевіряє Firebase ID token (JWKS securetoken); JWT Supabase у застосунку немає,
+# а keep-alive (GET) ходить без авторизації — тож перевірку шлюзу вимкнено.
+[functions.notify]
+verify_jwt = false

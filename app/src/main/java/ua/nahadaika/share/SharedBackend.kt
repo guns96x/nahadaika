@@ -97,18 +97,37 @@ interface SharedBackend {
     /** Вийти з чату; якщо я був останнім — чат видаляється. */
     suspend fun leave(chatId: String, me: Member)
 
-    /** Чи налаштовано й доступне хмарне сховище Firebase Storage для медіафайлів. */
+    /** Медіа можна передати іншим: є Firebase Storage або «кур'єр» у Firestore. */
     fun storageAvailable(): Boolean = false
 
     /**
-     * Завантажити медіафайл до приватного автентифікованого сховища Storage.
-     * Повертає відносний шлях у сховищі (mediaRef) або null, якщо сховище недоступне.
+     * Медіа лежить у хмарі лише до доставки всім учасникам (кур'єр), а не зберігається там.
+     * Тоді в чат без інших учасників (особиста копія в хмарі) його не вивантажують.
      */
-    suspend fun uploadMedia(chatId: String, reminderId: String, file: File, mime: String): String? = null
+    fun mediaIsTemporary(): Boolean = false
 
     /**
-     * Завантажити медіафайл зі сховища за приватним [mediaRef] у локальний файл [target].
-     * Повертає true у разі успіху.
+     * Вивантажити медіафайл (перед відправкою його можна стиснути). Повертає, що саме лежить на сервері,
+     * або null — цей файл не передати (немає сховища, завеликий): він лишається лише на телефоні.
+     * Мережеві збої — винятком, тоді запис повториться пізніше.
      */
+    suspend fun uploadMedia(chatId: String, reminderId: String, file: File, mime: String): UploadedMedia? = null
+
+    /** Завантажити медіафайл за [mediaRef] у локальний файл [target]; true — успішно. */
     suspend fun downloadMedia(mediaRef: String, target: File): Boolean = false
+
+    /** Файл [mediaRef] уже на цьому телефоні: кур'єр прибирає його з хмари, щойно отримали всі. */
+    suspend fun mediaReceived(chatId: String, mediaRef: String) = Unit
+
+    /** Прибрати з хмари медіа чату, яке ніхто не забрав за 30 днів. */
+    suspend fun cleanupMedia(chatId: String) = Unit
+
+    /** Зареєструвати цей телефон для миттєвих сповіщень про зміни в чаті. */
+    suspend fun registerPush(chatId: String) = Unit
+
+    /** Розбудити телефони інших учасників; [urgent] — нове нагадування чи повідомлення. Збої не страшні: є фонова перевірка. */
+    suspend fun notifyMembers(chatId: String, urgent: Boolean) = Unit
 }
+
+/** Медіа на сервері: шлях, розмір і тип того, що справді вивантажено (після стиснення). */
+data class UploadedMedia(val ref: String, val size: Long, val mime: String)

@@ -33,16 +33,21 @@ import java.io.File
 import java.security.SecureRandom
 
 /**
- * Чати в хмарі на Firestore і Storage. Структура:
+ * Чати в хмарі на Firestore. Структура:
  * chats/{id} — назва, учасники (members, names), код запрошення; chats/{id}/reminders, chats/{id}/comments;
+ * chats/{id}/push — FCM-токени телефонів учасників; chats/{id}/media — медіа «кур'єром» (див. [MediaCourier]);
  * invites/{код} — до якого чату веде запрошення.
- * Медіафайли у Storage: chats/{chatId}/media/{reminderId}.ext з перевіркою членства через Firestore у storage.rules.
+ * Якщо підключено Storage (план Blaze), медіа йде туди: chats/{chatId}/media/{reminderId}.ext, правила — storage.rules.
  */
 class FirestoreBackend(
+    private val context: Context,
     private val auth: FirebaseAuth,
     private val db: FirebaseFirestore,
     private val storage: FirebaseStorage? = null,
 ) : SharedBackend {
+    private val courier = MediaCourier(context, auth, db)
+    private val push = PushLink(context, auth, db)
+
     private suspend fun <T> Task<T>.confirmed(): T = withTimeout(20_000) { await() }
     // Відео до 25 МБ на повільному мобільному інтернеті за 20 с не встигає.
     private suspend fun <T> Task<T>.transferred(): T = withTimeout(5 * 60_000) { await() }
@@ -187,6 +192,7 @@ class FirestoreBackend(
 
     override suspend fun deleteReminder(chatId: String, reminderId: String) {
         reminders(chatId).document(reminderId).delete().confirmed()
+        runCatching { courier.deleteFor(chatId, reminderId) }
     }
 
     override suspend fun putComment(chatId: String, comment: RemoteComment) {
@@ -207,6 +213,7 @@ class FirestoreBackend(
     }
 
     override suspend fun leave(chatId: String, me: Member) {
+        runCatching { push.unregister(chatId) }
         val members = chat(chatId).get().confirmed().get("members") as? List<*>
         if (members == listOf(me.uid)) {
             chat(chatId).delete().confirmed()
@@ -215,28 +222,48 @@ class FirestoreBackend(
         }
     }
 
-    override fun storageAvailable(): Boolean = storage != null
+    // Без Storage медіа везе кур'єр через Firestore.
+    override fun storageAvailable(): Boolean = true
 
-    override suspend fun uploadMedia(chatId: String, reminderId: String, file: File, mime: String): String? {
-        val st = storage ?: return null
-        val ext = file.extension.ifEmpty { "bin" }
-        val path = MediaSync.storagePath(chatId, reminderId, ext)
-        check(MediaSync.isSafeMediaRef(path) && file.length() in 1..MediaSync.MAX_MEDIA_SIZE_BYTES)
-        val ref = st.reference.child(path)
-        val metadata = StorageMetadata.Builder().setContentType(mime).build()
-        ref.putFile(Uri.fromFile(file), metadata).transferred()
-        return path
+    override fun mediaIsTemporary(): Boolean = storage == null
+
+    override suspend fun uploadMedia(chatId: String, reminderId: String, file: File, mime: String): UploadedMedia? {
+        val (send, type) = MediaShrink.prepare(context, file, mime, reminderId)
+        try {
+            // Завелике навіть після стиснення — лишається на телефоні автора.
+            if (send.length() !in 1..MediaSync.MAX_MEDIA_SIZE_BYTES) return null
+            val st = storage ?: return courier.upload(chatId, reminderId, send, type)
+            val path = MediaSync.storagePath(chatId, reminderId, send.extension.ifEmpty { "bin" })
+            check(MediaSync.isSafeMediaRef(path))
+            val metadata = StorageMetadata.Builder().setContentType(type).build()
+            st.reference.child(path).putFile(Uri.fromFile(send), metadata).transferred()
+            return UploadedMedia(path, send.length(), type)
+        } finally {
+            if (send != file) send.delete()
+        }
     }
 
     override suspend fun downloadMedia(mediaRef: String, target: File): Boolean {
-        val st = storage ?: return false
         check(MediaSync.isSafeMediaRef(mediaRef))
+        courier.download(mediaRef, target)?.let { return it }
+        val st = storage ?: run {
+            courier.markGone(mediaRef)
+            return false
+        }
         val ref = st.reference.child(mediaRef)
         val metadata = ref.metadata.confirmed()
         check(metadata.sizeBytes in 1..MediaSync.MAX_MEDIA_SIZE_BYTES)
         ref.getFile(target).transferred()
         return true
     }
+
+    override suspend fun mediaReceived(chatId: String, mediaRef: String) = courier.received(chatId, mediaRef)
+
+    override suspend fun cleanupMedia(chatId: String) = courier.cleanup(chatId)
+
+    override suspend fun registerPush(chatId: String) = push.register(chatId)
+
+    override suspend fun notifyMembers(chatId: String, urgent: Boolean) = push.notify(chatId, urgent)
 
     private fun toChat(d: DocumentSnapshot): RemoteChat? {
         if (!d.exists()) return null

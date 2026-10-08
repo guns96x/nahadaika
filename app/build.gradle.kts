@@ -39,6 +39,7 @@ android {
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"\"")
         buildConfigField("String", "FIREBASE_WEB_CLIENT_ID", "\"\"")
         buildConfigField("String", "FIREBASE_STORAGE_BUCKET", "\"\"")
+        buildConfigField("String", "PUSH_URL", "\"\"")
     }
 
     // github — APK зі самооновленням з GitHub Releases; play — для Google Play (без оновлень і без інтернету).
@@ -56,6 +57,9 @@ android {
             buildConfigField("String", "FIREBASE_WEB_CLIENT_ID", "\"${localSetting("firebase.webClientId", "FIREBASE_WEB_CLIENT_ID")}\"")
             // Firebase Storage bucket для медіафайлів (голосові, відео, фото).
             buildConfigField("String", "FIREBASE_STORAGE_BUCKET", "\"${localSetting("firebase.storageBucket", "FIREBASE_STORAGE_BUCKET")}\"")
+            // Сервер миттєвих сповіщень (Supabase Edge Function, supabase/functions/notify). Адреса не секретна.
+            val pushUrl = localSetting("push.url", "NAHADAIKA_PUSH_URL").ifBlank { "https://lqspxwvyikuarfbfgnqf.supabase.co/functions/v1/notify" }
+            buildConfigField("String", "PUSH_URL", "\"$pushUrl\"")
         }
         create("play") {
             dimension = "dist"
@@ -122,6 +126,12 @@ dependencies {
     "githubImplementation"("com.google.firebase:firebase-firestore")
     "githubImplementation"("com.google.firebase:firebase-storage")
     "githubImplementation"("com.google.firebase:firebase-auth")
+    "githubImplementation"("com.google.firebase:firebase-messaging")
+    // Стиснення відео перед відправкою у спільний чат.
+    val media3 = "1.5.1"
+    "githubImplementation"("androidx.media3:media3-transformer:$media3")
+    "githubImplementation"("androidx.media3:media3-effect:$media3")
+    "githubImplementation"("androidx.media3:media3-common:$media3")
     "githubImplementation"("androidx.credentials:credentials:1.3.0")
     "githubImplementation"("androidx.credentials:credentials-play-services-auth:1.3.0")
     "githubImplementation"("com.google.android.libraries.identity.googleid:googleid:1.1.1")

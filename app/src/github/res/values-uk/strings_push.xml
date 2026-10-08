@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="push_sync_channel">Синхронізація чатів</string>
+    <string name="push_sync_title">Синхронізація спільних чатів</string>
+</resources>

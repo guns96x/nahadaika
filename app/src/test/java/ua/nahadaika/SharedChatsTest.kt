@@ -64,8 +64,20 @@ class FakeBackend(var uid: String = "me") : SharedBackend {
     override fun account() = email
     override fun canUseGoogle() = true
     override fun storageAvailable() = storageEnabled
-    override suspend fun uploadMedia(chatId: String, reminderId: String, file: java.io.File, mime: String): String? {
+    var temporaryMedia = false
+    var refuseUploads = false
+    var uploadAttempts = 0
+    val notified = mutableListOf<Pair<String, Boolean>>() // чат → терміново
+    val received = mutableListOf<String>()
+    val pushChats = mutableSetOf<String>()
+    override fun mediaIsTemporary() = temporaryMedia
+    override suspend fun mediaReceived(chatId: String, mediaRef: String) { received += mediaRef }
+    override suspend fun registerPush(chatId: String) { pushChats += chatId }
+    override suspend fun notifyMembers(chatId: String, urgent: Boolean) { synchronized(notified) { notified += chatId to urgent } }
+    override suspend fun uploadMedia(chatId: String, reminderId: String, file: java.io.File, mime: String): ua.nahadaika.share.UploadedMedia? {
         if (!storageEnabled) return null
+        uploadAttempts++
+        if (refuseUploads) return null
         if (failNextUpload) {
             failNextUpload = false
             throw java.io.IOException("Мережевий збій завантаження медіа")
@@ -74,7 +86,7 @@ class FakeBackend(var uid: String = "me") : SharedBackend {
         val ext = file.extension.ifEmpty { "bin" }
         val ref = "chats/$chatId/media/$reminderId.$ext"
         mediaStore[ref] = file.readBytes()
-        return ref
+        return ua.nahadaika.share.UploadedMedia(ref, file.length(), mime)
     }
     override suspend fun downloadMedia(mediaRef: String, target: java.io.File): Boolean {
         if (!storageEnabled) return false

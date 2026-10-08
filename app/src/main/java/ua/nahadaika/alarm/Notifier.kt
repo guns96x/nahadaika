@@ -20,6 +20,8 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import ua.nahadaika.R
 import ua.nahadaika.Res
+import ua.nahadaika.data.Chat
+import ua.nahadaika.data.Comment
 import ua.nahadaika.data.Kind
 import ua.nahadaika.data.Reminder
 import ua.nahadaika.previewText
@@ -167,6 +169,71 @@ object Notifier {
 
     fun cancel(context: Context, id: Long) {
         NotificationManagerCompat.from(context).cancel(id.toInt())
+    }
+
+    const val SHARED_CHANNEL_ID = "shared"
+
+    /** Скільки останніх рядків показувати в згорнутому списку нового. */
+    private const val MAX_LINES = 6
+
+    private fun createSharedChannel(context: Context) {
+        val channel = NotificationChannel(SHARED_CHANNEL_ID, Res.s(R.string.share_channel_name), NotificationManager.IMPORTANCE_HIGH).apply {
+            description = Res.s(R.string.share_channel_desc)
+            lockscreenVisibility = NotificationCompat.VISIBILITY_PRIVATE
+        }
+        context.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+    }
+
+    /**
+     * Нове від інших учасників спільного чату: одне сповіщення на чат (нові замінюють попереднє).
+     * Ідентифікатор від'ємний, щоб не перетнутися зі сповіщеннями нагадувань (там id нагадування).
+     */
+    fun showIncoming(context: Context, chat: Chat, reminders: List<Reminder>, comments: List<Pair<Comment, Reminder?>>) {
+        if (!canNotify(context) || (reminders.isEmpty() && comments.isEmpty())) return
+        createSharedChannel(context)
+        val fresh = reminders.map { Res.s(R.string.share_new_reminder, it.authorName.orEmpty(), previewText(it)) } +
+            comments.map { (c, about) -> Res.s(R.string.share_new_comment, c.authorName.orEmpty(), about?.let(::previewText).orEmpty(), c.text) }
+        val id = -(chat.id.toInt() + 1)
+        // Зміни приходять порціями — дописуємо до ще не прочитаного сповіщення, а не затираємо його.
+        val shown = context.getSystemService(NotificationManager::class.java).activeNotifications.firstOrNull { it.id == id }?.notification
+        val before = shown?.extras?.let { e ->
+            e.getCharSequenceArray(NotificationCompat.EXTRA_TEXT_LINES)?.map(CharSequence::toString)
+                ?: e.getCharSequence(NotificationCompat.EXTRA_BIG_TEXT)?.let { listOf(it.toString()) }
+        }.orEmpty()
+        val lines = (before + fresh).takeLast(MAX_LINES)
+        val count = (shown?.number?.takeIf { it > 0 } ?: before.size) + fresh.size
+        val single = count == 1
+        // Одне нагадування — відкрити саме його; кілька — просто чат.
+        val focus = if (shown != null) -1L else reminders.singleOrNull()?.id ?: comments.map { it.first.reminderId }.distinct().singleOrNull() ?: -1L
+        val open = PendingIntent.getActivity(
+            context, id,
+            Intent(context, MainActivity::class.java)
+                .setAction("ua.nahadaika.SHARED.${chat.id}")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                .putExtra(MainActivity.EXTRA_CHAT_ID, chat.id)
+                .putExtra(MainActivity.EXTRA_REMINDER_ID, focus),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val builder = NotificationCompat.Builder(context, SHARED_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setColor(0xFFB4A8FF.toInt())
+            .setContentTitle(chat.name)
+            .setContentText(if (single) lines.single() else Res.s(R.string.share_news_count, count))
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setNumber(count)
+            .setWhen(System.currentTimeMillis())
+            .setContentIntent(open)
+        if (single) {
+            builder.setStyle(NotificationCompat.BigTextStyle().bigText(lines.single()))
+        } else {
+            builder.setStyle(NotificationCompat.InboxStyle().also { style -> lines.forEach(style::addLine) })
+        }
+        try {
+            NotificationManagerCompat.from(context).notify(id, builder.build())
+        } catch (_: SecurityException) {
+        }
     }
 
     private fun openIntent(context: Context, r: Reminder, autoplay: Boolean, requestCode: Int): PendingIntent {

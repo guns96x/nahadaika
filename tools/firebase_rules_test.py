@@ -5,6 +5,8 @@
 node tools/verify_deploy_firestore.cjs --apply (FIREBASE_TOOLS_ROOT — каталог firebase-tools).
 Прямий запуск цього Python-файлу не очищає запрошення й тестові акаунти.
 """
+import base64
+import datetime
 import json
 import os
 import sys
@@ -58,6 +60,23 @@ def sv(x):
 
 def fields(d):
     return {"fields": {k: sv(v) for k, v in d.items()}}
+
+
+def ts(days):
+    """Мітка часу через [days] днів (для expireAt)."""
+    t = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=days)
+    return {"timestampValue": t.strftime("%Y-%m-%dT%H:%M:%SZ")}
+
+
+def part(data, days=1):
+    return {"fields": {"data": {"bytesValue": base64.b64encode(data).decode()}, "reminderId": {"stringValue": "r1"}, "expireAt": ts(days)}}
+
+
+def meta(uploader, parts=1, size=3, days=30, received=None):
+    f = fields({"reminderId": "r1", "uploader": uploader, "size": size, "mime": "image/jpeg", "sha256": "x", "parts": parts,
+                "receivedBy": received or []})
+    f["fields"]["expireAt"] = ts(days)
+    return f
 
 
 results = []
@@ -130,6 +149,38 @@ check("коментар від чужого імені заборонено", s,
 s, _ = call("PATCH", f"{BASE}/chats/{chat_id}/comments/c1?updateMask.fieldPaths=text", b_tok, fields({"text": "Змінив"}))
 check("коментар не редагується", s, 403)
 
+# FCM-токени для миттєвих сповіщень.
+dev_a, dev_b = f"{a}_device-aaaa-1", f"{b}_device-bbbb-1"
+check("учасник реєструє свій токен", call("PATCH", f"{BASE}/chats/{chat_id}/push/{dev_a}", a_tok, fields({"uid": a, "token": "tok-a"}))[0], 200)
+check("другий учасник реєструє свій токен", call("PATCH", f"{BASE}/chats/{chat_id}/push/{dev_b}", b_tok, fields({"uid": b, "token": "tok-b"}))[0], 200)
+s, j = call("GET", f"{BASE}/chats/{chat_id}/push", b_tok)
+check("учасник бачить токени чату (так їх читає сервер сповіщень)", len(j.get("documents", [])), 2)
+check("сторонній не читає токени", call("GET", f"{BASE}/chats/{chat_id}/push", c_tok)[0], 403)
+check("не можна записати токен від чужого імені", call("PATCH", f"{BASE}/chats/{chat_id}/push/{a}_device-fake-1", b_tok, fields({"uid": b, "token": "x"}))[0], 403)
+check("сторонній не реєструє токен у чужому чаті", call("PATCH", f"{BASE}/chats/{chat_id}/push/{c}_device-cccc-1", c_tok, fields({"uid": c, "token": "x"}))[0], 403)
+
+# Медіа «кур'єром»: шматки й опис файлу.
+M = f"{BASE}/chats/{chat_id}/media/r1.jpg"
+check("учасник вивантажує шматок", call("PATCH", f"{M}~0", b_tok, part(b"abc"))[0], 200)
+check("сторонній не вивантажує шматок", call("PATCH", f"{M}~1", c_tok, part(b"abc"))[0], 403)
+check("шматок із номером поза межами заборонено", call("PATCH", f"{M}~40", b_tok, part(b"abc"))[0], 403)
+check("шматок довше 31 дня заборонено", call("PATCH", f"{M}~1", b_tok, part(b"abc", days=60))[0], 403)
+check("завеликий шматок заборонено", call("PATCH", f"{M}~1", b_tok, part(b"x" * 960000))[0], 403)
+check("опис від чужого імені заборонено", call("PATCH", M, b_tok, meta(a))[0], 403)
+check("шматок без expireAt заборонено", call("PATCH", f"{M}~2", b_tok, {"fields": {"data": {"bytesValue": "YWJj"}, "reminderId": {"stringValue": "r1"}}})[0], 403)
+check("опис під іменем шматка заборонено", call("PATCH", f"{M}~3", b_tok, meta(b))[0], 403)
+check("опис із завеликим розміром заборонено", call("PATCH", M, b_tok, meta(b, size=40 * 1024 * 1024))[0], 403)
+check("учасник створює опис файлу", call("PATCH", M, b_tok, meta(b))[0], 200)
+check("учасник читає шматок", call("GET", f"{M}~0", a_tok)[0], 200)
+check("сторонній не читає шматок", call("GET", f"{M}~0", c_tok)[0], 403)
+check("сторонній не читає опис", call("GET", M, c_tok)[0], 403)
+check("отримувач не дописує інших у receivedBy", call("PATCH", f"{M}?updateMask.fieldPaths=receivedBy", a_tok, fields({"receivedBy": [a, c]}))[0], 403)
+check("опис не можна переписати", call("PATCH", f"{M}?updateMask.fieldPaths=size", a_tok, fields({"size": 1}))[0], 403)
+check("отримувач позначає себе в receivedBy", call("PATCH", f"{M}?updateMask.fieldPaths=receivedBy", a_tok, fields({"receivedBy": [a]}))[0], 200)
+check("сторонній не видаляє файл", call("DELETE", f"{M}~0", c_tok)[0], 403)
+check("учасник видаляє доставлений шматок", call("DELETE", f"{M}~0", a_tok)[0], 200)
+check("учасник видаляє опис", call("DELETE", M, a_tok)[0], 200)
+
 # Запит «мої чати» (відновлення на новому телефоні).
 q = {"structuredQuery": {"from": [{"collectionId": "chats"}], "where": {"fieldFilter": {"field": {"fieldPath": "members"}, "op": "ARRAY_CONTAINS", "value": {"stringValue": b}}}}}
 s, j = call("POST", f"{BASE}:runQuery", b_tok, q)
@@ -142,7 +193,14 @@ check("власник не видаляє чат, поки є учасники",
 s, _ = call("PATCH", f"{BASE}/chats/{chat_id}?updateMask.fieldPaths=members", b_tok, fields({"members": [a]}))
 check("учасник виходить", s, 200)
 check("вийшовший більше не читає", call("GET", f"{BASE}/chats/{chat_id}", b_tok)[0], 403)
+check("вийшовший не читає токени", call("GET", f"{BASE}/chats/{chat_id}/push", b_tok)[0], 403)
+check("вийшовший видаляє свій токен", call("DELETE", f"{BASE}/chats/{chat_id}/push/{dev_b}", b_tok)[0], 200)
+check("власник видаляє свій токен", call("DELETE", f"{BASE}/chats/{chat_id}/push/{dev_a}", a_tok)[0], 200)
 check("останній учасник видаляє чат", call("DELETE", f"{BASE}/chats/{chat_id}", a_tok)[0], 200)
+
+# Прибрати тестових анонімних користувачів.
+for tok in (a_tok, b_tok, c_tok):
+    call("POST", f"https://identitytoolkit.googleapis.com/v1/accounts:delete?key={KEY}", body={"idToken": tok})
 
 print(f"\nпройшло {sum(results)} з {len(results)}")
 sys.exit(0 if all(results) else 1)

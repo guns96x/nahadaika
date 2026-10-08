@@ -1,0 +1,18 @@
+name: Сервер сповіщень — не дати заснути
+
+# Безкоштовний проєкт Supabase засинає після тижня без активності — тоді миттєві сповіщення не йдуть
+# (лишається фонова перевірка раз на 2 год). Запит раз на 3 дні тримає його активним.
+# Увага: GitHub вимикає розклад у репозиторіях без комітів 60 днів — тоді запустіть вручну (Run workflow).
+on:
+  schedule:
+    - cron: "17 6 */3 * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: GET /functions/v1/notify
+        run: curl --fail --silent --show-error --max-time 60 https://lqspxwvyikuarfbfgnqf.supabase.co/functions/v1/notify

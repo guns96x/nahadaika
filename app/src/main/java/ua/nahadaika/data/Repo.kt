@@ -185,6 +185,8 @@ object Repo {
     suspend fun chatById(id: Long): Chat? = db.chats().get(id)
     suspend fun chatByRemoteId(remoteId: String): Chat? = db.chats().byRemoteId(remoteId)
     suspend fun reminder(id: Long): Reminder? = db.reminders().get(id)
+
+    suspend fun comment(id: Long): Comment? = db.comments().get(id)
     suspend fun reminderByRemoteId(remoteId: String): Reminder? = db.reminders().byRemoteId(remoteId)
     suspend fun remindersOf(chatId: Long): List<Reminder> = db.reminders().byChat(chatId)
 
@@ -216,7 +218,9 @@ object Repo {
      * Будильники ставить кожен телефон сам. Разове з минулого (історія чату) не дзвонить запізно,
      * повторюване переходить на найближчий раз. Свої зміни сюди повертаються «луною» й нічого не міняють.
      */
-    suspend fun applyRemote(chatId: Long, snapshot: ChatSnapshot, myUid: String) = lock.withLock {
+    /** Повертає, що нового з'явилося від інших учасників, — для сповіщення. */
+    suspend fun applyRemote(chatId: Long, snapshot: ChatSnapshot, myUid: String): RemoteNews = lock.withLock {
+        val news = RemoteNews()
         val now = System.currentTimeMillis()
         val chat = db.chats().get(chatId)
         val chatRemoteId = chat?.remoteId.orEmpty()
@@ -252,6 +256,7 @@ object Repo {
                 )
                 val id = db.reminders().insert(created)
                 if (!fired) AlarmScheduler.schedule(app, created.copy(id = id))
+                if (author != null) news.reminders += id
                 continue
             }
             val moved = target != local.triggerAt
@@ -300,13 +305,15 @@ object Repo {
                 ua.nahadaika.share.SyncQueue.clearReservation(app, "comment", pending.id)
                 continue
             }
-            db.comments().insert(
+            val id = db.comments().insert(
                 Comment(
                     reminderId = reminder.id, text = rc.text, createdAt = rc.createdAt, remoteId = rc.id,
                     authorName = if (rc.authorUid == myUid) null else rc.authorName,
                 ),
             )
+            if (rc.authorUid != myUid) news.comments += id
         }
+        news
     }
 
     // ---- Резервна копія ----
@@ -389,4 +396,9 @@ object Repo {
             k++
         }
     }
+}
+
+/** Нове від інших учасників після синхронізації: нагадування й повідомлення (локальні id). */
+data class RemoteNews(val reminders: MutableList<Long> = mutableListOf(), val comments: MutableList<Long> = mutableListOf()) {
+    fun isEmpty() = reminders.isEmpty() && comments.isEmpty()
 }

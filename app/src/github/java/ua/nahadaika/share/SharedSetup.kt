@@ -30,6 +30,8 @@ object SharedSetup {
                 .setApiKey(BuildConfig.FIREBASE_API_KEY)
                 .setApplicationId(BuildConfig.FIREBASE_APP_ID)
                 .setProjectId(BuildConfig.FIREBASE_PROJECT_ID)
+                // Для FCM: номер проєкту — друге поле App ID (1:НОМЕР:android:…).
+                .setGcmSenderId(BuildConfig.FIREBASE_APP_ID.split(':').getOrElse(1) { "" })
             if (BuildConfig.FIREBASE_STORAGE_BUCKET.isNotBlank()) {
                 val bucket = BuildConfig.FIREBASE_STORAGE_BUCKET.trim()
                 builder.setStorageBucket(if (bucket.startsWith("gs://")) bucket.removePrefix("gs://") else bucket)
@@ -45,24 +47,25 @@ object SharedSetup {
             }.getOrNull()
         } else null
 
-        SharedChats.init(context, FirestoreBackend(FirebaseAuth.getInstance(app), FirebaseFirestore.getInstance(app), storage))
+        SharedChats.init(context, FirestoreBackend(context.applicationContext, FirebaseAuth.getInstance(app), FirebaseFirestore.getInstance(app), storage))
         SharedSyncWorker.schedule(context)
     }
 }
 
 /**
- * Коли застосунок закрито: раз на пів години забрати нове зі спільних чатів і поставити будильники.
- * Зверніть увагу: фонова доставка не є гарантовано миттєвою (періодичний Worker з інтервалом 30 хв).
+ * Запасний шлях, коли застосунок закрито: раз на 2 години забрати нове зі спільних чатів і поставити будильники.
+ * Основний — миттєвий push ([PushService]); цей рятує, якщо сервер сповіщень заснув чи FCM не дійшло.
+ * Частіше не треба: кожен запуск читає всі документи всіх чатів, а це ліміт Spark (50 тис. читань на добу).
  */
 class SharedSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result = runCatching { SharedChats.syncOnce() }.fold({ Result.success() }, { Result.retry() })
 
     companion object {
         fun schedule(context: Context) {
-            val request = PeriodicWorkRequestBuilder<SharedSyncWorker>(30, TimeUnit.MINUTES)
+            val request = PeriodicWorkRequestBuilder<SharedSyncWorker>(2, TimeUnit.HOURS)
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
                 .build()
-            WorkManager.getInstance(context).enqueueUniquePeriodicWork("shared_sync", ExistingPeriodicWorkPolicy.KEEP, request)
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork("shared_sync", ExistingPeriodicWorkPolicy.UPDATE, request)
         }
     }
 }

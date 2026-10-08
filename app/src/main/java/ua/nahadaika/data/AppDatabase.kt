@@ -106,6 +106,9 @@ interface CommentDao {
     @Query("SELECT * FROM comments WHERE remoteId = :remoteId LIMIT 1")
     suspend fun byRemoteId(remoteId: String): Comment?
 
+    @Query("SELECT * FROM comments WHERE id = :id")
+    suspend fun get(id: Long): Comment?
+
     @Query("UPDATE comments SET remoteId = :remoteId WHERE id = :id")
     suspend fun setRemoteId(id: Long, remoteId: String)
 

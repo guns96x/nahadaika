@@ -71,6 +71,62 @@ service cloud.firestore {
         allow create: if isMember(chatId) && request.resource.data.authorUid == request.auth.uid;
         allow update, delete: if false;
       }
+
+      // FCM-токени телефонів учасників (документ {uid}_{пристрій}). Читають учасники — і сервер сповіщень
+      // від імені того, хто надсилає; пише лише власник. Вийшовши з чату, власник може свій токен видалити.
+      match /push/{device} {
+        allow read: if isMember(chatId);
+        allow create, update: if isMember(chatId)
+          && device.matches(request.auth.uid + '_[A-Za-z0-9-]{8,40}')
+          && request.resource.data.keys().hasOnly(['uid', 'token', 'updatedAt'])
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.token is string
+          && request.resource.data.token.size() < 500;
+        allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+      }
+
+      // Медіа «кур'єром» (поки немає Storage): опис файлу {id.ext} і шматки до 900 КБ поруч — {id.ext}~{n}.
+      // У всіх документів expireAt не далі 31 дня: прострочене (зокрема шматки без опису) прибирають телефони.
+      match /media/{doc} {
+        function isPart() {
+          return doc.matches('[A-Za-z0-9_-]+[.](m4a|mp4|jpg|jpeg|png|webp)~([0-9]|[12][0-9]|3[01])');
+        }
+
+        function expiresSoon() {
+          return request.resource.data.expireAt is timestamp
+            && request.resource.data.expireAt < request.time + duration.value(31, 'd');
+        }
+
+        function partOk() {
+          return request.resource.data.keys().hasOnly(['data', 'reminderId', 'expireAt'])
+            && request.resource.data.data is bytes
+            && request.resource.data.data.size() <= 950000
+            && request.resource.data.reminderId is string
+            && expiresSoon();
+        }
+
+        function metaOk() {
+          return doc.matches('[A-Za-z0-9_-]+[.](m4a|mp4|jpg|jpeg|png|webp)')
+            && request.resource.data.keys().hasOnly(['reminderId', 'uploader', 'size', 'mime', 'sha256', 'parts', 'receivedBy', 'createdAt', 'expireAt'])
+            && request.resource.data.uploader == request.auth.uid
+            && request.resource.data.reminderId is string
+            && request.resource.data.size is int && request.resource.data.size > 0 && request.resource.data.size <= 26214400
+            && request.resource.data.parts is int && request.resource.data.parts >= 1 && request.resource.data.parts <= 32
+            && request.resource.data.receivedBy == []
+            && expiresSoon();
+        }
+
+        // Отримувач лише додає себе до receivedBy.
+        function receivedOk() {
+          return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['receivedBy'])
+            && request.resource.data.receivedBy.hasAll(resource.data.receivedBy)
+            && request.resource.data.receivedBy.removeAll(resource.data.receivedBy) == [request.auth.uid];
+        }
+
+        allow read, delete: if isMember(chatId);
+        allow create: if isMember(chatId) && ((isPart() && partOk()) || (!isPart() && metaOk()));
+        allow update: if isMember(chatId) && ((isPart() && partOk()) || (!isPart() && receivedOk()));
+      }
     }
   }
 }
