@@ -113,6 +113,15 @@ private fun kindIcon(kind: Kind): ImageVector = when (kind) {
 private const val PAST_DAYS = 14L
 private const val FUTURE_DAYS = 120L
 
+/** Скільки днів у смужці й у гортанні таймлайну: два тижні назад і ~4 місяці вперед від сьогодні. */
+internal const val DAY_COUNT = (PAST_DAYS + FUTURE_DAYS + 1).toInt()
+
+/** Номер дня [date] у смужці/гортанні, що починається за [PAST_DAYS] днів до [today]. */
+internal fun dayIndex(today: LocalDate, date: LocalDate): Int =
+    ChronoUnit.DAYS.between(today.minusDays(PAST_DAYS), date).toInt().coerceIn(0, DAY_COUNT - 1)
+
+internal fun dayAt(today: LocalDate, index: Int): LocalDate = today.minusDays(PAST_DAYS).plusDays(index.toLong())
+
 /** Крок між днями на нитці й висота смужки. */
 private val CELL_WIDTH = 40.dp
 private val STRIP_HEIGHT = 64.dp
@@ -159,8 +168,8 @@ fun DayStrip(
     modifier: Modifier = Modifier,
 ) {
     val start = today.minusDays(PAST_DAYS)
-    val count = (PAST_DAYS + FUTURE_DAYS + 1).toInt()
-    val indexOf = { d: LocalDate -> ChronoUnit.DAYS.between(start, d).toInt().coerceIn(0, count - 1) }
+    val count = DAY_COUNT
+    val indexOf = { d: LocalDate -> dayIndex(today, d) }
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = indexOf(selected))
     val currentSelected by rememberUpdatedState(selected)
     val onSelectNow by rememberUpdatedState(onSelect)
@@ -405,7 +414,11 @@ fun TimelineItem(
             Modifier
                 .weight(1f)
                 .card(fill = cardFill)
+                // Без хвилі натискання: вона рахується за розміром згорнутої картки й на розгорнутій
+                // (з кружечком) видно велике сіре коло. Відгук на тап — саме розгортання.
                 .combinedClickable(
+                    interactionSource = null,
+                    indication = null,
                     onClickLabel = if (expanded) labelCollapse else labelExpand,
                     onLongClickLabel = labelActions,
                     onClick = onClick,

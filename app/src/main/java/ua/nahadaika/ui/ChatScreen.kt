@@ -28,6 +28,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.AlertDialog
@@ -56,6 +58,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -100,6 +103,7 @@ import ua.nahadaika.ui.theme.edgeFade
 import ua.nahadaika.ui.theme.glassHaze
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 
 
 /** Рядок таймлайну: нагадування або лінія «зараз». */
@@ -140,14 +144,29 @@ fun ChatScreen(
     // Таймлайн обраного дня (як у Structured): нагадування по часу + лінія «зараз» сьогодні.
     val today = remember(nowTick) { nowTick.toLocalDate() }
     var selectedDate by rememberSaveable { mutableStateOf(LocalDate.now()) }
-    val entries = remember(all, selectedDate, nowTick) {
-        val items = occurrencesOn(all, selectedDate).map { Entry.Item(it) }
-        if (selectedDate != today) {
-            items
-        } else {
-            val split = items.indexOfFirst { it.occurrence.at > nowTick }.let { if (it < 0) items.size else it }
-            items.take(split) + Entry.Now + items.drop(split)
+    fun entriesOn(day: LocalDate): List<Entry> {
+        val items = occurrencesOn(all, day).map { Entry.Item(it) }
+        if (day != today) return items
+        val split = items.indexOfFirst { it.occurrence.at > nowTick }.let { if (it < 0) items.size else it }
+        return items.take(split) + Entry.Now + items.drop(split)
+    }
+    val entries = remember(all, selectedDate, nowTick) { entriesOn(selectedDate) }
+
+    // Дні гортаються пальцем уліво-вправо, як сторінки; смужка дат зверху їде слідом.
+    val pager = rememberPagerState(initialPage = dayIndex(today, selectedDate)) { DAY_COUNT }
+    // Перегорнули за половину — день уже обрано: смужка рушає одночасно зі сторінкою, а не після зупинки.
+    LaunchedEffect(pager, today) {
+        snapshotFlow { pager.currentPage }.collect { page ->
+            if (pager.isScrollInProgress) selectedDate = dayAt(today, page)
         }
+    }
+    // День обрали інакше (тап по смужці, сповіщення, нове нагадування) — догортаємо сторінки до нього.
+    LaunchedEffect(selectedDate, today) {
+        val target = dayIndex(today, selectedDate)
+        if (pager.isScrollInProgress || pager.currentPage == target) return@LaunchedEffect
+        // Далекий стрибок — без прокручування десятків сторінок: лише останній крок анімовано.
+        if (kotlin.math.abs(target - pager.currentPage) > 1) pager.scrollToPage(target + if (target > pager.currentPage) -1 else 1)
+        pager.animateScrollToPage(target)
     }
 
     val player = remember { AudioPlayer() }
@@ -599,30 +618,42 @@ fun ChatScreen(
     ) { padding ->
         Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
             AppBackground()
+            HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), key = { it }) { page ->
+            val day = dayAt(today, page)
+            // Обраний день — зі спільним станом списку (до нього прокручує сповіщення), сусідні — зі своїм.
+            val pageEntries = if (day == selectedDate) entries else remember(all, day, nowTick) { entriesOn(day) }
+            val pageList = if (day == selectedDate) listState else rememberLazyListState()
             LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
+                state = pageList,
+                modifier = Modifier.fillMaxSize().graphicsLayer {
+                    // Легке «перегортання»: сусідня сторінка трохи менша й прозоріша, поки її тягнуть.
+                    val offset = kotlin.math.abs((pager.currentPage - page) + pager.currentPageOffsetFraction).coerceIn(0f, 1f)
+                    alpha = 1f - 0.35f * offset
+                    val scale = 1f - 0.05f * offset
+                    scaleX = scale
+                    scaleY = scale
+                },
                 contentPadding = PaddingValues(
                     top = padding.calculateTopPadding() + 6.dp,
                     bottom = padding.calculateBottomPadding() + 10.dp,
                 ),
             ) {
                 item(key = "banners") { PermissionBanners() }
-                if (entries.none { it is Entry.Item }) {
+                if (pageEntries.none { it is Entry.Item }) {
                     item(key = "empty") {
                         Box(Modifier.fillParentMaxHeight(0.6f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            EmptyDay(if (selectedDate == today) stringResource(R.string.chat_empty_today) else stringResource(R.string.chat_empty_on_day, dayLabel(selectedDate).replaceFirstChar { it.lowercase() }))
+                            EmptyDay(if (day == today) stringResource(R.string.chat_empty_today) else stringResource(R.string.chat_empty_on_day, dayLabel(day).replaceFirstChar { it.lowercase() }))
                         }
                     }
                 } else {
-                    itemsIndexed(entries, key = { _, e ->
+                    itemsIndexed(pageEntries, key = { _, e ->
                         when (e) {
                             is Entry.Item -> "${e.occurrence.reminder.id}-${e.occurrence.at}"
                             Entry.Now -> "now"
                         }
                     }) { index, e ->
                         val isFirst = index == 0
-                        val isLast = index == entries.lastIndex
+                        val isLast = index == pageEntries.lastIndex
                         when (e) {
                             Entry.Now -> NowLine(nowTick, isFirst, isLast)
                             is Entry.Item -> {
@@ -672,6 +703,7 @@ fun ChatScreen(
                         }
                     }
                 }
+            }
             }
             rec?.takeIf { it.kind == Kind.VIDEO }?.let { r ->
                 VideoCircleRecorder(
