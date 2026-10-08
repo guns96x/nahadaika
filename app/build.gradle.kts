@@ -27,8 +27,8 @@ android {
         applicationId = "ua.nahadaika"
         minSdk = 26
         targetSdk = 35
-        versionCode = 27
-        versionName = "3.18"
+        versionCode = 28
+        versionName = "3.19"
         // Мови інтерфейсу; нову мову додавати і сюди, і в res/xml/locales_config.xml.
         resourceConfigurations += listOf("uk", "en")
         // Розумний час: Gemini через Firebase AI Logic (проєкт Firebase — нижче, у варіанті github). Модель можна міняти тут.
