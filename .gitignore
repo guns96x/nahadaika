@@ -11,3 +11,4 @@ local.properties
 /out/
 /prev/
 supabase/.temp/
+.mail-secrets.*.tmp

@@ -9,10 +9,10 @@ SUPABASE_REF=lqspxwvyikuarfbfgnqf
 read -r -p "Gmail, з якого шлемо листи: " GMAIL_USER
 read -r -s -p "Пароль застосунку (16 символів, пробіли не важливі): " GMAIL_APP_PASSWORD
 echo
-ENV_FILE=$(mktemp)
+# Тимчасовий файл — у поточному каталозі, а не в /tmp: так його бачить і Windows-Node (WSL, Git Bash).
+ENV_FILE=".mail-secrets.$$.tmp"
 trap 'rm -f "$ENV_FILE"' EXIT
+umask 077
 { printf "GMAIL_USER='%s'\n" "$GMAIL_USER"; printf "GMAIL_APP_PASSWORD='%s'\n" "$(printf %s "$GMAIL_APP_PASSWORD" | tr -d ' \r\n')"; } > "$ENV_FILE"
-# Node (Windows) не бачить MSYS-шляху /tmp/…: передаємо шлях у форматі Windows.
-ENV_ARG=$(cygpath -m "$ENV_FILE" 2>/dev/null || echo "$ENV_FILE")
-npx --yes supabase secrets set --project-ref "$SUPABASE_REF" --env-file "$ENV_ARG" >/dev/null
+npx --yes supabase secrets set --project-ref "$SUPABASE_REF" --env-file "$ENV_FILE" >/dev/null
 echo "Готово: секрети GMAIL_USER і GMAIL_APP_PASSWORD задано. Функція invite-mail шле листи від $GMAIL_USER."
