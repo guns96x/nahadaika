@@ -28,7 +28,6 @@
     <string name="share_invite_remove_contact">Remove %1$s from saved</string>
     <string name="share_invite_saved">Saved addresses</string>
     <string name="share_invite_email_subject">Invitation to “%1$s” in Nahadaika</string>
-    <string name="share_invite_email_body">%1$s\n\nNeed the app? %2$s</string>
     <string name="share_invite_email_invalid">Enter a valid email address</string>
     <string name="share_stale_banner">%1$s haven\'t updated Nahadaika yet: new notifications and media won\'t reach them</string>
     <string name="share_stale_send">Send</string>

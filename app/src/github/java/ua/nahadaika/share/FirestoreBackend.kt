@@ -275,7 +275,8 @@ class FirestoreBackend(
         return members.filter { it != me && it !in current }.map { (names[it] as? String).orEmpty().ifBlank { "?" } }
     }
 
-    override fun updateLink(): String = "https://github.com/${BuildConfig.UPDATE_REPO}/releases/latest"
+    // Сторінка на GitHub Pages (docs/index.html): відкриває застосунок за кодом або веде встановити/оновити.
+    override fun updateLink(): String = BuildConfig.UPDATE_REPO.split("/").let { (owner, repo) -> "https://$owner.github.io/$repo/" }
 
     override suspend fun notifyMembers(chatId: String, urgent: Boolean) = push.notify(chatId, urgent)
 

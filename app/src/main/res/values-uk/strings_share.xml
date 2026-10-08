@@ -28,7 +28,6 @@
     <string name="share_invite_remove_contact">Прибрати %1$s зі збережених</string>
     <string name="share_invite_saved">Збережені адреси</string>
     <string name="share_invite_email_subject">Запрошення в «%1$s» у Нагадайці</string>
-    <string name="share_invite_email_body">%1$s\n\nЩе немає застосунку? %2$s</string>
     <string name="share_invite_email_invalid">Введіть правильну адресу пошти</string>
     <string name="share_stale_banner">%1$s ще не оновили Нагадайку: нові сповіщення й медіа до них не дійдуть</string>
     <string name="share_stale_send">Надіслати</string>

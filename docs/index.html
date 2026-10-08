@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Нагадайка</title>
+<style>
+  :root { color-scheme: light dark; --bg:#f4f1fb; --fg:#1d1a2b; --dim:#6b6680; --card:#fff; --accent:#6b5bd6; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#14111f; --fg:#f1eefc; --dim:#a39fb8; --card:#201c31; --accent:#9a8cff; } }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:16px;
+         background:var(--bg); color:var(--fg); font:16px/1.45 system-ui, sans-serif; }
+  main { width:100%; max-width:380px; background:var(--card); border-radius:24px; padding:28px 22px; text-align:center;
+         box-shadow:0 8px 32px rgba(40,30,90,.15); }
+  h1 { margin:0 0 6px; font-size:24px; }
+  p { margin:0 0 18px; color:var(--dim); }
+  .code { font-size:30px; letter-spacing:6px; font-weight:600; color:var(--fg); margin:0 0 6px; }
+  a.btn { display:block; padding:14px; margin-top:10px; border-radius:14px; text-decoration:none; font-weight:600;
+          background:var(--accent); color:#fff; }
+  a.btn.alt { background:transparent; color:var(--accent); border:1.5px solid var(--accent); }
+  small { display:block; margin-top:16px; color:var(--dim); font-size:13px; }
+  [hidden] { display:none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Нагадайка</h1>
+  <div id="join" hidden>
+    <p>Вас запросили до спільного чату</p>
+    <div class="code" id="code"></div>
+    <a class="btn" id="open" href="#">Відкрити чат у застосунку</a>
+  </div>
+  <div id="plain"><p>Нагадування, голосові, відео й фото — разом із рідними.</p></div>
+  <a class="btn alt" id="apk" href="https://github.com/guns96x/nahadaika/releases/latest">Встановити або оновити</a>
+  <small id="hint"></small>
+</main>
+<script>
+(function () {
+  var repo = 'guns96x/nahadaika', pkg = 'ua.nahadaika';
+  var releases = 'https://github.com/' + repo + '/releases/latest';
+  var code = (new URLSearchParams(location.search).get('c') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+  var apk = document.getElementById('apk'), hint = document.getElementById('hint');
+  var android = /android/i.test(navigator.userAgent);
+
+  // Пряме посилання на APK останнього випуску; доки не завантажилось — сторінка випуску.
+  fetch('https://api.github.com/repos/' + repo + '/releases/latest').then(function (r) { return r.json(); }).then(function (rel) {
+    var a = (rel.assets || []).filter(function (x) { return /\.apk$/.test(x.name); })[0];
+    if (a) { apk.href = a.browser_download_url; apk.textContent = 'Встановити або оновити (' + rel.tag_name + ')'; }
+  }).catch(function () {});
+
+  if (code) {
+    document.getElementById('join').hidden = false;
+    document.getElementById('plain').hidden = true;
+    document.getElementById('code').textContent = code;
+    var open = document.getElementById('open');
+    var deep = 'nahadaika://join/' + code;
+    // Chrome: відкриє застосунок, а якщо його немає — перейде на сторінку встановлення.
+    open.href = android
+      ? 'intent://join/' + code + '#Intent;scheme=nahadaika;package=' + pkg + ';S.browser_fallback_url=' + encodeURIComponent(releases) + ';end'
+      : deep;
+    hint.textContent = 'Застосунку ще немає? Спершу встановіть його, потім поверніться за цим посиланням. Код: ' + code;
+  } else if (!android) {
+    hint.textContent = 'Нагадайка — для Android.';
+  }
+})();
+</script>
+</body>
+</html>

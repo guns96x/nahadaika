@@ -428,7 +428,7 @@ fun NameDialog(
 @Composable
 private fun InviteDialog(chat: Chat, code: String, onDismiss: () -> Unit) {
     val context = LocalContext.current
-    val message = stringResource(R.string.share_invite_message, chat.name, "nahadaika://join/$code", code)
+    val message = stringResource(R.string.share_invite_message, chat.name, SharedChats.inviteLink(code), code)
     var email by remember { mutableStateOf("") }
     var invalid by remember { mutableStateOf(false) }
     var saved by remember { mutableStateOf(Contacts.list(context)) }
@@ -443,7 +443,6 @@ private fun InviteDialog(chat: Chat, code: String, onDismiss: () -> Unit) {
         }
     }
     val subject = stringResource(R.string.share_invite_email_subject, chat.name)
-    val needApp = SharedChats.updateLink()?.let { stringResource(R.string.share_invite_email_body, message, it) } ?: message
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -503,7 +502,7 @@ private fun InviteDialog(chat: Chat, code: String, onDismiss: () -> Unit) {
                     val to = email.trim()
                     val mail = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:${Uri.encode(to)}"))
                         .putExtra(Intent.EXTRA_SUBJECT, subject)
-                        .putExtra(Intent.EXTRA_TEXT, needApp)
+                        .putExtra(Intent.EXTRA_TEXT, message)
                     context.startActivitySafe(mail)
                     Contacts.add(context, to)
                     saved = Contacts.list(context)

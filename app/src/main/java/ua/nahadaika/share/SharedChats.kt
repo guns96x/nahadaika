@@ -56,6 +56,9 @@ object SharedChats {
 
     fun updateLink(): String? = backend?.updateLink()
 
+    /** Клікабельне запрошення: сторінка відкриває застосунок або веде його встановити; без сторінки — пряма схема. */
+    fun inviteLink(code: String): String = updateLink()?.let { "$it?c=$code" } ?: "nahadaika://join/$code"
+
     /** Перевірити версії учасників; не частіше за раз на годину на чат (кожна перевірка читає документи). */
     suspend fun checkStale(remoteId: String, force: Boolean = false) {
         val b = backend ?: return
