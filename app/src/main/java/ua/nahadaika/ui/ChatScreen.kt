@@ -638,7 +638,10 @@ fun ChatScreen(
                     bottom = padding.calculateBottomPadding() + 10.dp,
                 ),
             ) {
-                item(key = "banners") { PermissionBanners() }
+                item(key = "banners") {
+                    PermissionBanners()
+                    StaleMembersBanner(chat?.remoteId)
+                }
                 if (pageEntries.none { it is Entry.Item }) {
                     item(key = "empty") {
                         Box(Modifier.fillParentMaxHeight(0.6f).fillMaxWidth(), contentAlignment = Alignment.Center) {

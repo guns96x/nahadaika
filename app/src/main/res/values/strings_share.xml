@@ -22,4 +22,15 @@
     <string name="share_new_reminder">%1$s: %2$s</string>
     <string name="share_new_comment">%1$s about “%2$s”: %3$s</string>
     <string name="share_news_count">New in the chat: %1$d</string>
+    <string name="share_invite_email_hint">Email address</string>
+    <string name="share_invite_email_send">Send by email</string>
+    <string name="share_invite_pick_contact">Pick from phone contacts</string>
+    <string name="share_invite_remove_contact">Remove %1$s from saved</string>
+    <string name="share_invite_saved">Saved addresses</string>
+    <string name="share_invite_email_subject">Invitation to “%1$s” in Nahadaika</string>
+    <string name="share_invite_email_body">%1$s\n\nNeed the app? %2$s</string>
+    <string name="share_invite_email_invalid">Enter a valid email address</string>
+    <string name="share_stale_banner">%1$s haven\'t updated Nahadaika yet: new notifications and media won\'t reach them</string>
+    <string name="share_stale_send">Send</string>
+    <string name="share_stale_message">Please update Nahadaika — shared chats work better with the latest version: %1$s</string>
 </resources>

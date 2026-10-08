@@ -21,6 +21,18 @@ import ua.nahadaika.ui.theme.glass
 import ua.nahadaika.ui.theme.glassHaze
 import android.annotation.SuppressLint
 import android.content.Context
+import android.provider.ContactsContract
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Contacts
+import androidx.compose.material3.InputChip
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import ua.nahadaika.share.Contacts
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -411,23 +423,91 @@ fun NameDialog(
     )
 }
 
-/** Код запрошення великими літерами й кнопка «Надіслати» (посилання + код). */
+/** Код запрошення, пошта (зі збереженими адресами й вибором із контактів) і звичайне «Надіслати». */
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 private fun InviteDialog(chat: Chat, code: String, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val message = stringResource(R.string.share_invite_message, chat.name, "nahadaika://join/$code", code)
+    var email by remember { mutableStateOf("") }
+    var invalid by remember { mutableStateOf(false) }
+    var saved by remember { mutableStateOf(Contacts.list(context)) }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val uri = result.data?.data ?: return@rememberLauncherForActivityResult
+        runCatching {
+            context.contentResolver.query(
+                uri,
+                arrayOf(ContactsContract.CommonDataKinds.Email.ADDRESS),
+                null, null, null,
+            )?.use { if (it.moveToFirst()) { email = it.getString(0).orEmpty(); invalid = false } }
+        }
+    }
+    val subject = stringResource(R.string.share_invite_email_subject, chat.name)
+    val needApp = SharedChats.updateLink()?.let { stringResource(R.string.share_invite_email_body, message, it) } ?: message
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.share_invite_title, chat.name)) },
         text = {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                Text(code, color = Glass.Text, fontSize = 32.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 6.sp)
-                Spacer(Modifier.height(12.dp))
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 Text(
-                    stringResource(if (ua.nahadaika.BuildConfig.FIREBASE_STORAGE_BUCKET.isNotBlank()) R.string.share_invite_note_media else R.string.share_invite_note),
-                    color = Glass.TextDim,
-                    fontSize = 14.sp,
+                    code, color = Glass.Text, fontSize = 32.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 6.sp,
+                    textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
                 )
+                Spacer(Modifier.height(12.dp))
+                Text(stringResource(R.string.share_invite_note_media), color = Glass.TextDim, fontSize = 14.sp)
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it; invalid = false },
+                    singleLine = true,
+                    isError = invalid,
+                    label = { Text(stringResource(R.string.share_invite_email_hint)) },
+                    supportingText = if (invalid) ({ Text(stringResource(R.string.share_invite_email_invalid)) }) else null,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    trailingIcon = {
+                        IconButton(onClick = {
+                            picker.launch(Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Email.CONTENT_URI))
+                        }) { Icon(Icons.Default.Contacts, stringResource(R.string.share_invite_pick_contact)) }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (saved.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(stringResource(R.string.share_invite_saved), color = Glass.TextFaint, fontSize = 12.sp)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        saved.forEach { c ->
+                            InputChip(
+                                selected = c.email == email.trim().lowercase(),
+                                onClick = { email = c.email; invalid = false },
+                                label = { Text(c.name.ifBlank { c.email }, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                trailingIcon = {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        stringResource(R.string.share_invite_remove_contact, c.email),
+                                        modifier = Modifier.size(16.dp).clickable {
+                                            Contacts.remove(context, c.email)
+                                            saved = Contacts.list(context)
+                                        },
+                                    )
+                                },
+                            )
+                        }
+                    }
+                }
+                TextButton(onClick = {
+                    if (!Contacts.isEmail(email)) {
+                        invalid = true
+                        return@TextButton
+                    }
+                    val to = email.trim()
+                    val mail = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:${Uri.encode(to)}"))
+                        .putExtra(Intent.EXTRA_SUBJECT, subject)
+                        .putExtra(Intent.EXTRA_TEXT, needApp)
+                    context.startActivitySafe(mail)
+                    Contacts.add(context, to)
+                    saved = Contacts.list(context)
+                }) { Text(stringResource(R.string.share_invite_email_send)) }
             }
         },
         confirmButton = {
@@ -539,6 +619,39 @@ fun PermissionBanners() {
                 },
             )
         }
+    }
+}
+
+/** Підказка в спільному чаті: хто з учасників ще зі старою версією й не отримає сповіщень та медіа. */
+@Composable
+fun StaleMembersBanner(remoteId: String?) {
+    if (remoteId == null) return
+    val context = LocalContext.current
+    LaunchedEffect(remoteId) { SharedChats.checkStale(remoteId) }
+    val names = SharedChats.stale.collectAsStateWithLifecycle().value[remoteId].orEmpty().sorted()
+    if (names.isEmpty()) return
+    val prefs = remember { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
+    val key = "stale_hidden_$remoteId"
+    val signature = names.joinToString("|")
+    // Прихований для цього набору імен; зʼявився новий відстаючий — показуємо знову.
+    var hidden by remember(remoteId, signature) { mutableStateOf(prefs.getString(key, null) == signature) }
+    if (hidden) return
+    Box(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
+        Banner(
+            Icons.Default.SystemUpdate,
+            stringResource(R.string.share_stale_banner, names.joinToString(", ")),
+            stringResource(R.string.share_stale_send),
+            onAction = {
+                val link = SharedChats.updateLink().orEmpty()
+                val send = Intent(Intent.ACTION_SEND).setType("text/plain")
+                    .putExtra(Intent.EXTRA_TEXT, context.getString(R.string.share_stale_message, link))
+                context.startActivitySafe(Intent.createChooser(send, null))
+            },
+            onDismiss = {
+                prefs.edit().putString(key, signature).apply()
+                hidden = true
+            },
+        )
     }
 }
 

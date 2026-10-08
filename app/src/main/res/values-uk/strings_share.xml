@@ -22,4 +22,15 @@
     <string name="share_new_reminder">%1$s: %2$s</string>
     <string name="share_new_comment">%1$s про «%2$s»: %3$s</string>
     <string name="share_news_count">Нового в чаті: %1$d</string>
+    <string name="share_invite_email_hint">Електронна пошта</string>
+    <string name="share_invite_email_send">Надіслати поштою</string>
+    <string name="share_invite_pick_contact">Вибрати з контактів телефону</string>
+    <string name="share_invite_remove_contact">Прибрати %1$s зі збережених</string>
+    <string name="share_invite_saved">Збережені адреси</string>
+    <string name="share_invite_email_subject">Запрошення в «%1$s» у Нагадайці</string>
+    <string name="share_invite_email_body">%1$s\n\nЩе немає застосунку? %2$s</string>
+    <string name="share_invite_email_invalid">Введіть правильну адресу пошти</string>
+    <string name="share_stale_banner">%1$s ще не оновили Нагадайку: нові сповіщення й медіа до них не дійдуть</string>
+    <string name="share_stale_send">Надіслати</string>
+    <string name="share_stale_message">Оновіть, будь ласка, Нагадайку — спільні чати працюють краще з останньою версією: %1$s</string>
 </resources>

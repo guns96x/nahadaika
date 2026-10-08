@@ -73,6 +73,14 @@ class FakeBackend(var uid: String = "me") : SharedBackend {
     override fun mediaIsTemporary() = temporaryMedia
     override suspend fun mediaReceived(chatId: String, mediaRef: String) { received += mediaRef }
     override suspend fun registerPush(chatId: String) { pushChats += chatId }
+    var stale: List<String> = emptyList()
+    var staleChecks = 0
+    var failStale = false
+    override suspend fun staleMembers(chatId: String): List<String> {
+        staleChecks++
+        if (failStale) throw java.io.IOException("Мережевий збій")
+        return stale
+    }
     override suspend fun notifyMembers(chatId: String, urgent: Boolean) { synchronized(notified) { notified += chatId to urgent } }
     override suspend fun uploadMedia(chatId: String, reminderId: String, file: java.io.File, mime: String): ua.nahadaika.share.UploadedMedia? {
         if (!storageEnabled) return null
