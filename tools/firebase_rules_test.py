@@ -19,12 +19,16 @@ props = dict(
 )
 KEY = props["firebase.apiKey"]
 PROJECT = props["firebase.projectId"]
+# Ключ обмежено застосунком ua.nahadaika — представляємось ним (SHA-1 релізного підпису, публічний).
+CERT = props.get("firebase.certSha1", "1E05D4AB7EE688E3013B71E10C6206D2B5B0E1A1")
 BASE = f"https://firestore.googleapis.com/v1/projects/{PROJECT}/databases/(default)/documents"
 
 
 def call(method, url, token=None, body=None):
     req = urllib.request.Request(url, method=method, data=json.dumps(body).encode() if body is not None else None)
     req.add_header("Content-Type", "application/json")
+    req.add_header("X-Android-Package", "ua.nahadaika")
+    req.add_header("X-Android-Cert", CERT)
     if token:
         req.add_header("Authorization", "Bearer " + token)
     try:

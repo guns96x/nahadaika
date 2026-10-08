@@ -25,6 +25,8 @@ props = dict(
     if "=" in line and not line.startswith("#")
 )
 KEY, PROJECT = props["firebase.apiKey"], props["firebase.projectId"]
+# Ключ обмежено застосунком ua.nahadaika — представляємось ним (SHA-1 релізного підпису, публічний).
+CERT = props.get("firebase.certSha1", "1E05D4AB7EE688E3013B71E10C6206D2B5B0E1A1")
 
 NOW = "2026-09-30T10:00"
 PROMPT = "\n".join([
@@ -107,6 +109,8 @@ def ask(model, source, as_text=False):
         req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST")
         req.add_header("Content-Type", "application/json")
         req.add_header("x-goog-api-key", KEY)
+        req.add_header("X-Android-Package", "ua.nahadaika")
+        req.add_header("X-Android-Cert", CERT)
         try:
             with urllib.request.urlopen(req, timeout=90) as r:
                 text = json.loads(r.read())["candidates"][0]["content"]["parts"][0]["text"]
