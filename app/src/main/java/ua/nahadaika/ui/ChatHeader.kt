@@ -48,6 +48,7 @@ internal fun ChatHeader(
     today: LocalDate,
     dotsFor: (LocalDate) -> List<Color>,
     onSelectDate: (LocalDate) -> Unit,
+    followPosition: () -> Float? = { null },
     onOpenChats: () -> Unit,
     onOpenSearch: () -> Unit,
     haze: HazeState,
@@ -121,6 +122,7 @@ internal fun ChatHeader(
             today = today,
             dotsFor = dotsFor,
             onSelect = onSelectDate,
+            follow = followPosition,
             modifier = Modifier.fillMaxWidth(),
         )
     }

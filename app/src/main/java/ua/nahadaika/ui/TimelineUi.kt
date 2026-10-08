@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.Canvas
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.collectLatest
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.snapshotFlow
@@ -166,6 +169,7 @@ fun DayStrip(
     dotsFor: (LocalDate) -> List<Color>,
     onSelect: (LocalDate) -> Unit,
     modifier: Modifier = Modifier,
+    follow: () -> Float? = { null },
 ) {
     val start = today.minusDays(PAST_DAYS)
     val count = DAY_COUNT
@@ -189,6 +193,7 @@ fun DayStrip(
     // Прогортали й зупинились — день посередині стає обраним.
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }.filter { !it }.collect {
+            if (follow() != null) return@collect // смужку веде сторінка — вибір дня за нею
             val c = centeredIndex() ?: return@collect
             if (c != indexOf(currentSelected)) onSelectNow(start.plusDays(c.toLong()))
         }
@@ -199,6 +204,23 @@ fun DayStrip(
         val sidePadding = (maxWidth - CELL_WIDTH) / 2
         val density = LocalDensity.current
         val pitchPx = with(density) { CELL_WIDTH.toPx() }
+
+        // Сторінки днів гортають пальцем — смужка їде за ними пліч-о-пліч (follow = дробовий індекс дня),
+        // а не стрибає після зупинки. Власне гортання смужки має пріоритет.
+        LaunchedEffect(pitchPx) {
+            // Скролимо на початку кадру (withFrameNanos), а не посеред вимірювання — інакше Compose кидає виняток.
+            snapshotFlow { follow() }.collectLatest { pos ->
+                withFrameNanos { }
+                if (listState.isScrollInProgress) return@collectLatest
+                if (pos == null) {
+                    // Сторінка зупинилась — вирівняти день рівно по центру.
+                    if (centeredIndex() == indexOf(currentSelected)) listState.scrollToItem(indexOf(currentSelected))
+                } else {
+                    val now = listState.firstVisibleItemIndex * pitchPx + listState.firstVisibleItemScrollOffset
+                    listState.scrollBy(pos * pitchPx - now)
+                }
+            }
+        }
 
         // Відстань клітинки [i] від центру в клітинках (null — її не видно).
         fun offsetOf(i: Int): Float? {

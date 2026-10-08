@@ -561,6 +561,7 @@ fun ChatScreen(
                 today = today,
                 dotsFor = { day -> occurrencesOn(all, day).map { kindColor(it.reminder.kind) }.distinct() },
                 onSelectDate = { selectedDate = it },
+                followPosition = { if (pager.isScrollInProgress) pager.currentPage + pager.currentPageOffsetFraction else null },
                 onOpenChats = onOpenChats,
                 onOpenSearch = onOpenSearch,
                 haze = hazeState,
