@@ -1,5 +1,6 @@
 package ua.nahadaika
 
+import androidx.compose.foundation.layout.Box
 import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -121,6 +122,27 @@ class ScreenshotTest {
         compose.onAllNodes(hasScrollToIndexAction())[0].performScrollToIndex(5)
         compose.waitForIdle()
         compose.onRoot().captureRoboImage("build/screenshots/2b_chat_bottom.png")
+    }
+
+    @Test
+    fun welcome() {
+        compose.setContent { NahadaikaTheme { ua.nahadaika.ui.WelcomeScreen(onDone = {}) } }
+        compose.waitForIdle()
+        compose.onRoot().captureRoboImage("build/screenshots/9_welcome.png")
+    }
+
+    @Test
+    fun mailInvites() = runBlocking {
+        Repo.init(app)
+        val server = FakeBackend().apply { email = "tato@gmail.com" }
+        ua.nahadaika.share.SharedChats.init(app, server, watch = false)
+        val remote = server.createChat("Сім'я", ua.nahadaika.share.Member("mama", "Мама"))
+        server.inviteByEmail(remote.id, "Сім'я", remote.inviteCode, "tato@gmail.com", "Мама")
+        ua.nahadaika.share.SharedChats.refreshInbox()
+        compose.setContent { NahadaikaTheme { Box { ua.nahadaika.ui.theme.AppBackground(); ua.nahadaika.ui.MailInvitesInbox({}, {}) } } }
+        compose.waitForIdle()
+        compose.onRoot().captureRoboImage("build/screenshots/9b_mail_invite.png")
+        ua.nahadaika.share.SharedChats.reset()
     }
 
     @OptIn(ExperimentalRoborazziApi::class)

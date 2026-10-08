@@ -42,6 +42,9 @@ data class RemoteComment(
 )
 
 /** Чат на сервері; [members] > 1 — справді спільний, інакше лише копія в хмарі. */
+/** Запрошення, надіслане на пошту Google-акаунта: одержувач бачить його в застосунку після входу. */
+data class MailInvite(val id: String, val chatId: String, val chatName: String, val code: String, val fromName: String)
+
 data class RemoteChat(val id: String, val name: String, val inviteCode: String, val members: Int = 1)
 
 /** Усе, що зараз лежить у чаті на сервері; [name] = null — назву не відомо (не міняти). */
@@ -130,6 +133,15 @@ interface SharedBackend {
      * Версію кожен телефон повідомляє, реєструючись для сповіщень; хто не реєструвався — вважається старим.
      */
     suspend fun staleMembers(chatId: String): List<String> = emptyList()
+
+    /** Запросити людину за поштою її Google-акаунта: запрошення чекатиме на неї в застосунку. */
+    suspend fun inviteByEmail(chatId: String, chatName: String, code: String, email: String, fromName: String) = Unit
+
+    /** Запрошення, адресовані пошті мого Google-акаунта (порожньо, якщо не ввійшов). */
+    suspend fun myMailInvites(): List<MailInvite> = emptyList()
+
+    /** Прибрати запрошення — прийняте чи відхилене. */
+    suspend fun dismissMailInvite(id: String) = Unit
 
     /** Куди відправити людину оновитися (сторінка останнього випуску); null — немає куди. */
     fun updateLink(): String? = null

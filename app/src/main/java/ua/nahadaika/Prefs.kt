@@ -48,6 +48,10 @@ object Prefs {
         if (prefs(context).contains("smart_voice")) prefs(context).getBoolean("smart_voice", false) else null
     fun setSmartVoice(context: Context, on: Boolean) = prefs(context).edit().putBoolean("smart_voice", on).apply()
 
+    /** Одноразова пропозиція ввійти через Google при першому запуску. */
+    fun welcomeShown(context: Context): Boolean = prefs(context).getBoolean("welcome_shown", false)
+    fun setWelcomeShown(context: Context) = prefs(context).edit().putBoolean("welcome_shown", true).apply()
+
     /** Ім'я, яке бачать учасники спільних чатів. */
     fun displayName(context: Context): String = prefs(context).getString("display_name", null).orEmpty()
     fun setDisplayName(context: Context, name: String) = prefs(context).edit().putString("display_name", name.trim()).apply()

@@ -56,6 +56,47 @@ object SharedChats {
 
     fun updateLink(): String? = backend?.updateLink()
 
+    private val inboxNow = MutableStateFlow<List<MailInvite>>(emptyList())
+
+    /** Запрошення мені на пошту Google-акаунта (показуємо в застосунку, поки не прийняті чи відхилені). */
+    val inbox: StateFlow<List<MailInvite>> = inboxNow
+
+    /** Запросити людину за її Google-поштою; чат за потреби стає спільним. Повертає код (для посилання-запасу). */
+    suspend fun inviteByEmail(chat: Chat, email: String): String {
+        val b = checkNotNull(backend)
+        val code = share(chat)
+        val remoteId = checkNotNull(Repo.chatById(chat.id)?.remoteId)
+        b.inviteByEmail(remoteId, chat.name, code, email.trim().lowercase(), Prefs.displayName(ctx()))
+        return code
+    }
+
+    /** Перечитати запрошення мені; без входу через Google їх не буває. */
+    suspend fun refreshInbox() {
+        val b = backend ?: return
+        if (b.account() == null) {
+            inboxNow.value = emptyList()
+            return
+        }
+        // Уже в цьому чаті — запрошення зайве, прибираємо мовчки.
+        val list = runCatching { b.myMailInvites() }.getOrNull() ?: return
+        val (stale, fresh) = list.partition { Repo.chatByRemoteId(it.chatId) != null && Prefs.isShared(ctx(), it.chatId) }
+        stale.forEach { runCatching { b.dismissMailInvite(it.id) } }
+        inboxNow.value = fresh
+    }
+
+    /** Прийняти запрошення: приєднатись за кодом і прибрати його. Повертає id локального чату. */
+    suspend fun acceptInvite(invite: MailInvite): Long? {
+        val chatId = join(invite.code) ?: return null
+        runCatching { backend?.dismissMailInvite(invite.id) }
+        inboxNow.value = inboxNow.value.filterNot { it.id == invite.id }
+        return chatId
+    }
+
+    suspend fun declineInvite(invite: MailInvite) {
+        runCatching { backend?.dismissMailInvite(invite.id) }
+        inboxNow.value = inboxNow.value.filterNot { it.id == invite.id }
+    }
+
     /** Клікабельне запрошення: сторінка відкриває застосунок або веде його встановити; без сторінки — пряма схема. */
     fun inviteLink(code: String): String = updateLink()?.let { "$it?c=$code" } ?: "nahadaika://join/$code"
 
@@ -93,6 +134,7 @@ object SharedChats {
         live.clear()
         staleNow.value = emptyMap()
         staleCheckedAt.clear()
+        inboxNow.value = emptyList()
         backend = null
     }
 

@@ -21,6 +21,14 @@ import ua.nahadaika.ui.theme.glass
 import ua.nahadaika.ui.theme.glassHaze
 import android.annotation.SuppressLint
 import android.content.Context
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.text.input.ImeAction
+import ua.nahadaika.share.MailInvite
+import ua.nahadaika.ui.theme.PrimaryButton
 import android.provider.ContactsContract
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -224,6 +232,22 @@ fun ChatsScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
+                item(key = "mail-invites") {
+                    MailInvitesInbox(
+                        onAccept = { inv ->
+                            withName {
+                                busy = true
+                                scope.launch {
+                                    runCatching { SharedChats.acceptInvite(inv) }
+                                        .onSuccess { id -> if (id != null) onOpenChat(id) else toast(R.string.share_code_not_found) }
+                                        .onFailure { toast(R.string.share_failed) }
+                                    busy = false
+                                }
+                            }
+                        },
+                        onDecline = { inv -> scope.launch { SharedChats.declineInvite(inv) } },
+                    )
+                }
                 items(chats, key = { it.id }) { chat ->
                     val pending = reminders.filter { it.chatId == chat.id && !it.fired }.sortedBy { it.alarmAt() }
                     ChatRow(
@@ -423,100 +447,169 @@ fun NameDialog(
     )
 }
 
-/** Код запрошення, пошта (зі збереженими адресами й вибором із контактів) і звичайне «Надіслати». */
+/** Запрошення на гарному фоні: Google-пошта (лист не потрібен — запрошення прийде в застосунок) і посилання-запас. */
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 private fun InviteDialog(chat: Chat, code: String, onDismiss: () -> Unit) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val message = stringResource(R.string.share_invite_message, chat.name, SharedChats.inviteLink(code), code)
     var email by remember { mutableStateOf("") }
     var invalid by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    var sentTo by remember { mutableStateOf<String?>(null) }
+    var failed by remember { mutableStateOf(false) }
     var saved by remember { mutableStateOf(Contacts.list(context)) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val uri = result.data?.data ?: return@rememberLauncherForActivityResult
         runCatching {
-            context.contentResolver.query(
-                uri,
-                arrayOf(ContactsContract.CommonDataKinds.Email.ADDRESS),
-                null, null, null,
-            )?.use { if (it.moveToFirst()) { email = it.getString(0).orEmpty(); invalid = false } }
+            context.contentResolver.query(uri, arrayOf(ContactsContract.CommonDataKinds.Email.ADDRESS), null, null, null)
+                ?.use { if (it.moveToFirst()) { email = it.getString(0).orEmpty(); invalid = false; sentTo = null } }
         }
     }
-    val subject = stringResource(R.string.share_invite_email_subject, chat.name)
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.share_invite_title, chat.name)) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
-                Text(
-                    code, color = Glass.Text, fontSize = 32.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 6.sp,
-                    textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
-                )
-                Spacer(Modifier.height(12.dp))
-                Text(stringResource(R.string.share_invite_note_media), color = Glass.TextDim, fontSize = 14.sp)
-                Spacer(Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = email,
-                    onValueChange = { email = it; invalid = false },
-                    singleLine = true,
-                    isError = invalid,
-                    label = { Text(stringResource(R.string.share_invite_email_hint)) },
-                    supportingText = if (invalid) ({ Text(stringResource(R.string.share_invite_email_invalid)) }) else null,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                    trailingIcon = {
-                        IconButton(onClick = {
-                            picker.launch(Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Email.CONTENT_URI))
-                        }) { Icon(Icons.Default.Contacts, stringResource(R.string.share_invite_pick_contact)) }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                if (saved.isNotEmpty()) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(stringResource(R.string.share_invite_saved), color = Glass.TextFaint, fontSize = 12.sp)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        saved.forEach { c ->
-                            InputChip(
-                                selected = c.email == email.trim().lowercase(),
-                                onClick = { email = c.email; invalid = false },
-                                label = { Text(c.name.ifBlank { c.email }, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                                trailingIcon = {
-                                    Icon(
-                                        Icons.Default.Close,
-                                        stringResource(R.string.share_invite_remove_contact, c.email),
-                                        modifier = Modifier.size(16.dp).clickable {
-                                            Contacts.remove(context, c.email)
-                                            saved = Contacts.list(context)
-                                        },
-                                    )
-                                },
-                            )
-                        }
-                    }
-                }
-                TextButton(onClick = {
-                    if (!Contacts.isEmail(email)) {
-                        invalid = true
-                        return@TextButton
-                    }
-                    val to = email.trim()
-                    val mail = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:${Uri.encode(to)}"))
-                        .putExtra(Intent.EXTRA_SUBJECT, subject)
-                        .putExtra(Intent.EXTRA_TEXT, message)
-                    context.startActivitySafe(mail)
+    fun invite() {
+        if (!Contacts.isEmail(email)) {
+            invalid = true
+            return
+        }
+        val to = email.trim().lowercase()
+        busy = true
+        failed = false
+        scope.launch {
+            runCatching { SharedChats.inviteByEmail(chat, to) }
+                .onSuccess {
                     Contacts.add(context, to)
                     saved = Contacts.list(context)
-                }) { Text(stringResource(R.string.share_invite_email_send)) }
+                    sentTo = to
+                    email = ""
+                }
+                .onFailure { failed = true }
+            busy = false
+        }
+    }
+
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        Box(Modifier.fillMaxSize()) {
+            AppBackground()
+            Column(
+                Modifier.fillMaxSize().systemBarsPadding().imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp),
+            ) {
+                IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) {
+                    Icon(Icons.Default.Close, stringResource(R.string.share_invite_close), tint = Glass.TextDim)
+                }
+                Text(stringResource(R.string.share_invite_title, chat.name), color = Glass.Text, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, lineHeight = 32.sp)
+                Spacer(Modifier.height(16.dp))
+                Column(Modifier.fillMaxWidth().card().padding(16.dp)) {
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = { email = it; invalid = false; sentTo = null; failed = false },
+                        singleLine = true,
+                        isError = invalid,
+                        label = { Text(stringResource(R.string.share_invite_google_hint)) },
+                        supportingText = {
+                            Text(
+                                when {
+                                    invalid -> stringResource(R.string.share_invite_email_invalid)
+                                    failed -> stringResource(R.string.share_failed)
+                                    sentTo != null -> stringResource(R.string.share_invite_sent, sentTo.orEmpty())
+                                    else -> stringResource(R.string.share_invite_google_note)
+                                },
+                            )
+                        },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(onSend = { invite() }),
+                        trailingIcon = {
+                            IconButton(onClick = {
+                                picker.launch(Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Email.CONTENT_URI))
+                            }) { Icon(Icons.Default.Contacts, stringResource(R.string.share_invite_pick_contact)) }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (saved.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            saved.forEach { c ->
+                                InputChip(
+                                    selected = c.email == email.trim().lowercase(),
+                                    onClick = { email = c.email; invalid = false; sentTo = null },
+                                    label = { Text(c.name.ifBlank { c.email }, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                    trailingIcon = {
+                                        Icon(
+                                            Icons.Default.Close,
+                                            stringResource(R.string.share_invite_remove_contact, c.email),
+                                            modifier = Modifier.size(16.dp).clickable {
+                                                Contacts.remove(context, c.email)
+                                                saved = Contacts.list(context)
+                                            },
+                                        )
+                                    },
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    PrimaryButton(
+                        text = stringResource(R.string.share_invite_google_send),
+                        onClick = ::invite,
+                        enabled = !busy,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+                Column(Modifier.fillMaxWidth().card().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(stringResource(R.string.share_invite_or_link), color = Glass.TextDim, fontSize = 13.sp)
+                    Spacer(Modifier.height(6.dp))
+                    Text(code, color = Glass.Text, fontSize = 32.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 6.sp)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        stringResource(if (ua.nahadaika.BuildConfig.FIREBASE_STORAGE_BUCKET.isNotBlank()) R.string.share_invite_note_media else R.string.share_invite_note),
+                        color = Glass.TextDim, fontSize = 13.sp, textAlign = TextAlign.Center,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    TextButton(onClick = {
+                        val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, message)
+                        context.startActivitySafe(Intent.createChooser(send, null))
+                    }) { Text(stringResource(R.string.share_invite_send), color = Glass.Lavender, fontWeight = FontWeight.SemiBold) }
+                }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, message)
-                context.startActivitySafe(Intent.createChooser(send, null))
-            }) { Text(stringResource(R.string.share_invite_send)) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.share_done)) } },
-    )
+        }
+    }
+}
+
+/** Запрошення, що прийшли мені на пошту Google-акаунта: приєднатися чи відхилити. */
+@Composable
+fun MailInvitesInbox(onAccept: (MailInvite) -> Unit, onDecline: (MailInvite) -> Unit) {
+    val scope = rememberCoroutineScope()
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { scope.launch { SharedChats.refreshInbox() } }
+    val invites by SharedChats.inbox.collectAsStateWithLifecycle()
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        invites.forEach { invite ->
+            Column(Modifier.fillMaxWidth().card().padding(16.dp)) {
+                Text(
+                    if (invite.fromName.isBlank()) stringResource(R.string.share_inbox_text_anon, invite.chatName)
+                    else stringResource(R.string.share_inbox_text, invite.fromName, invite.chatName),
+                    color = Glass.Text, fontSize = 16.sp, fontWeight = FontWeight.Medium,
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    PrimaryButton(stringResource(R.string.share_inbox_accept), onClick = { onAccept(invite) }, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { onDecline(invite) }) { Text(stringResource(R.string.share_inbox_decline), color = Glass.TextDim) }
+                }
+            }
+        }
+    }
+}
+
+/** У чаті: короткий банер про нове запрошення, що веде до списку чатів. */
+@Composable
+fun MailInviteBanner(onOpenChats: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { scope.launch { SharedChats.refreshInbox() } }
+    val first = SharedChats.inbox.collectAsStateWithLifecycle().value.firstOrNull() ?: return
+    Box(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
+        Banner(Icons.Default.Group, stringResource(R.string.share_inbox_banner, first.chatName), stringResource(R.string.share_inbox_open), onOpenChats)
+    }
 }
 
 /** Приєднатися до спільного чату за кодом із запрошення. */

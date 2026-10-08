@@ -642,6 +642,7 @@ fun ChatScreen(
                 item(key = "banners") {
                     PermissionBanners()
                     StaleMembersBanner(chat?.remoteId)
+                    MailInviteBanner(onOpenChats)
                 }
                 if (pageEntries.none { it is Entry.Item }) {
                     item(key = "empty") {

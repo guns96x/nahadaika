@@ -36,7 +36,7 @@ import java.security.SecureRandom
  * Чати в хмарі на Firestore. Структура:
  * chats/{id} — назва, учасники (members, names), код запрошення; chats/{id}/reminders, chats/{id}/comments;
  * chats/{id}/push — FCM-токени телефонів учасників; chats/{id}/media — медіа «кур'єром» (див. [MediaCourier]);
- * invites/{код} — до якого чату веде запрошення.
+ * invites/{код} — до якого чату веде запрошення; mailInvites/{чат}_{пошта} — запрошення на пошту Google-акаунта.
  * Якщо підключено Storage (план Blaze), медіа йде туди: chats/{chatId}/media/{reminderId}.ext, правила — storage.rules.
  */
 class FirestoreBackend(
@@ -114,6 +114,33 @@ class FirestoreBackend(
             ),
         ).confirmed()
         return toChat(chat(chatId).get().confirmed())?.copy(inviteCode = code)
+    }
+
+    private fun mailInviteId(chatId: String, email: String) = "${chatId}_$email"
+
+    override suspend fun inviteByEmail(chatId: String, chatName: String, code: String, email: String, fromName: String) {
+        val uid = auth.currentUser?.uid ?: return
+        val clean = email.trim().lowercase()
+        db.collection("mailInvites").document(mailInviteId(chatId, clean)).set(
+            mapOf(
+                "email" to clean, "chatId" to chatId, "chatName" to chatName, "code" to code,
+                "fromName" to fromName, "createdBy" to uid, "createdAt" to FieldValue.serverTimestamp(),
+            ),
+        ).confirmed()
+    }
+
+    override suspend fun myMailInvites(): List<MailInvite> {
+        val email = account()?.lowercase() ?: return emptyList()
+        return db.collection("mailInvites").whereEqualTo("email", email).get().confirmed().documents.mapNotNull { d ->
+            MailInvite(
+                d.id, d.getString("chatId") ?: return@mapNotNull null, d.getString("chatName").orEmpty(),
+                d.getString("code") ?: return@mapNotNull null, d.getString("fromName").orEmpty(),
+            )
+        }
+    }
+
+    override suspend fun dismissMailInvite(id: String) {
+        db.collection("mailInvites").document(id).delete().confirmed()
     }
 
     override suspend fun myChats(): List<RemoteChat> {

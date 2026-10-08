@@ -48,6 +48,37 @@ service cloud.firestore {
       allow list, update, delete: if false;
     }
 
+    // Запрошення на пошту Google-акаунта: бачить і прибирає лише адресат (за підтвердженою поштою з токена)
+    // та той, хто запросив. Усередині — код чату, тож стороннім його не показуємо.
+    match /mailInvites/{id} {
+      function forMe() {
+        return signedIn() && request.auth.token.email_verified == true
+          && resource.data.email == request.auth.token.email.lower();
+      }
+
+      function mine() {
+        return signedIn() && resource.data.createdBy == request.auth.uid;
+      }
+
+      function shapeOk() {
+        return request.resource.data.keys().hasOnly(['email', 'chatId', 'chatName', 'code', 'fromName', 'createdBy', 'createdAt'])
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.email is string
+          && request.resource.data.email == request.resource.data.email.lower()
+          && request.resource.data.email.matches('[^@ ]+@[^@ ]+[.][^@ ]+')
+          && request.resource.data.email.size() < 200
+          && request.resource.data.chatName is string && request.resource.data.chatName.size() < 200
+          && request.resource.data.fromName is string && request.resource.data.fromName.size() < 100
+          && request.resource.data.code is string && request.resource.data.code.size() < 20
+          && isMember(request.resource.data.chatId);
+      }
+
+      allow read: if forMe() || mine();
+      allow create: if signedIn() && shapeOk();
+      allow update: if mine() && shapeOk();
+      allow delete: if forMe() || mine();
+    }
+
     match /chats/{chatId} {
       allow create: if signedIn() && request.resource.data.members == [request.auth.uid]
         && request.resource.data.owner == request.auth.uid

@@ -118,6 +118,7 @@ private fun AppRoot(
     var showList by rememberSaveable { mutableStateOf(false) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showSearch by rememberSaveable { mutableStateOf(false) }
+    var welcome by rememberSaveable { mutableStateOf(shouldShowWelcome(context)) }
     // Зі сповіщення про нову версію — одразу в налаштування.
     // Відкрили запрошення — показуємо список чатів із вікном «Приєднатися».
     LaunchedEffect(joinCode) {
@@ -155,7 +156,9 @@ private fun AppRoot(
     }
     if (current == null) return
 
-    if (showSettings) {
+    if (welcome) {
+        WelcomeScreen(onDone = { welcome = false })
+    } else if (showSettings) {
         SettingsScreen(onBack = { showSettings = false })
     } else if (showSearch) {
         SearchScreen(
