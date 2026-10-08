@@ -46,13 +46,29 @@ async function firestore(path: string, idToken: string): Promise<any | null> {
   return await res.json();
 }
 
+/** Що не так з налаштуванням FCM — лише назва етапу, без вмісту секрету. */
+class FcmSetupError extends Error {}
+
 let cachedAccess: { token: string; until: number } | null = null;
 
 /** OAuth-токен для FCM v1 із ключа сервісного акаунта (підпис JWT, обмін у Google). */
 async function fcmAccessToken(): Promise<string> {
   if (cachedAccess && cachedAccess.until > Date.now() + 60_000) return cachedAccess.token;
-  const sa = JSON.parse(Deno.env.get("FCM_SERVICE_ACCOUNT") ?? "{}");
-  const key = await importPKCS8(sa.private_key, "RS256");
+  const raw = Deno.env.get("FCM_SERVICE_ACCOUNT");
+  if (!raw) throw new FcmSetupError("secret missing");
+  let sa: { private_key?: string; client_email?: string };
+  try {
+    sa = JSON.parse(raw);
+  } catch {
+    throw new FcmSetupError("secret is not valid JSON");
+  }
+  if (!sa.private_key || !sa.client_email) throw new FcmSetupError("secret lacks private_key/client_email");
+  let key;
+  try {
+    key = await importPKCS8(sa.private_key, "RS256");
+  } catch {
+    throw new FcmSetupError("private_key unreadable");
+  }
   const now = Math.floor(Date.now() / 1000);
   const assertion = await new SignJWT({ scope: "https://www.googleapis.com/auth/firebase.messaging" })
     .setProtectedHeader({ alg: "RS256", typ: "JWT" })
@@ -66,7 +82,7 @@ async function fcmAccessToken(): Promise<string> {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }),
   });
-  if (!res.ok) throw new Error(`oauth ${res.status}`);
+  if (!res.ok) throw new FcmSetupError(`google oauth ${res.status}`);
   const body = await res.json();
   cachedAccess = { token: body.access_token, until: Date.now() + body.expires_in * 1000 };
   return cachedAccess.token;
@@ -121,9 +137,9 @@ Deno.serve(async (req) => {
   let access: string;
   try {
     access = await fcmAccessToken();
-  } catch {
+  } catch (e) {
     // Немає або зіпсований секрет FCM_SERVICE_ACCOUNT — телефони підхоплять зміни фоновою перевіркою.
-    return json(503, { error: "fcm not configured" });
+    return json(503, { error: "fcm not configured", why: e instanceof FcmSetupError ? e.message : "unexpected" });
   }
   const urgent = body.urgent !== false;
   let sent = 0;

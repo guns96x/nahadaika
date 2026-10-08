@@ -33,12 +33,18 @@
 - Безкоштовний проєкт Supabase засинає після тижня без запитів. Його тримає `.github/workflows/push-keepalive.yml` (GET раз на 3 дні). Якщо проєкт таки заснув: supabase.com → проєкт `nahadaika-push` → Restore. Поки він спить, працює запасна синхронізація раз на 2 години.
 - Перевірка: `python tools/push_smoke_test.py`. Деплой функції — Supabase MCP або `npx supabase functions deploy notify --project-ref lqspxwvyikuarfbfgnqf`. У `supabase/config.toml` стоїть `verify_jwt = false`, бо функція сама перевіряє Firebase-токен.
 
-### Секрет для FCM (один раз, значення не потрапляє в репозиторій)
+### Секрет для FCM і обмеження ключа (один раз)
 
-1. [console.cloud.google.com](https://console.cloud.google.com/iam-admin/serviceaccounts?project=nahadaika-89a9c) → **IAM → Service Accounts → Create service account**: назва `nahadaika-push`. Роль — **Firebase Cloud Messaging API Admin** (лише вона). Готово.
-2. Відкрити створений акаунт → **Keys → Add key → Create new key → JSON**. Файл завантажиться.
-3. [supabase.com/dashboard](https://supabase.com/dashboard/project/lqspxwvyikuarfbfgnqf/functions/secrets) → **Edge Functions → Secrets → Add new secret**: Name `FCM_SERVICE_ACCOUNT`, Value — **увесь вміст** JSON-файлу. Save.
-4. Видалити JSON-файл із диска. Перевірити: `python tools/push_smoke_test.py` — останній рядок має стати `OK`, а не `WAIT`.
+Все робить `tools/setup_push.sh`: обмежує ключ API пакетом `ua.nahadaika` і двома SHA-1, створює сервісний акаунт лише з роллю *Firebase Cloud Messaging API Admin* і кладе його ключ у секрет Supabase `FCM_SERVICE_ACCOUNT` (файли ключа видаляються, у вивід і чат він не потрапляє).
+
+Потрібно: `gcloud` з `gcloud auth login` і `npx supabase login`. Запускати в **Git Bash**, а не в WSL (`bash` у PowerShell відкриває WSL, де немає ваших входів), із gcloud у PATH:
+
+```bash
+export PATH="$PATH:/c/Users/pavlo/AppData/Local/Google/Cloud SDK/google-cloud-sdk/bin"
+bash tools/setup_push.sh
+```
+
+Скрипт можна запускати повторно: зайві ключі акаунта він прибирає. Перевірка: `python tools/push_smoke_test.py` — усі рядки `OK`. Якщо функція повертає 503, поле `why` скаже, на якому етапі проблема з секретом (відсутній, не JSON, нечитабельний ключ, відмова Google).
 
 Якщо FCM відповідає помилкою доступу, перевірте, що в проєкті ввімкнено **Firebase Cloud Messaging API (V1)** (Project settings → Cloud Messaging).
 

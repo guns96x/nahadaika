@@ -10,3 +10,4 @@ local.properties
 # Тимчасові файли tools/release.sh
 /out/
 /prev/
+supabase/.temp/
