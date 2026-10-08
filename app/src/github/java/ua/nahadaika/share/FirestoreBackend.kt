@@ -263,6 +263,20 @@ class FirestoreBackend(
 
     override suspend fun registerPush(chatId: String) = push.register(chatId)
 
+    override suspend fun staleMembers(chatId: String): List<String> {
+        val me = auth.currentUser?.uid ?: return emptyList()
+        val info = chat(chatId).get(Source.SERVER).confirmed()
+        val members = (info.get("members") as? List<*>).orEmpty().filterIsInstance<String>()
+        val names = (info.get("names") as? Map<*, *>).orEmpty()
+        val current = chat(chatId).collection("push").get(Source.SERVER).confirmed().documents
+            .filter { (it.getLong("app") ?: 0) >= PushLink.MIN_VERSION }
+            .mapNotNull { it.getString("uid") }
+            .toSet()
+        return members.filter { it != me && it !in current }.map { (names[it] as? String).orEmpty().ifBlank { "?" } }
+    }
+
+    override fun updateLink(): String = "https://github.com/${BuildConfig.UPDATE_REPO}/releases/latest"
+
     override suspend fun notifyMembers(chatId: String, urgent: Boolean) = push.notify(chatId, urgent)
 
     private fun toChat(d: DocumentSnapshot): RemoteChat? {

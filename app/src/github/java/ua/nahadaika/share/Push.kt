@@ -50,6 +50,11 @@ internal class PushLink(context: Context, private val auth: FirebaseAuth, privat
         prefs.getString("device", null) ?: UUID.randomUUID().toString().also { prefs.edit().putString("device", it).apply() }
     }
 
+    companion object {
+        /** Перша версія, що вміє миттєві сповіщення й медіа «кур'єром» (3.17). Старіші цього не знають. */
+        const val MIN_VERSION = 26
+    }
+
     private suspend fun token(): String? = runCatching { FirebaseMessaging.getInstance().token.confirmed() }.getOrNull()
 
     private fun doc(chatId: String, uid: String) = db.collection("chats").document(chatId).collection("push").document("${uid}_$device")
@@ -57,9 +62,11 @@ internal class PushLink(context: Context, private val auth: FirebaseAuth, privat
     suspend fun register(chatId: String) {
         val uid = auth.currentUser?.uid ?: return
         val token = token() ?: return
-        val stamp = "$uid|$token"
+        val stamp = "$uid|$token|${BuildConfig.VERSION_CODE}"
         if (prefs.getString("chat_$chatId", null) == stamp) return
-        doc(chatId, uid).set(mapOf("uid" to uid, "token" to token, "updatedAt" to FieldValue.serverTimestamp())).confirmed()
+        doc(chatId, uid).set(
+            mapOf("uid" to uid, "token" to token, "updatedAt" to FieldValue.serverTimestamp(), "app" to BuildConfig.VERSION_CODE),
+        ).confirmed()
         prefs.edit().putString("chat_$chatId", stamp).apply()
     }
 

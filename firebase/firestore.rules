@@ -78,7 +78,8 @@ service cloud.firestore {
         allow read: if isMember(chatId);
         allow create, update: if isMember(chatId)
           && device.matches(request.auth.uid + '_[A-Za-z0-9-]{8,40}')
-          && request.resource.data.keys().hasOnly(['uid', 'token', 'updatedAt'])
+          && request.resource.data.keys().hasOnly(['uid', 'token', 'updatedAt', 'app'])
+          && (!('app' in request.resource.data) || request.resource.data.app is int)
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.token is string
           && request.resource.data.token.size() < 500;

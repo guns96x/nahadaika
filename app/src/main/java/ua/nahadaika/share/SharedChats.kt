@@ -8,6 +8,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -46,6 +48,26 @@ object SharedChats {
 
     fun available(): Boolean = backend != null
 
+    private val staleNow = MutableStateFlow<Map<String, List<String>>>(emptyMap())
+    private val staleCheckedAt = mutableMapOf<String, Long>()
+
+    /** Хто в яких спільних чатах має стару версію (remoteId чату → імена). */
+    val stale: StateFlow<Map<String, List<String>>> = staleNow
+
+    fun updateLink(): String? = backend?.updateLink()
+
+    /** Перевірити версії учасників; не частіше за раз на годину на чат (кожна перевірка читає документи). */
+    suspend fun checkStale(remoteId: String, force: Boolean = false) {
+        val b = backend ?: return
+        val now = System.currentTimeMillis()
+        if (!force && now - (staleCheckedAt[remoteId] ?: 0) < STALE_CHECK_MS) return
+        val names = runCatching { b.staleMembers(remoteId) }.getOrNull() ?: return
+        staleCheckedAt[remoteId] = now
+        staleNow.value = staleNow.value + (remoteId to names)
+    }
+
+    private const val STALE_CHECK_MS = 60 * 60_000L
+
     /** Застосунок перед очима — нове й так видно в чаті, сповіщення зайве. Підміна в тестах. */
     var appVisible: () -> Boolean = {
         ActivityManager.RunningAppProcessInfo().also(ActivityManager::getMyMemoryState).importance ==
@@ -66,6 +88,8 @@ object SharedChats {
         watching.values.forEach { it.cancel() }
         watching.clear()
         live.clear()
+        staleNow.value = emptyMap()
+        staleCheckedAt.clear()
         backend = null
     }
 
